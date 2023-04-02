@@ -2,8 +2,6 @@
 """
 
 import os
-import sys
-
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
@@ -12,10 +10,7 @@ import seaborn as sns
 from scipy.io import loadmat
 from scipy.signal import find_peaks, savgol_filter
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import sem
-
-sys.path.append("C:\\Users\\aprenard\\recherches\\python_packages")
-from utils.utils import ci_timeseries_bootstrap
+from src.utils import ci_timeseries_bootstrap
 
 sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
@@ -196,8 +191,8 @@ data_sensor = np.load(path)
 data_sensor = data_sensor[:,:,180000:240000]
 
 
-# Check linearly and sensitivity of the sensor.
-# ---------------------------------------------
+# Check linearity and sensitivity of the sensor.
+# ----------------------------------------------
 
 
 DISTANCE = [300,350,400,450,500,550,600,650,700,750,800]
