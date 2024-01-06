@@ -66,11 +66,11 @@ calibration_coil_files = [
     '220731_calibration_coil_fakemouse_biphasic_square_1ms_35mT.m',
     '220731_calibration_coil_fakemouse_biphasic_square_1ms_30mT.m',
 
-    '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_35mT.m',
-    '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_30mT.m',
-    '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_25mT.m',
-    '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_20mT.m',
-    '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_15mT.m',
+    # '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_35mT.m',
+    # '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_30mT.m',
+    # '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_25mT.m',
+    # '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_20mT.m',
+    # '220731_calibration_coil_fakemouse_biphasic_hann_1.6ms_15mT.m',
 
     '220731_calibration_coil_fakemouse_biphasic_hann_3ms_35mT.m',
     '220731_calibration_coil_fakemouse_biphasic_hann_3ms_30mT.m',
@@ -92,7 +92,7 @@ calibration_coil_files = [
 ]
 calibration_coil_files = [os.path.join(FOLDER_READ,f) for f in calibration_coil_files]
 
-# Magntic strength response.
+# Magnetic strength response.
 data = np.zeros((len(calibration_coil_files),NTRIALS,TRIAL_LENGTH)) * np.nan
 for i, ifile in enumerate(calibration_coil_files):
     data[i] = loadmat(ifile)['data'].astype('float32')[:NTRIALS]
@@ -122,11 +122,11 @@ displacement_files = [
     '220731_calibration_displacement_fakemouse_biphasic_square_1ms_35mT.m',
     '220731_calibration_displacement_fakemouse_biphasic_square_1ms_30mT.m',
 
-    '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_35mT.m',
-    '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_30mT.m',
-    '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_25mT.m',
-    '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_20mT.m',
-    '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_15mT.m',
+    # '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_35mT.m',
+    # '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_30mT.m',
+    # '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_25mT.m',
+    # '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_20mT.m',
+    # '220731_calibration_displacement_fakemouse_biphasic_hann_1.6ms_15mT.m',
 
     '220731_calibration_displacement_fakemouse_biphasic_hann_3ms_35mT.m',
     '220731_calibration_displacement_fakemouse_biphasic_hann_3ms_30mT.m',
@@ -162,7 +162,7 @@ np.save(path_write,data)
 # Read data.
 # ----------
 
-FOLDER_READ = 'C:\\Users\\aprenard\\recherches\\fast-learning\\calibration\\data'
+FOLDER_READ = 'C:\\Users\\aprenard\\recherches\\fast-learning\\data\\calibration'
 
 FILE_NAME = '220819_calibration_displacement_fakemouse.npy'
 path = os.path.join(FOLDER_READ,FILE_NAME)
@@ -360,14 +360,13 @@ stimulus = 0
 time = np.linspace(-5,10,1500)
 start = 19500
 end = 21000
-stimuli = [0,3,8]
+stimuli = [0,7,8]
 
 f, axes = plt.subplots(3,2, sharex=True)
 # for iax in axes[:,0]: iax.axhline(30, linestyle='--',alpha=0.5,color='grey')
 
 for istim in stimuli:
     axes[1,0].plot(time,data_coil[istim,:,start:end].mean(0))
-
 for istim in stimuli:
     axes[0,1].plot(time,data_disp[istim,:,start:end].mean(0))
 for istim in stimuli:
@@ -375,10 +374,10 @@ for istim in stimuli:
 for istim in stimuli:
     axes[2,1].plot(time,data_disp_acc[istim,:,start:end].mean(0))
 
-axes[0,1].set_yticks(range(-6,7,2))
-axes[0,1].set_ylim(-6,6)
-axes[1,1].set_yticks(range(-16,17,4))
-axes[1,1].set_ylim(-16,16)
+axes[0,1].set_yticks(range(-8,9,2))
+axes[0,1].set_ylim(-8,8)
+axes[1,1].set_yticks(range(-22,23,4))
+axes[1,1].set_ylim(-22,22)
 axes[2,1].set_ylim(-70000000,70000000)
 for iax in axes[:,0]: iax.set_yticks([0,10,20,30,40])
 for iax in axes.flatten(): iax.set_xticks(range(-5,11))
