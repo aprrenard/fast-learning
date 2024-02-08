@@ -543,6 +543,11 @@ PALETTE = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
 PALETTE = sns.color_palette(PALETTE)
 
 
+SESSIONS_DB_PATH = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\behavior_sessions.xlsx"
+DATA_FOLDER_PATH = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard'
+df_behav = read_results_excel(SESSIONS_DB_PATH, DATA_FOLDER_PATH)
+
+
 # Compute performance.
 # --------------------
 
@@ -689,7 +694,6 @@ for mouse_id in mice:
     # Close the pdf file
     pdf.close()
 
-
 # Particle test plot.
 # ###################
 
@@ -765,6 +769,7 @@ color_wh = palette[2]
 
 fig = plt.figure(dpi=300)
 ax = plt.gca()
+
 
 for imouse in mice:
     sns.lineplot(data=data.loc[data.mouse_id==imouse], x='inactivation', y='hr_c', estimator=np.mean, color=palette[5],

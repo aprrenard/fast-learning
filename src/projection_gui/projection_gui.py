@@ -9,22 +9,23 @@ import pyqtgraph as pg
 import SimpleITK as sitk
 from matplotlib.colors import hsv_to_rgb
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtCore import QCoreApplication, QTimer
-from PyQt5.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel,
-                             QLineEdit, QMainWindow, QMessageBox, QPushButton,
-                             QVBoxLayout, QWidget)
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow
 from skimage.metrics import structural_similarity as ssim
 
-mouse_list = ['AR107']
+
+mouse_list = ['AR103', 'AR104', 'AR106','AR107']
 
 class ProjectionsGUI(QMainWindow):
 
     def __init__(self):
+
         super(ProjectionsGUI, self).__init__()
         pg.setConfigOptions(imageAxisOrder="row-major")
-        self.setWindowTitle("Pick projection neurons depending on dual CTB-injections")
+        self.setWindowTitle("Classify projection neurons depending on dual CTB-injections")
         self.setGeometry(50, 50, 2100, 1100)
         self.home()
+
 
     def home(self):
 
@@ -33,7 +34,7 @@ class ProjectionsGUI(QMainWindow):
 
         self.server_dir = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data'
         mouse_list_unique = list(set(mouse_list))
-        
+
         cwidget = QtWidgets.QWidget()
         self.l0 =  QtWidgets.QHBoxLayout()
         self.buttons =  QtWidgets.QVBoxLayout()
@@ -41,16 +42,16 @@ class ProjectionsGUI(QMainWindow):
         cwidget.setLayout(self.l0)
         self.setCentralWidget(cwidget)
 
-        self.maxprojWin =pg.GraphicsLayoutWidget()
+        self.functional_win = pg.GraphicsLayoutWidget()
         self.redWin = pg.GraphicsLayoutWidget()
         self.farRedWin =  pg.GraphicsLayoutWidget()
 
-        self.maxproj = pg.ImageItem(name='ROIs')
+        self.functional = pg.ImageItem(name='ROIs')
         self.red = pg.ImageItem(name='Red')
         self.far_red = pg.ImageItem(name='FarRed')
 
         self.l0.addLayout(self.buttons)
-        self.l0.addWidget(self.maxprojWin)
+        self.l0.addWidget(self.functional_win)
         self.l0.addWidget(self.redWin)
         self.l0.addWidget(self.farRedWin)
 
@@ -85,6 +86,9 @@ class ProjectionsGUI(QMainWindow):
         self.labelSsiRFR = QLabel(self)
         self.labelSsiRFR.setText('SSI R vs FR = ')
 
+        self.ROI_button = QtWidgets.QPushButton("ROI")
+        self.ROI_button.clicked.connect(self.clickedROIButton)
+
         self.buttons.addWidget(self.label_mouse_name)
         self.buttons.addWidget(self.comboBoxMouseName )
         self.buttons.addWidget(self.RButton)
@@ -93,12 +97,14 @@ class ProjectionsGUI(QMainWindow):
         self.buttons.addWidget(self.labelRatio)
         self.buttons.addWidget(self.labelSsiGR)
         self.buttons.addWidget(self.labelSsiRFR)
+        self.buttons.addWidget(self.ROI_button)
 
         self.buttons.addStretch(1)
 
         self.buttons.addWidget(self.CloseButton)
 
         self.show()
+
 
     def close_application_immediately(self):
 
@@ -121,13 +127,22 @@ class ProjectionsGUI(QMainWindow):
             self.server_dir = pathlib.Path(os.path.join(self.server_dir, choiceMouse))
 
             if not(self.server_dir.is_dir()):
-                print('Folder made!')
+                print('Folder created!')
                 os.makedirs(self.server_dir)
-                
+
             suite2p_folder = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\Suite2PRois\\{choiceMouse}\\suite2p\\plane0'
             self.stat = np.load(os.path.join(suite2p_folder, 'stat.npy'), allow_pickle=True)
-            self.ops = np.load(os.path.join(suite2p_folder, 'ops.npy'), allow_pickle=True)
-        
+            self.ops = np.load(os.path.join(suite2p_folder, 'ops.npy'), allow_pickle=True).item()
+            self.iscell = np.load(os.path.join(suite2p_folder, 'iscell.npy'), allow_pickle=True)
+            self.iscell = self.iscell[:,0]
+
+            for i, s in enumerate(self.stat):
+                if 'inmerge' in s:
+                    if not((s['inmerge'] == 0.0) or (s['inmerge'] == -1.0)):
+                        self.iscell[i] = 0.0
+            self.stat = self.stat[self.iscell==1.]
+            self.rois = range(self.stat.shape[0])
+
             self.load_images()
 
 
@@ -145,27 +160,23 @@ class ProjectionsGUI(QMainWindow):
         self.CheckUNFile =  pathlib.Path(os.path.join(self.server_dir, "UNRois.npy"))
 
         if not(self.CheckRedFile.is_file()) or not(self.CheckFarRedFile.is_file()) or not(self.CheckUNFile.is_file()):
-
-            (self.far_red, self.Red, self.UN) =  self.predefineRois()
+            (self.Far_red, self.Red, self.UN) =  self.predefineRois()
 
         if self.CheckRedFile.is_file():
-
-            self.Red = np.load(self.CheckRedFile ,allow_pickle=True)
+            self.Red = np.load(self.CheckRedFile, allow_pickle=True)
 
         if self.CheckFarRedFile.is_file():
-
-            self.far_red = np.load(self.CheckFarRedFile ,allow_pickle=True)
+            self.Far_red = np.load(self.CheckFarRedFile, allow_pickle=True)
 
         if self.CheckUNFile.is_file():
-
-            self.UN = np.load(self.CheckUNFile,allow_pickle=True)
+            self.UN = np.load(self.CheckUNFile, allow_pickle=True)
 
         (self.ROIsImage, self.iROIs, self.maximg,
          self.H, self.S, self.xrange, self.yrange, self.Lx, self.Ly) = self.makeRoisImage()
 
         self.plot0 = pg.PlotItem(name='Cells',title = 'ROIs Image')
         self.plot1 = pg.PlotItem(name='Red', title = 'Red Image')
-        self.plot2= pg.PlotItem(name='FarRedImage', title = 'FarRed Image')
+        self.plot2 = pg.PlotItem(name='FarRedImage', title = 'FarRed Image')
 
         self.plot0.setAspectLocked()
         self.plot0.hideAxis('bottom')
@@ -179,9 +190,10 @@ class ProjectionsGUI(QMainWindow):
         self.plot2.hideAxis('bottom')
         self.plot2.hideAxis('left')
 
-        self.maxprojWin.addItem(self.plot0, 0,0)
-        self.plot0.addItem(self.maxproj)
-        self.maxproj.setImage(self.ROIsImage)
+        self.functional_win.addItem(self.plot0, 0,0)
+        self.plot0.addItem(self.functional)
+        self.functional.setImage(self.ROIsImage)
+        self.functional.setLevels([0, 0.5])
 
         self.redWin.addItem(self.plot1, 0,0)
         self.plot1.addItem(self.red)
@@ -222,6 +234,7 @@ class ProjectionsGUI(QMainWindow):
 
         return roiSelected
 
+
     def circle(self,med,r):
 
         """ returns pixels of circle with radius 2x radius of cell (r) """
@@ -237,24 +250,17 @@ class ProjectionsGUI(QMainWindow):
     def newROIimage(self):
 
         titleNew =  'ROIs Image, ' + 'ROI selected: ' + str(int(self.roiSelected))
-
         self.plot0.setTitle(titleNew)
-
         self.sessionkey.update({'roi_number': self.roiSelected})
-
-        print(self.sessionkey)
-
-        stats = (lsensGF.CalciumRois & self.sessionkey).fetch('roi_stats')
-
-        stats = stats[0]
+        
+        stats = self.stat
+        stats = stats[self.sessionkey['roi_number']]
 
         #add a white color to the selected ROI
         roix = stats['xpix'].flatten()
-
         roiy = stats['ypix'].flatten()
 
         #make new green ROIs image
-
         HN = np.copy(self.H)
         SN = np.copy(self.S)
         VN = np.copy(self.maximg)
@@ -289,14 +295,13 @@ class ProjectionsGUI(QMainWindow):
         SRN = np.zeros([self.Lx,self.Ly])
         VRN = self.imageNorm(RedImage)
 
-
         HRN[self.xc, self.yc] = 0
         SRN[self.xc, self.yc] = 1
         VRN[self.xc, self.yc] = 1
 
         pixRN = np.concatenate(((HRN[:, :, np.newaxis]),
-                                  SRN[:, :, np.newaxis],
-                                  VRN[:, :, np.newaxis]), axis=-1)
+                                 SRN[:, :, np.newaxis],
+                                 VRN[:, :, np.newaxis]), axis=-1)
         pixRN = hsv_to_rgb(pixRN)
 
         RedN = pixRN[self.xrange[0]:self.xrange[1],self.yrange[0]:self.yrange[1],:]
@@ -321,8 +326,6 @@ class ProjectionsGUI(QMainWindow):
 
         FarRedN = pixFRN[self.xrange[0]:self.xrange[1],self.yrange[0]:self.yrange[1],:]
 
-        plt.imshow(FarRedN)
-
 
         return(ROIsImageN,RedN,FarRedN)
 
@@ -331,7 +334,7 @@ class ProjectionsGUI(QMainWindow):
     def mouseClickedGreen(self,evt):
 
         #get mouse coordinates in relation to image space
-        pos = self.maxproj.mapFromScene(evt.scenePos())
+        pos = self.functional.mapFromScene(evt.scenePos())
 
         #round to get pixel size
         self.x = int(pos.y())
@@ -344,12 +347,13 @@ class ProjectionsGUI(QMainWindow):
 
             (self.ROIsImageN, self.RedN, self.FarRedN) = self.newROIimage()
 
-            self.maxproj.setImage(self.ROIsImageN)
+            self.functional.setImage(self.ROIsImageN)
             self.red.setImage(self.RedN)
             self.far_red.setImage(self.FarRedN)
             self.labelRatio.setText('Ratio FR/R = ' + str(np.round(self.Ratio[self.roiSelected],3)))
             self.labelSsiGR.setText('SSI G vs R = '+ str(np.round(self.ssiGR[self.roiSelected],3)))
             self.labelSsiRFR.setText('SSI R vs FR = '+ str(np.round(self.ssiRFR[self.roiSelected])))
+
 
     def clickedRedButton(self):
 
@@ -358,13 +362,10 @@ class ProjectionsGUI(QMainWindow):
             print("ROI is selected and changed to red")
 
             stats = self.stat
-            print('ok')
-            
-            stats = stats[0]
+            stats = stats[self.sessionkey['roi_number']]
 
             #add a white color to the selected ROI
             roix = stats['xpix'].flatten()
-
             roiy = stats['ypix'].flatten()
 
             #make new  ROIs image with changed color
@@ -399,13 +400,12 @@ class ProjectionsGUI(QMainWindow):
 
             ROIsImageAfterRedClick = pixAfterRedClick[self.xrange[0]:self.xrange[1],self.yrange[0]:self.yrange[1],:]
 
-            self.maxproj.setImage(ROIsImageAfterRedClick)
+            self.functional.setImage(ROIsImageAfterRedClick)
 
-            if self.sessionkey["roi_number"] in self.far_red:
+            if self.sessionkey["roi_number"] in self.Far_red:
 
-                IndexInFarRed = [i for (i, fr) in enumerate(self.far_red) if (fr == self.sessionkey["roi_number"]) ]
-                self.far_red = np.delete(self.far_red, IndexInFarRed[0])
-                print(self.far_red)
+                IndexInFarRed = [i for (i, fr) in enumerate(self.Far_red) if (fr == self.sessionkey["roi_number"]) ]
+                self.Far_red = np.delete(self.Far_red, IndexInFarRed[0])
                 print('Deleted In FarRed at ' + str(IndexInFarRed[0]))
 
             elif self.sessionkey["roi_number"] in self.UN:
@@ -420,7 +420,7 @@ class ProjectionsGUI(QMainWindow):
 
                 self.Red = np.append(self.Red,int(self.sessionkey["roi_number"]))
 
-            np.save(self.CheckFarRedFile,self.far_red)
+            np.save(self.CheckFarRedFile,self.Far_red)
             np.save(self.CheckRedFile,self.Red)
             np.save(self.CheckUNFile,self.UN)
 
@@ -433,13 +433,12 @@ class ProjectionsGUI(QMainWindow):
 
             print("ROI is selected and changed to far red")
 
-            stats = (lsensGF.CalciumRois & self.sessionkey).fetch('roi_stats')
+            stats = self.stat
 
-            stats = stats[0]
+            stats = stats[self.sessionkey['roi_number']]
 
             #add a white color to the selected ROI
             roix = stats['xpix'].flatten()
-
             roiy = stats['ypix'].flatten()
 
             #make new  ROIs image with changed color
@@ -474,7 +473,7 @@ class ProjectionsGUI(QMainWindow):
 
             ROIsImageAfterFarRedClick = pixAfterFarRedClick[self.xrange[0]:self.xrange[1],self.yrange[0]:self.yrange[1],:]
 
-            self.maxproj.setImage(ROIsImageAfterFarRedClick)
+            self.functional.setImage(ROIsImageAfterFarRedClick)
 
 
             if self.sessionkey["roi_number"] in self.Red:
@@ -492,11 +491,11 @@ class ProjectionsGUI(QMainWindow):
 
             # and file to the read and save the file
 
-            if not(self.sessionkey["roi_number"] in self.far_red) :
+            if not(self.sessionkey["roi_number"] in self.Far_red) :
 
-                self.far_red = np.append(self.far_red,int(self.sessionkey["roi_number"]))
+                self.Far_red = np.append(self.Far_red,int(self.sessionkey["roi_number"]))
 
-            np.save(self.CheckFarRedFile,self.far_red)
+            np.save(self.CheckFarRedFile,self.Far_red)
             np.save(self.CheckRedFile,self.Red)
             np.save(self.CheckUNFile,self.UN)
 
@@ -508,14 +507,11 @@ class ProjectionsGUI(QMainWindow):
         if "roi_number" in self.sessionkey:
 
             print("ROI is selected and changed to unidentified")
-
-            stats = (lsensGF.CalciumRois & self.sessionkey).fetch('roi_stats')
-
-            stats = stats[0]
+            stats = self.stat
+            stats = stats[self.sessionkey['roi_number']]
 
             #add a white color to the selected ROI
             roix = stats['xpix'].flatten()
-
             roiy = stats['ypix'].flatten()
 
             #make new  ROIs image with changed color
@@ -550,7 +546,7 @@ class ProjectionsGUI(QMainWindow):
 
             ROIsImageAfterUNClick = pixAfterUNClick[self.xrange[0]:self.xrange[1],self.yrange[0]:self.yrange[1],:]
 
-            self.maxproj.setImage(ROIsImageAfterUNClick)
+            self.functional.setImage(ROIsImageAfterUNClick)
 
 
             if self.sessionkey["roi_number"] in self.Red:
@@ -559,10 +555,10 @@ class ProjectionsGUI(QMainWindow):
                 self.Red = np.delete(self.Red, IndexInRed[0])
                 print('Deleted In Red at ' + str(IndexInRed[0]))
 
-            elif self.sessionkey["roi_number"] in self.far_red:
+            elif self.sessionkey["roi_number"] in self.Far_red:
 
-                IndexInFarRed = [i for (i, fr) in enumerate(self.far_red) if (fr == self.sessionkey["roi_number"])]
-                self.far_red = np.delete(self.far_red, IndexInFarRed[0])
+                IndexInFarRed = [i for (i, fr) in enumerate(self.Far_red) if (fr == self.sessionkey["roi_number"])]
+                self.Far_red = np.delete(self.Far_red, IndexInFarRed[0])
                 print('Deleted in Far Red at ' + str(IndexInFarRed[0]))
 
 
@@ -573,12 +569,28 @@ class ProjectionsGUI(QMainWindow):
 
                 self.UN = np.append(self.UN,int(self.sessionkey["roi_number"]))
 
-            np.save(self.CheckFarRedFile,self.far_red)
+            np.save(self.CheckFarRedFile,self.Far_red)
             np.save(self.CheckRedFile,self.Red)
             np.save(self.CheckUNFile,self.UN)
 
             print('File Saved!')
 
+
+    def clickedROIButton(self):
+
+        if 'hide_ROIS' not in self.sessionkey.keys():
+           self.sessionkey['hide_ROIs'] = False
+
+        if self.sessionkey['hide_ROIs'] == False:
+            self.functional.setImage(self.ImgGreen)
+            self.sessionkey['hide_ROIs'] = True
+            return
+
+
+        
+
+
+        
 
     def computeGreenImage(self,x,y):
 
@@ -714,7 +726,7 @@ class ProjectionsGUI(QMainWindow):
         self.RedNew = self.computeRedImage(self.xR,self.yR)
         self.FarRedNew = self.computeFarRedImage(self.xR,self.yR)
 
-        self.maxproj.setImage(self.GreenNew)
+        self.functional.setImage(self.GreenNew)
         self.red.setImage(self.RedNew)
         self.far_red.setImage(self.FarRedNew)
 
@@ -743,10 +755,9 @@ class ProjectionsGUI(QMainWindow):
         self.RedNew = self.computeRedImage(self.xFR,self.yFR)
         self.FarRedNew = self.computeFarRedImage(self.xFR,self.yFR)
 
-        self.maxproj.setImage(self.GreenNew)
+        self.functional.setImage(self.GreenNew)
         self.red.setImage(self.RedNew)
         self.far_red.setImage(self.FarRedNew)
-
 
 
     def imageNorm(self,mimg):
@@ -759,6 +770,7 @@ class ProjectionsGUI(QMainWindow):
 
         return mimg
 
+
     def registerImages(self):
 
         # baseline_img = (lsensGF.ProjectionsInfo() & self.sessionkey & 'ctb_type = "CTB-594"').fetch1('ctb_baseline_800')
@@ -766,38 +778,37 @@ class ProjectionsGUI(QMainWindow):
         # ctb_img_red =  (lsensGF.ProjectionsInfo() & self.sessionkey & 'ctb_type = "CTB-594 "').fetch1('ctb_image')
         # red_reg_img =  (lsensGF.ProjectionsInfo() & self.sessionkey & 'ctb_type = "CTB-594"').fetch1('ctb_redreg')
         mouse_name = self.sessionkey['mouse_name']
-        projection_path = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\data\\{mouse_name}\\Recording\\ProjectionsInfo'
+        projection_path = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_name}\\projection_neurons'
         images = os.listdir(projection_path)
-        baseline_img = [im for im in images if 'G' in im][0]
-        ctb_img_farred = [im for im in images if 'FR' in im][0]
-        ctb_img_red = [im for im in images if 'R1' in im][0]
-        red_reg_img = [im for im in images if 'R2' in im][0]
-        
+        baseline_img = [im for im in images if '_G' in im][0]
+        ctb_img_farred = [im for im in images if '_FR' in im][0]
+        ctb_img_red = [im for im in images if '_R1' in im][0]
+        red_reg_img = [im for im in images if '_R2' in im][0]
+
         baseline_img = os.path.join(projection_path, baseline_img)
         ctb_img_farred = os.path.join(projection_path, ctb_img_farred)
         ctb_img_red = os.path.join(projection_path, ctb_img_red)
         red_reg_img = os.path.join(projection_path, red_reg_img)
-        
+
         baseline_img = cv2.imread(baseline_img, cv2.IMREAD_UNCHANGED)
         ctb_img_farred = cv2.imread(ctb_img_farred, cv2.IMREAD_UNCHANGED)
         ctb_img_red = cv2.imread(ctb_img_red, cv2.IMREAD_UNCHANGED)
         red_reg_img = cv2.imread(red_reg_img, cv2.IMREAD_UNCHANGED)
-        
-        suite2pImg = self.ops.item()['meanImg']
-        suite2pImgMax = self.ops.item()['max_proj']
-        xrange = self.ops.item()['xrange']
-        yrange = self.ops.item()['yrange']
-        
-        # suite2pImg = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('mean_img')
-        # suite2pImgMax = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('maxproj_img')
-        # xrange = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('xrange')
-        # yrange = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('yrange')
+
+        suite2pImg = self.ops['meanImg']
+        suite2pImgMax = self.ops['max_proj']
+        xrange = self.ops['xrange']
+        yrange = self.ops['yrange']
+
+        # ImgRed = ctb_img_red
+        # ImgFarRed = ctb_img_farred
+        # ImgGreen = baseline_img
 
         # normalise the images using cv2
         baselineImgNorm = cv2.normalize(src=baseline_img, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         redRegImgNorm = cv2.normalize(src=red_reg_img, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         suite2pImgNorm = cv2.normalize(src=suite2pImg, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        suite2pImgMaxNorm = cv2.normalize(src=suite2pImgMax, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        # suite2pImgNorm = cv2.normalize(src=suite2pImgMax, dst=None, alpha=0, beta=60, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         ctbImgRedNorm = cv2.normalize(src=ctb_img_red, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         ctbImgFarRedNorm = cv2.normalize(src=ctb_img_farred, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
@@ -848,25 +859,25 @@ class ProjectionsGUI(QMainWindow):
         transformedctbImgRedArrayNorm =  cv2.normalize(src=transformedctbImgRedArray, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         transformedctbImgFarRedArrayNorm =  cv2.normalize(src=transformedctbImgFarRedArray, dst=None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
-
         ImgRedFull = self.imageNorm(np.transpose(transformedctbImgRedArrayNorm))
         ImgFarRedFull = self.imageNorm(np.transpose(transformedctbImgFarRedArrayNorm))
         ImgGreenFull = self.imageNorm(np.transpose(transformedbaselineImgArray))
 
         ImgRed = ImgRedFull[xrange[0]:xrange[1],yrange[0]:yrange[1]]
         ImgFarRed = ImgFarRedFull[xrange[0]:xrange[1],yrange[0]:yrange[1]]
-        ImgGreen = ImgRedFull[xrange[0]:xrange[1],yrange[0]:yrange[1]]
+        ImgGreen = ImgGreenFull[xrange[0]:xrange[1],yrange[0]:yrange[1]]
 
         print('Registration done!')
 
+        # return (ImgRed, ImgFarRed, ImgGreen, ImgRed, ImgFarRed, ImgGreen)
         return (ImgRed, ImgFarRed, ImgGreen, ImgRedFull, ImgFarRedFull, ImgGreenFull)
+
 
     def calculateRatiosROIs(self):
 
-        
-
         # get the unique ROI numbers for this key
-        rois =  set((lsensGF.CalciumRois() & self.sessionkey).fetch('roi_number'))
+        # rois =  set((lsensGF.CalciumRois() & self.sessionkey).fetch('roi_number'))
+        rois =  self.rois
 
         self.GreenRoi = []
         self.RedRoi = []
@@ -879,14 +890,15 @@ class ProjectionsGUI(QMainWindow):
         self.ssiGR = []
         self.ssiRFR = []
 
-        for i, r in enumerate(rois):
+        for i in rois:
 
-            print('Doing ROI : ' + str(r))
+            print('Doing ROI : ' + str(i))
             # read ROI stats ti find indexes in the images
-            roiStats = (lsensGF.CalciumRois() & self.sessionkey & ('roi_number = ' + str(r))).fetch('roi_stats')
+            roiStats = self.stat
+            # roiStats = (lsensGF.CalciumRois() & self.sessionkey & ('roi_number = ' + str(r))).fetch('roi_stats')
 
             # the ROIs are extracted once for every mouse so they are same for every session
-            roiStatsSingle = roiStats[0]
+            roiStatsSingle = roiStats[i]
             xRoi = roiStatsSingle['xpix'].flatten()
             yRoi = roiStatsSingle['ypix'].flatten()
 
@@ -923,10 +935,10 @@ class ProjectionsGUI(QMainWindow):
             self.GreenRoi.append(np.mean(roiGreen))
             self.RedRoi.append(np.mean(roiRed))
             self.FarRedRoi.append(np.mean(roiFarRed))
-
             self.Ratio.append(np.mean(roiFarRed)/np.mean(roiRed))
 
         print('done')
+
 
     def predefineRois(self):
 
@@ -937,27 +949,13 @@ class ProjectionsGUI(QMainWindow):
         ratioMean = np.mean(self.Ratio)
         ratioSigma = np.std(self.Ratio)
 
-        print(ratioMean)
-        print(ratioSigma)
-
-
         for i, r in enumerate(self.Ratio):
-
-
             if (r > (ratioMean + ratioSigma)) and (self.ssiRFR[i] < 0.8):
-
                 FarRed.append(i)
-
             elif (r < (ratioMean - ratioSigma)) and (self.ssiRFR[i] < 0.8) and (self.ssiGR[i] < 0.8):
-
                 Red.append(i)
-
             else:
                 UN.append(i)
-
-        print(FarRed)
-        print(Red)
-        print(UN)
 
         np.save(self.CheckRedFile,Red)
         np.save(self.CheckFarRedFile, FarRed)
@@ -965,20 +963,19 @@ class ProjectionsGUI(QMainWindow):
 
         return (FarRed, Red, UN)
 
+
     def makeRoisImage(self):
 
-        rois = set((lsensGF.CalciumRois & self.sessionkey).fetch('roi_number'))
-        imageMax = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('maxproj_img')
+        rois = self.rois
+        imageMax = self.ops['max_proj']
         imageMaxNorm = self.imageNorm(imageMax)
 
+        Lx = self.ops['Lx']
+        Ly = self.ops['Ly']
+        xrange = self.ops['xrange']
+        yrange = self.ops['yrange']
 
-        Lx = list(set((lsensGF.CalciumSession() & self.sessionkey).fetch('fov_x')))[0]
-        Ly = list(set((lsensGF.CalciumSession() & self.sessionkey).fetch('fov_y')))[0]
-        xrange = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('xrange')
-        yrange = (lsensGF.CalciumFOV() & self.sessionkey).fetch1('yrange')
-
-        #initalise images and index image
-
+        # initalise images and index image
         H = np.zeros([Lx,Ly])
         S = np.zeros([Lx,Ly])
         img = np.zeros([Lx,Ly])
@@ -987,29 +984,29 @@ class ProjectionsGUI(QMainWindow):
 
         img[xrange[0]:xrange[1],yrange[0]:yrange[1]] = np.transpose(imageMaxNorm)
 
-        for i , r in enumerate(rois):
+        for i in rois:
 
-            roiStats = (lsensGF.CalciumRois() & self.sessionkey & ('roi_number = ' + str(i))).fetch('roi_stats')
+            roiStats = self.stat
 
-            roiStatsSingle = roiStats[0]
+            roiStatsSingle = roiStats[i]
             xRoi = roiStatsSingle['xpix'].flatten()
             yRoi = roiStatsSingle['ypix'].flatten()
 
-            if r in self.Red:
+            if i in self.Red:
                 H[xRoi, yRoi] = 0
                 S[xRoi ,yRoi] = 1
                 img[xRoi ,yRoi] = 1
 
-            if r in self.far_red:
+            if i in self.Far_red:
                 H[xRoi, yRoi] = 0.67
                 S[xRoi ,yRoi] = 1
                 img[xRoi ,yRoi] = 1
-            if r in self.UN:
+            if i in self.UN:
                 H[xRoi, yRoi] = 0.33
                 S[xRoi ,yRoi] = 1
                 img[xRoi ,yRoi] = 1
 
-            iROIs[xRoi ,yRoi] = int(r)
+            iROIs[xRoi ,yRoi] = int(i)
 
         pix = np.concatenate(((H[:, :, np.newaxis]),
                                S[:, :, np.newaxis],
