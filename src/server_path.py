@@ -21,6 +21,12 @@ def get_experimenter_analysis_folder(experimenter_initials):
     return nwb_folder
 
 
+def get_data_folder():
+    nwb_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+
+    return nwb_folder
+
+
 def get_experimenter_nwb_folder(experimenter_initials):
     experimenter = EXPERIMENTER_MAP[experimenter_initials]
     nwb_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis', experimenter, 'NWB')
