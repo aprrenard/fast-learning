@@ -2,6 +2,7 @@ import os
 import sys
 
 import numpy as np
+import scipy
 import matplotlib.pyplot as plt
 import fissa
 
@@ -10,11 +11,87 @@ import server_path
 
 
 mice_ids = ['ARXXX']
+experimenter = 'AR'
+
+def set_merged_roi_to_non_cell(stat, is_cell):
+    # Set merged cells to 0 in is_cell.
+    if 'inmerge' in stat[0].keys():
+        for i, st in enumerate(stat):
+            # 0: no merge; -1: input of a merge; index > 0: result of a merge.
+            if st['inmerge'] not in [0, -1]:
+                is_cell[i] = 0.0
+
+    return is_cell
+
+
+def compute_F0(F, fs, window):
+
+    # Parameters --------------------------------------------------------------
+    nfilt = 30  # Number of taps to use in FIR filter
+    fw_base = 1  # Cut-off frequency for lowpass filter, in Hz
+    base_pctle = 5  # Percentile to take as baseline value
+
+    # Main --------------------------------------------------------------------
+    # Ensure array_like input is a numpy.ndarray
+    F = np.asarray(F)
+
+    # For short measurements, we reduce the number of taps
+    nfilt = min(nfilt, max(3, int(F.shape[1] / 3)))
+
+    if fs <= fw_base:
+        # If our sampling frequency is less than our goal with the smoothing
+        # (sampling at less than 1Hz) we don't need to apply the filter.
+        filtered_f = F
+    else:
+        # The Nyquist rate of the signal is half the sampling frequency
+        nyq_rate = fs / 2.0
+
+        # Cut-off needs to be relative to the nyquist rate. For sampling
+        # frequencies in the range from our target lowpass filter, to
+        # twice our target (i.e. the 1Hz to 2Hz range) we instead filter
+        # at the Nyquist rate, which is the highest possible frequency to
+        # filter at.
+        cutoff = min(1.0, fw_base / nyq_rate)
+
+        # Make a set of weights to use with our taps.
+        # We use an FIR filter with a Hamming window.
+        b = scipy.signal.firwin(nfilt, cutoff=cutoff, window='hamming')
+
+        # The default padlen for filtfilt is 3 * nfilt, but in case our
+        # dataset is small, we need to make sure padlen is not too big
+        padlen = min(3 * nfilt, F.shape[1] - 1)
+
+        # Use filtfilt to filter with the FIR filter, both forwards and
+        # backwards.
+        filtered_f = scipy.signal.filtfilt(b, [1.0], F, axis=1,
+                                           padlen=padlen)
+
+    # Take a percentile of the filtered signal and windowed signal
+    F0 = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,(fs*2*window + 1)), mode='constant', cval=+np.inf)
+
+    # Ensure filtering doesn't take us below the minimum value which actually
+    # occurs in the data. This can occur when the amount of data is very low.
+    F0 = np.maximum(F0, np.nanmin(F, axis=1, keepdims=True))
+
+    return F0
+
+
+def compute_dff(F_cor, F_raw, fs, window=60):
+    '''
+    F_cor: decontaminated traces, output of Fissa
+    F_raw: raw traces extracted by Fissa (not suite2p)
+    fs: sampling frequency
+    window: running window size on each side of sample for percentile computation
+    '''
+    F0 = compute_F0(F_raw, fs, window)
+    dff = F_cor / F0
+
+    return F0, dff
+
 
 for mouse_id in mice_ids:
     output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
                                  mouse_id, 'suite2p', 'plane0')
-    # output_folder = os.path.join('D:\AR\calcium_imaging_processing\ARXXX', 'fissa')
 
     if not os.path.join(output_folder):
         os.mkdir(output_folder)
@@ -26,12 +103,7 @@ for mouse_id in mice_ids:
     iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)[:,0]
     images = os.path.join(suite2p_folder, 'reg_tif')
 
-    # Make sure to correct is_cell for merges.
-    if 'inmerge' in stat[0].keys():  # If no merge in session, 'inmerge' not in dict.
-        for i in range(len(stat)):
-            if stat[i]['inmerge'] not in [0.0, -1.0]:
-                iscell[i] = 0.0
-        print('Merged ROIs corrected after merging..')
+    iscell = set_merged_roi_to_non_cell(stat, iscell)
 
     # Get image size
     Lx = ops['Lx']
@@ -49,12 +121,17 @@ for mouse_id in mice_ids:
     for i, n in enumerate(cell_ids):
         # i is the position in cell_ids, and n is the actual cell number
         # Don't remove overlapping pixels of merges.
-        if ('imerge' in stat[0].keys()) & (np.array(stat[n]['imerge']).any()):
-            ypix = stat[n]['ypix']
-            xpix = stat[n]['xpix']
+        if 'imerge' in stat[0].keys():
+            if np.array(stat[n]['imerge']).any():
+                ypix = stat[n]['ypix']
+                xpix = stat[n]['xpix']
+            else:
+                ypix = stat[n]['ypix'][~stat[n]['overlap']]
+                xpix = stat[n]['xpix'][~stat[n]['overlap']]
         else:
             ypix = stat[n]['ypix'][~stat[n]['overlap']]
             xpix = stat[n]['xpix'][~stat[n]['overlap']]
+
         if (np.sum(xpix) == 0 or np.sum(ypix) == 0):
             print(f'ROI {n} overlaps fully.')
         rois[i][ypix, xpix] = 1
@@ -85,8 +162,12 @@ for mouse_id in mice_ids:
         F_raw.append(np.concatenate(tmp))
     F_raw = np.vstack(F_raw)
 
+    # TODO: compute F0 and dff.
+    F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
+    
     # Saving data.
     np.save(os.path.join(output_folder, 'F_cor'), F_cor)
     np.save(os.path.join(output_folder, 'F_raw'), F_raw)
-
-    # TODO: compute F0 and dff.
+    np.save(os.path.join(output_folder, 'F0'), F0)
+    np.save(os.path.join(output_folder, 'dff'), dff)
+    print(f'Data saved.')
