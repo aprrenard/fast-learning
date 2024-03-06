@@ -14,9 +14,9 @@ from PyQt5.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow
 from skimage.metrics import structural_similarity as ssim
 
 
-mouse_list = ['AR127']
+mouse_list = ['AR099', 'AR103', 'AR106', 'AR107']
 
-class ProjectionsGUI(QMainWindow):
+class ProjectionsGUI(QMainWindow):  
 
     def __init__(self):
 
@@ -155,9 +155,9 @@ class ProjectionsGUI(QMainWindow):
 
         #check if files already exist
 
-        self.CheckRedFile =  pathlib.Path(os.path.join(self.server_dir, 'projections_info', "RedRois.npy"))
-        self.CheckFarRedFile =  pathlib.Path(os.path.join(self.server_dir, 'projections_info', "FarRedRois.npy"))
-        self.CheckUNFile =  pathlib.Path(os.path.join(self.server_dir, 'projections_info', "UNRois.npy"))
+        self.CheckRedFile =  pathlib.Path(os.path.join(self.server_dir, 'projection_neurons', "RedRois.npy"))
+        self.CheckFarRedFile =  pathlib.Path(os.path.join(self.server_dir, 'projection_neurons', "FarRedRois.npy"))
+        self.CheckUNFile =  pathlib.Path(os.path.join(self.server_dir, 'projection_neurons', "UNRois.npy"))
 
         if not(self.CheckRedFile.is_file()) or not(self.CheckFarRedFile.is_file()) or not(self.CheckUNFile.is_file()):
             (self.Far_red, self.Red, self.UN) =  self.predefineRois()
@@ -778,7 +778,7 @@ class ProjectionsGUI(QMainWindow):
         # ctb_img_red =  (lsensGF.ProjectionsInfo() & self.sessionkey & 'ctb_type = "CTB-594 "').fetch1('ctb_image')
         # red_reg_img =  (lsensGF.ProjectionsInfo() & self.sessionkey & 'ctb_type = "CTB-594"').fetch1('ctb_redreg')
         mouse_name = self.sessionkey['mouse_name']
-        projection_path = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_name}\\projections_info'
+        projection_path = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_name}\\projection_neurons'
         images = os.listdir(projection_path)
         baseline_img = [im for im in images if '_G' in im][0]
         ctb_img_farred = [im for im in images if '_FR' in im][0]

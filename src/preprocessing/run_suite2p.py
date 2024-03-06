@@ -8,13 +8,12 @@ sys.path.append('H://anthony//repos//fast-learning//src')
 import server_path
 
 
-mice_ids = ['AR103','AR104','AR106','AR107','AR071','AR099']
-exclude = ['AR071_20230529_130617']
+mice_ids = ['AR129', 'AR131']
 experimenter = 'AR'
 
 # set your options for running
 ops = default_ops() # populates ops with the default options
-ops['batch_size'] = 500
+ops['batch_size'] = 1000
 ops['threshold_scaling'] = 1.0 # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
 ops['fs'] = 30
 ops['tau'] = 1.25 # timescale of gcamp to use for deconvolution
@@ -26,7 +25,7 @@ dbs = []
 for mouse_id in mice_ids:
   tiff_folders = os.path.join(server_path.get_data_folder(), mouse_id, 'Recording', 'Imaging')
   tiff_folders = [os.path.join(tiff_folders, folder) for folder in os.listdir(tiff_folders)
-                  if os.path.isdir(os.path.join(tiff_folders, folder)) and (folder not in exclude)]
+                  if os.path.isdir(os.path.join(tiff_folders, folder))]
   # tiff_folders = ['D://AR//test_data']
   fast_disk = os.path.join('D:', 'suite2p', mouse_id)
   save_path = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
