@@ -33,16 +33,16 @@ for mouse_id in mice_ids:
   if not os.path.exists(fast_disk):
      os.mkdir(fast_disk)
 
-  # db overwrites any ops (allows for experiment specific settings)
-  db = {
+    # db overwrites any ops (allows for experiment specific settings)
+    db = {
         'h5py': [], # a single h5 file path
         'h5py_key': 'data',
-        'data_path': tiff_folders, # a list of folders with tiffs 
-                                              # (or folder of folders with tiffs if look_one_level_down is True, or subfolders is not empty)          
+        'data_path': tiff_folders, # a list of folders with tiffs
+                                                # (or folder of folders with tiffs if look_one_level_down is True, or subfolders is not empty)
         'fast_disk': fast_disk, # string which specifies where the binary file will be stored (should be an SSD)
         'save_path0': save_path,
-      }
-  dbs.append(db)
+        }
+    dbs.append(db)
 
 for dbi in dbs:
     opsEnd = run_s2p(ops=ops, db=dbi)

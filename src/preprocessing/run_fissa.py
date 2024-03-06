@@ -101,10 +101,18 @@ for mouse_id in mice_ids:
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
     iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)[:,0]
-    images = os.path.join(suite2p_folder, 'reg_tif')
+    tif_path = os.path.join(suite2p_folder, 'reg_tif')
 
+    # Set merged roi's to non-cells.
     iscell = set_merged_roi_to_non_cell(stat, iscell)
-
+    
+    # The registered tifs in the reg-tif folder created by suite2p
+    # are not lexicographically ordered. Reorder them and give list of
+    # tifs as argument to Fissa.
+    
+    images = os.listdir(tif_path)
+    
+    
     # Get image size
     Lx = ops['Lx']
     Ly = ops['Ly']

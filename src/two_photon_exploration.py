@@ -1,26 +1,56 @@
 import os
+import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-
-import server_path
 from analysis.psth_analysis import return_events_aligned_data_table
 
-
-nwb_list =  [
-            # 'AR103_20230823_102029.nwb',
-            #  'AR103_20230826_173720.nwb',
-            #  'AR103_20230825_190303.nwb',
-            #  'AR103_20230824_100910.nwb',
-            #  'AR103_20230827_180738.nwb',
-             'GF333_21012021_125450.nwb'
-             ]
+import server_path
 
 
-rrs_keys = ['ophys', 'fluorescence_all_cells', 'dcnv']
-time_range = (1,5)
+def read_excel_database(folder, file_name):
+    excel_path = os.path.join(folder, file_name)
+    database = pd.read_excel(excel_path, converters={'session_day': str})
+
+    # Remove empty lines.
+    database = database.loc[~database.isna().all(axis=1)]
+
+    # Change yes/no columns to booleans.
+    database = database.replace('yes', True)
+    database = database.replace('no', False)
+    database = database.astype({'2P_calcium_imaging': bool,
+                                'optogenetic': bool,'pharmacology': bool})
+
+    return database
+
+
+# nwb_list =  [
+#             # 'AR103_20230823_102029.nwb',
+#             #  'AR103_20230826_173720.nwb',
+#             #  'AR103_20230825_190303.nwb',
+#             #  'AR103_20230824_100910.nwb',
+#             #  'AR103_20230827_180738.nwb',
+#              'GF333_21012021_125450.nwb'
+#              ]
+
+# # Read excel database.
+# db_folder = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard'
+# db_name = 'sessions_GF.xlsx'
+# db = read_excel_database(db_folder, db_name)
+# db.session_day
+
+nwb_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB'
+nwb_list = sorted([nwb for nwb in os.listdir(nwb_path) if 'AR127' in nwb])
+nwb_list = ['AR127_20240221_133407.nwb',
+ 'AR127_20240222_152629.nwb',
+ 'AR127_20240223_131820.nwb',
+ 'AR127_20240224_140853.nwb',
+ 'AR127_20240225_142858.nwb',]
+
+rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+time_range = (2,3)
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
 epoch_name = 'unmotivated'
 
@@ -66,7 +96,68 @@ for ievent in range(50):
 plt.axvline(90, color='k')
 plt.axvline(271, color='k')
 
+%matplotlib qt
+d = temp.loc[(temp.cell_type=='wM1') & (temp.behavior_day.isin([-1, 1]))]
+sns.lineplot(x='time', y='activity', data=d, hue='cell_type', style='behavior_day', n_boot=100)
 
+
+
+for cell in table.loc[table.cell_type=='wM1', 'roi'].unique():
+    d = table.loc[(table.roi==cell) & (table.behavior_day.isin([-1,+1]))]
+    plt.figure()
+    sns.lineplot(x='time', y='activity', data=d, style='behavior_day', n_boot=100)
+    plt.title(cell)
+
+event = 0
+cell = 166
+bday = 1
+for event in range(50):
+    d = table.loc[(table.roi==cell) & (table.event==event) & (table.behavior_day==bday)]
+    sns.lineplot(x='time', y='activity', data=d)
+
+
+
+
+
+
+
+
+path = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\AR127\\suite2p\\plane0\\F_cor.npy"
+F_cor = np.load(path, allow_pickle=True)
+plt.plot(F_cor[166])
+
+sep = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\AR127\\suite2p\\plane0\\prepared.npz"
+sep = np.load(sep, allow_pickle=True)
+
+# fissa = sep['result']
+fissa = sep['raw']
+
+
+cell = 166
+tif=0
+fissa[cell,tif][0]
+
+for i in range(100):
+    plt.plot(np.arange(0+500*i,500*(i+1)), fissa[cell,i][0])
+
+
+
+# Extract and reshape corrected traces to (ncells, nt).
+ncells, ntifs = fissa.shape
+F_cor = []
+for icell in range(ncells):
+    tmp = []
+    for itif in range(ntifs):
+        tmp.append(fissa[icell,itif][0])
+    F_cor.append(np.concatenate(tmp))
+
+
+a = np.stack(F_cor, axis=0)
+a.shape
+
+plt.plot(F_cor[166])
+plt.plot(np.concatenate(tmp))
+len(F_cor)
 
 
 
