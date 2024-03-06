@@ -112,6 +112,7 @@ for mouse_id in mice_ids:
     reg_tif_list = os.listdir(tif_path)
     f = lambda x: int(x[6:-10])
     reg_tif_list = sorted(reg_tif_list, key=f)
+    reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
 
     # Get image size
     Lx = ops['Lx']
