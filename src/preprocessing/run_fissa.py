@@ -24,7 +24,7 @@ def set_merged_roi_to_non_cell(stat, is_cell):
     return is_cell
 
 
-def compute_F0(F, fs, window):
+def compute_baseline(F, fs, window):
 
     # Parameters --------------------------------------------------------------
     nfilt = 30  # Number of taps to use in FIR filter
@@ -67,13 +67,13 @@ def compute_F0(F, fs, window):
                                            padlen=padlen)
 
     # Take a percentile of the filtered signal and windowed signal
-    F0 = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,(fs*2*window + 1)), mode='constant', cval=+np.inf)
+    baseline = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,(fs*2*window + 1)), mode='constant', cval=+np.inf)
 
     # Ensure filtering doesn't take us below the minimum value which actually
     # occurs in the data. This can occur when the amount of data is very low.
-    F0 = np.maximum(F0, np.nanmin(F, axis=1, keepdims=True))
+    baseline = np.maximum(baseline, np.nanmin(F, axis=1, keepdims=True))
 
-    return F0
+    return baseline
 
 
 def compute_dff(F_cor, F_raw, fs, window=60):
@@ -83,7 +83,7 @@ def compute_dff(F_cor, F_raw, fs, window=60):
     fs: sampling frequency
     window: running window size on each side of sample for percentile computation
     '''
-    F0 = compute_F0(F_raw, fs, window)
+    F0 = compute_baseline(F_raw, fs, window)
     dff = F_cor / F0
 
     return F0, dff
@@ -170,7 +170,6 @@ for mouse_id in mice_ids:
         F_raw.append(np.concatenate(tmp))
     F_raw = np.vstack(F_raw)
 
-    # TODO: compute F0 and dff.
     F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
     
     # Saving data.
@@ -178,4 +177,7 @@ for mouse_id in mice_ids:
     np.save(os.path.join(output_folder, 'F_raw'), F_raw)
     np.save(os.path.join(output_folder, 'F0'), F0)
     np.save(os.path.join(output_folder, 'dff'), dff)
+    np.save(os.path.join(output_folder, 'iscell'), iscell)
+    np.save(os.path.join(output_folder, 'ops'), ops)
+    np.save(os.path.join(output_folder, 'stat'), stat)
     print(f'Data saved.')
