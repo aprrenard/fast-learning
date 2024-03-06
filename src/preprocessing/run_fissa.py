@@ -10,7 +10,7 @@ sys.path.append('H://anthony//repos//fast-learning//src')
 import server_path
 
 
-mice_ids = ['ARXXX']
+mice_ids = ['AR127']
 experimenter = 'AR'
 
 def set_merged_roi_to_non_cell(stat, is_cell):
@@ -101,7 +101,6 @@ for mouse_id in mice_ids:
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
     iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)[:,0]
-    tif_path = os.path.join(suite2p_folder, 'reg_tif')
 
     # Set merged roi's to non-cells.
     iscell = set_merged_roi_to_non_cell(stat, iscell)
@@ -109,10 +108,11 @@ for mouse_id in mice_ids:
     # The registered tifs in the reg-tif folder created by suite2p
     # are not lexicographically ordered. Reorder them and give list of
     # tifs as argument to Fissa.
-    
-    images = os.listdir(tif_path)
-    
-    
+    tif_path = os.path.join(suite2p_folder, 'reg_tif')
+    reg_tif_list = os.listdir(tif_path)
+    f = lambda x: int(x[6:-10])
+    reg_tif_list = sorted(reg_tif_list, key=f)
+
     # Get image size
     Lx = ops['Lx']
     Ly = ops['Ly']
@@ -145,7 +145,7 @@ for mouse_id in mice_ids:
         rois[i][ypix, xpix] = 1
 
     print(f'Running Fissa separation for {mouse_id}.')
-    exp = fissa.Experiment(images, [rois], output_folder)
+    exp = fissa.Experiment(reg_tif_list, [rois], output_folder)
     exp.separate()
 
     # Extract and reshape corrected traces to (ncells, nt).
