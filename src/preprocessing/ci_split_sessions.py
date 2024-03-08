@@ -5,7 +5,7 @@ from ScanImageTiffReader import ScanImageTiffReader
 import tifffile as tiff
 
 
-mice_id = ['AR106', 'AR107']
+mice_id = ['AR127',]
 
 for mouse_id in mice_id:
 
@@ -23,12 +23,13 @@ for mouse_id in mice_id:
     F_cor = np.load(os.path.join(suite2p_folder, 'F_cor.npy'), allow_pickle=True)
     F_raw = np.load(os.path.join(suite2p_folder, 'F_raw.npy'), allow_pickle=True)
     F0 = np.load(os.path.join(suite2p_folder, 'F0.npy'), allow_pickle=True)
+    dff = np.load(os.path.join(suite2p_folder, 'dff.npy'), allow_pickle=True)
     stat = np.load(os.path.join(suite2p_folder, 'stat.npy'), allow_pickle=True)
     iscell = np.load(os.path.join(suite2p_folder, 'iscell.npy'), allow_pickle=True)
     ops = np.load(os.path.join(suite2p_folder, 'ops.npy'), allow_pickle=True)
 
-    # Count frames per sessions.
-
+    # Count frames per session.
+ 
     frames_per_session = []
     for session in session_list:
         path = os.path.join(imaging_folder, session)
@@ -57,6 +58,11 @@ for mouse_id in mice_id:
         np.save(os.path.join(save_path, 'F_cor.npy'), F_cor[:, a:b])
         np.save(os.path.join(save_path, 'F_raw.npy'), F_raw[:, a:b])
         np.save(os.path.join(save_path, 'F0.npy'), F0[:, a:b])
+        np.save(os.path.join(save_path, 'dff.npy'), dff[:, a:b])
+        np.save(os.path.join(save_path, 'stat.npy'), stat)
+        np.save(os.path.join(save_path, 'iscell.npy'), iscell)
+        np.save(os.path.join(save_path, 'ops.npy'), ops)
+        
 
 
     # Move reg tifs to the sessions they belong to.
@@ -123,6 +129,5 @@ for mouse_id in mice_id:
             frames_per_session[isession] += cut_left
             frames_per_session[isession+1] += 500 - cut_left
             isession += 1
-
 
 

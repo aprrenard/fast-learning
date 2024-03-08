@@ -13,15 +13,15 @@ import server_path
 mice_ids = ['AR127']
 experimenter = 'AR'
 
-def set_merged_roi_to_non_cell(stat, is_cell):
-    # Set merged cells to 0 in is_cell.
+def set_merged_roi_to_non_cell(stat, iscell):
+    # Set merged cells to 0 in iscell.
     if 'inmerge' in stat[0].keys():
         for i, st in enumerate(stat):
             # 0: no merge; -1: input of a merge; index > 0: result of a merge.
             if st['inmerge'] not in [0, -1]:
-                is_cell[i] = 0.0
+                iscell[i][0] = 0.0
 
-    return is_cell
+    return iscell
 
 
 def compute_baseline(F, fs, window):
@@ -112,6 +112,7 @@ for mouse_id in mice_ids:
     reg_tif_list = os.listdir(tif_path)
     f = lambda x: int(x[6:-10])
     reg_tif_list = sorted(reg_tif_list, key=f)
+    reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
 
     # Get image size
     Lx = ops['Lx']
@@ -120,7 +121,7 @@ for mouse_id in mice_ids:
     # Get the cell ids
     ncells = len(stat)
     cell_ids = np.arange(ncells)  # assign each cell an ID, starting from 0.
-    cell_ids = cell_ids[iscell==1]  # only keep the ROIs that are actually cells.
+    cell_ids = cell_ids[iscell[:,0]==1]  # only keep the ROIs that are actually cells.
     num_rois = len(cell_ids)
 
     # Generate ROI masks in a format usable by FISSA (in this case, a list of masks)
@@ -177,7 +178,4 @@ for mouse_id in mice_ids:
     np.save(os.path.join(output_folder, 'F_raw'), F_raw)
     np.save(os.path.join(output_folder, 'F0'), F0)
     np.save(os.path.join(output_folder, 'dff'), dff)
-    np.save(os.path.join(output_folder, 'iscell'), iscell)
-    np.save(os.path.join(output_folder, 'ops'), ops)
-    np.save(os.path.join(output_folder, 'stat'), stat)
     print(f'Data saved.')
