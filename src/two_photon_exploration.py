@@ -5,8 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from analysis.psth_analysis import return_events_aligned_data_table
+import itertools
 
+sys.path.append('C:\\Users\\aprenard\\recherches\\repos\\NWB_analysis\\nwb_wrappers')
+from analysis.psth_analysis import return_events_aligned_data_table
+from nwb_wrappers import nwb_reader_functions as nwb_read
 import server_path
 
 
@@ -40,29 +43,99 @@ def read_excel_database(folder, file_name):
 # db_name = 'sessions_GF.xlsx'
 # db = read_excel_database(db_folder, db_name)
 # db.session_day
-
-nwb_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB'
-nwb_list = sorted([nwb for nwb in os.listdir(nwb_path) if 'AR127' in nwb])
-nwb_list = ['AR127_20240221_133407.nwb',
- 'AR127_20240222_152629.nwb',
- 'AR127_20240223_131820.nwb',
- 'AR127_20240224_140853.nwb',
- 'AR127_20240225_142858.nwb',]
-
+mice = ['AR127', 'AR129', 'AR131']
 rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
 time_range = (2,3)
-trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
 epoch_name = 'unmotivated'
 
 nwb_path = server_path.get_experimenter_nwb_folder('AR')
-nwb_list = [os.path.join(nwb_path, nwb) for nwb in nwb_list]
+nwb_list = []
+for mouse_id in mice:
+    nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
+nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
 
+
+behavior_types = ['auditory', 'whisker']
+days = [-2, -1, 0, 1, 2]
+behavior_days = itertools.product(behavior_types, days)
+nwb_list = [nwb for nwb in nwb_list if (nwb_read.get_bhv_type_and_training_day_index(nwb) in behavior_days)]
+
+trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
 table = return_events_aligned_data_table(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
 
-temp = table.groupby(['mouse_id', 'session_id', 'roi', 'time', 'cell_type', 'behavior_type', 'behavior_day'], as_index=False).agg(np.nanmean)
+
+# PSTH over cells for different days and cell types.
+palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+temp = table.groupby(['mouse_id', 'session_id', 'roi', 'time', 'cell_type', 'behavior_type', 'behavior_day'],
+                     as_index=False).agg(np.nanmean)
 temp = temp.astype({'roi': str})
-f = plt.figure()
-sns.lineplot(data=temp.loc[temp.roi.isin(['10','38','44'])], x='time', y='activity', hue='roi', style='session_id', n_boot=100)
+
+temp = temp.loc[~((temp.mouse_id=='AR131') & (temp.cell_type=='wS2'))]
+
+for mouse_id in mice:
+    d = temp.loc[temp.mouse_id==mouse_id]
+    sns.relplot(data=d, x='time', y='activity', hue='cell_type', hue_order=['na', 'wM1', 'wS2'], n_boot=100, kind='line',
+                col='behavior_day', palette=palette)
+    if mouse_id == 'AR131':
+        plt.suptitle(f'{mouse_id} R-')
+    else:
+        plt.suptitle(f'{mouse_id} R+')
+    plt.subplots_adjust(top=0.85)
+
+
+
+# For GF
+
+
+rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+time_range = (0,5)
+epoch_name = 'unmotivated'
+
+nwb_path = server_path.get_experimenter_nwb_folder('AR')
+nwb_list = os.listdir(nwb_path)
+nwb_list = [nwb for nwb in nwb_list if 'GF' in nwb]
+nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
+nwb_list = [nwb for nwb in nwb_list
+            if 'twophoton' in nwb_read.get_session_metadata(nwb)['session_type']]
+
+nwb_list_rew = [nwb for nwb in nwb_list
+                if nwb_read.get_session_metadata(nwb)['wh_reward']==1]
+nwb_list_non_rew = [nwb for nwb in nwb_list
+                if nwb_read.get_session_metadata(nwb)['wh_reward']==0]
+
+trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
+table_rew = return_events_aligned_data_table(nwb_list_rew, rrs_keys, time_range, trial_selection, epoch_name)
+table_rew['wh_reward'] = 'R+'
+table_non_rew = return_events_aligned_data_table(nwb_list_non_rew, rrs_keys, time_range, trial_selection, epoch_name)
+table_non_rew['wh_reward'] = 'R-'
+del table
+import gc
+gc.collect()
+del table_rew
+
+
+
+# PSTH over cells for different days and cell types.
+palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+temp = table_rew.groupby(['mouse_id', 'session_id', 'roi', 'time', 'cell_type', 'behavior_type', 'behavior_day', 'wh_reward'],
+                     as_index=False).agg(np.nanmean)
+temp = table_rew.astype({'roi': str})
+
+sns.relplot(data=temp, x='time', y='activity', hue='cell_type', hue_order=['na', 'wM1', 'wS2'], n_boot=100, kind='line',
+            col='behavior_day', palette=palette)
+if table['wh_reward'].unique()[0] == 'R+':
+    plt.suptitle(f'{mouse_id} R+')
+else:
+    plt.suptitle(f'{mouse_id} R-')
+plt.subplots_adjust(top=0.85)
+
+
+
+
+
+
+    
+    
 
 temp = table.groupby(['mouse_id', 'session_id', 'roi', 'time', 'behavior_type', 'behavior_day'], as_index=False).agg(np.nanmean)
 temp = temp.astype({'roi': str})
