@@ -1,9 +1,33 @@
 import os
-import sys
 
 from suite2p import run_s2p, default_ops
-sys.path.append('H:\\anthony\\repos\\NWB_analysis')
-from nwb_utils import server_path
+
+
+EXPERIMENTER_MAP = {
+    'AR': 'Anthony_Renard',
+    'RD': 'Robin_Dard',
+    'AB': 'Axel_Bisi',
+    'MP': 'Mauro_Pulin',
+    'PB': 'Pol_Bech',
+    'MM': 'Meriam_Malekzadeh',
+    'MS': 'Lana_Smith',
+    'GF': 'Anthony_Renard',
+    'MI': 'Anthony_Renard',
+    }
+
+
+def get_data_folder():
+    data_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+
+    return data_folder  
+
+
+def get_experimenter_analysis_folder(initials):
+    # Map initials to experimenter to get analysis folder path.
+    experimenter = EXPERIMENTER_MAP[initials]
+    analysis_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
+                                   experimenter, 'data')
+    return analysis_folder
 
 
 mice_ids = ['RD046']

@@ -6,9 +6,6 @@ import scipy
 import matplotlib.pyplot as plt
 import fissa
 
-sys.path.append('H://anthony//repos//fast-learning//src')
-import server_path
-
 
 def set_merged_roi_to_non_cell(stat, iscell):
     # Set merged cells to 0 in iscell.
@@ -86,39 +83,57 @@ def compute_dff(F_cor, F_raw, fs, window=60):
     return f0, dff
 
 
+EXPERIMENTER_MAP = {
+    'AR': 'Anthony_Renard',
+    'RD': 'Robin_Dard',
+    'AB': 'Axel_Bisi',
+    'MP': 'Mauro_Pulin',
+    'PB': 'Pol_Bech',
+    'MM': 'Meriam_Malekzadeh',
+    'MS': 'Lana_Smith',
+    'GF': 'Anthony_Renard',
+    'MI': 'Anthony_Renard',
+}
+
+
+def get_data_folder():
+    data_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+
+    return data_folder  
+
+
+def get_experimenter_analysis_folder(initials):
+    # Map initials to experimenter to get analysis folder path.
+    experimenter = EXPERIMENTER_MAP[initials]
+    analysis_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
+                                   experimenter, 'data')
+    return analysis_folder
+
+
 mice_ids = ['RD046']
 experimenter = 'AR'
 longitudinal = False
 
-inputs = []
-outputs = []
-
+suite2p_folders = []
 if longitudinal:
     for mouse_id in mice_ids:
-        output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
+        suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
                                     mouse_id, 'suite2p', 'plane0')
-        if not os.path.join(output_folder):
-            os.mkdir(output_folder)
-        outputs.append(output_folder)
-
-        suite2p_folder = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
-                                    mouse_id, 'suite2p', 'plane0')
-        inputs.append(suite2p_folder)
+        suite2p_folders.append(suite2p_folder)
 else:
     for mouse_id in mice_ids:
-        output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
-                                    mouse_id, 'suite2p', 'plane0')
-        if not os.path.join(output_folder):
-            os.mkdir(output_folder)
-        outputs.append(output_folder)
+        # List sessions with imaging.
+        sessions = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
+        sessions = [os.path.join(sessions, folder)
+                        for folder in os.listdir(sessions)
+                        if os.path.isdir(os.path.join(sessions, folder))]
+        sessions = [os.path.split(folder)[1] for folder in sessions]
+        for session_id in sessions:
+            suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
+                                          mouse_id, session_id, 'suite2p', 'plane0')
+            suite2p_folders.append(suite2p_folder)
 
-        suite2p_folder = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
-                                    mouse_id, 'suite2p', 'plane0')
-        inputs.append(suite2p_folder)
-
-
-
-for suite2p_folder, output_folder in zip(inputs, outputs):
+for suite2p_folder in suite2p_folders:
 
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
@@ -132,6 +147,7 @@ for suite2p_folder, output_folder in zip(inputs, outputs):
     # tifs as argument to Fissa.
     tif_path = os.path.join(suite2p_folder, 'reg_tif')
     reg_tif_list = os.listdir(tif_path)
+    reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext[1] in ['.tif', '.tiff']]
     f = lambda x: int(x[6:-10])
     reg_tif_list = sorted(reg_tif_list, key=f)
     reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
@@ -168,7 +184,7 @@ for suite2p_folder, output_folder in zip(inputs, outputs):
         rois[i][ypix, xpix] = 1
 
     print(f'Running Fissa separation for {mouse_id}.')
-    exp = fissa.Experiment(reg_tif_list, [rois], output_folder)
+    exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
     exp.separate()
 
     # Extract and reshape corrected traces to (ncells, nt).
@@ -196,8 +212,8 @@ for suite2p_folder, output_folder in zip(inputs, outputs):
     F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
     
     # Saving data.
-    np.save(os.path.join(output_folder, 'F_cor'), F_cor)
-    np.save(os.path.join(output_folder, 'F_raw'), F_raw)
-    np.save(os.path.join(output_folder, 'F0'), F0)
-    np.save(os.path.join(output_folder, 'dff'), dff)
+    np.save(os.path.join(suite2p_folder, 'F_cor'), F_cor)
+    np.save(os.path.join(suite2p_folder, 'F_raw'), F_raw)
+    np.save(os.path.join(suite2p_folder, 'F0'), F0)
+    np.save(os.path.join(suite2p_folder, 'dff'), dff)
     print(f'Data saved.')
