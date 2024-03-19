@@ -2,8 +2,8 @@ import os
 import sys
 
 from suite2p import run_s2p, default_ops
-sys.path.append('H://anthony//repos//fast-learning//src')
-import server_path
+sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+from nwb_utils import server_path
 
 
 mice_ids = ['RD046']

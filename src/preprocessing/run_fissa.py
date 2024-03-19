@@ -10,9 +10,6 @@ sys.path.append('H://anthony//repos//fast-learning//src')
 import server_path
 
 
-mice_ids = ['AR127']
-experimenter = 'AR'
-
 def set_merged_roi_to_non_cell(stat, iscell):
     # Set merged cells to 0 in iscell.
     if 'inmerge' in stat[0].keys():
@@ -83,21 +80,46 @@ def compute_dff(F_cor, F_raw, fs, window=60):
     fs: sampling frequency
     window: running window size on each side of sample for percentile computation
     '''
-    F0 = compute_baseline(F_raw, fs, window)
-    dff = F_cor / F0
+    f0 = compute_baseline(F_raw, fs, window)
+    dff = F_cor / f0
 
-    return F0, dff
+    return f0, dff
 
 
-for mouse_id in mice_ids:
-    output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
-                                 mouse_id, 'suite2p', 'plane0')
+mice_ids = ['RD046']
+experimenter = 'AR'
+longitudinal = False
 
-    if not os.path.join(output_folder):
-        os.mkdir(output_folder)
+inputs = []
+outputs = []
 
-    suite2p_folder = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
-                                  mouse_id, 'suite2p', 'plane0')
+if longitudinal:
+    for mouse_id in mice_ids:
+        output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
+                                    mouse_id, 'suite2p', 'plane0')
+        if not os.path.join(output_folder):
+            os.mkdir(output_folder)
+        outputs.append(output_folder)
+
+        suite2p_folder = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
+                                    mouse_id, 'suite2p', 'plane0')
+        inputs.append(suite2p_folder)
+else:
+    for mouse_id in mice_ids:
+        output_folder = os.path.join(server_path.get_experimenter_analysis_folder('AR'),
+                                    mouse_id, 'suite2p', 'plane0')
+        if not os.path.join(output_folder):
+            os.mkdir(output_folder)
+        outputs.append(output_folder)
+
+        suite2p_folder = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
+                                    mouse_id, 'suite2p', 'plane0')
+        inputs.append(suite2p_folder)
+
+
+
+for suite2p_folder, output_folder in zip(inputs, outputs):
+
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
     iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)[:,0]
