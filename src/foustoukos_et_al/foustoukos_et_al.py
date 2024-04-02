@@ -7,14 +7,13 @@ import pandas as pd
 import seaborn as sns
 import itertools
 
-sys.path.append('C:\\Users\\aprenard\\recherches\\repos\\NWB_analysis\\nwb_wrappers')
-from analysis.psth_analysis import return_events_aligned_data_table
+sys.path.append('C:\\Users\\aprenard\\recherches\\repos\\NWB_analysis')
+from analysis.psth_analysis import make_events_aligned_data_table, make_events_aligned_array
 from nwb_wrappers import nwb_reader_functions as nwb_read
-import server_path
+import nwb_utils.server_path as server_path
 
 
-def read_excel_database(folder, file_name):
-    excel_path = os.path.join(folder, file_name)
+def read_excel_db(excel_path):
     database = pd.read_excel(excel_path, converters={'session_day': str})
 
     # Remove empty lines.
@@ -29,23 +28,14 @@ def read_excel_database(folder, file_name):
     return database
 
 
-# nwb_list =  [
-#             # 'AR103_20230823_102029.nwb',
-#             #  'AR103_20230826_173720.nwb',
-#             #  'AR103_20230825_190303.nwb',
-#             #  'AR103_20230824_100910.nwb',
-#             #  'AR103_20230827_180738.nwb',
-#              'GF333_21012021_125450.nwb'
-#              ]
+# Read excel database.
+excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
+db = read_excel_db(excel_path)
+db.session_day
+mice = db.loc[db['2P_calcium_imaging']==True, 'subject_id'].unique()
 
-# # Read excel database.
-# db_folder = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard'
-# db_name = 'sessions_GF.xlsx'
-# db = read_excel_database(db_folder, db_name)
-# db.session_day
-mice = ['AR127', 'AR129', 'AR131']
 rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-time_range = (2,3)
+time_range = (1,3)
 epoch_name = 'unmotivated'
 
 nwb_path = server_path.get_experimenter_nwb_folder('AR')
@@ -54,14 +44,11 @@ for mouse_id in mice:
     nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
 nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
 
-
 behavior_types = ['auditory', 'whisker']
 days = [-2, -1, 0, 1, 2]
-behavior_days = itertools.product(behavior_types, days)
-nwb_list = [nwb for nwb in nwb_list if (nwb_read.get_bhv_type_and_training_day_index(nwb) in behavior_days)]
-
+nwb_list = [nwb for nwb in nwb_list if nwb_read.get_bhv_type_and_training_day_index(nwb)[1] in days]
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
-table = return_events_aligned_data_table(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
+table = make_events_aligned_array(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
 
 
 # PSTH over cells for different days and cell types.
@@ -104,9 +91,9 @@ nwb_list_non_rew = [nwb for nwb in nwb_list
                 if nwb_read.get_session_metadata(nwb)['wh_reward']==0]
 
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
-table_rew = return_events_aligned_data_table(nwb_list_rew, rrs_keys, time_range, trial_selection, epoch_name)
+table_rew = make_events_aligned_data_table(nwb_list_rew, rrs_keys, time_range, trial_selection, epoch_name)
 table_rew['wh_reward'] = 'R+'
-table_non_rew = return_events_aligned_data_table(nwb_list_non_rew, rrs_keys, time_range, trial_selection, epoch_name)
+table_non_rew = make_events_aligned_data_table(nwb_list_non_rew, rrs_keys, time_range, trial_selection, epoch_name)
 table_non_rew['wh_reward'] = 'R-'
 del table
 import gc
@@ -333,4 +320,59 @@ f, axes = plt.subplots(2,1, sharex=True)
 axes[0].plot(F[icell])
 axes[0].plot(Fneu[icell])
 axes[1].plot(F_fissa[icell])
+
+
+# Using numpy rather than pandas.
+# ###############################
+
+# Read excel database.
+excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
+db = read_excel_db(excel_path)
+mice = db.loc[db['2P_calcium_imaging']==True, 'subject_id'].unique()
+
+rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+time_range = (0,5)
+epoch_name = 'unmotivated'
+
+nwb_path = server_path.get_experimenter_nwb_folder('AR')
+nwb_list = []
+for mouse_id in mice:
+    nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
+nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
+
+behavior_types = ['auditory', 'whisker']
+days = [-2, -1, 0, 1, 2]
+behavior_days = list(itertools.product(behavior_types, days))
+nwb_list = [nwb for nwb in nwb_list if nwb_read.get_bhv_type_and_training_day_index(nwb) in behavior_days]
+trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
+traces = make_events_aligned_array(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
+
+# Save acticity dict.
+save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+            'data_processed\\traces_non_motivated_trials.npy')
+np.save(save_path, traces)
+
+
+# PSTH's day -1 VS day +1 full population.
+# ----------------------------------------
+
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\activity_dict_non_motivated_trials.npy')
+traces = np.load(read_path, allow_pickle=True)
+
+# Just look at GF data.
+traces = traces[15:]
+
+# Substract baseline.
+traces = traces - np.nanmean(traces[:,:,:,:,:,:30], axis=5, keepdims=True)
+
+pop_resp_all_cells = np.nanmean(traces, axis=(2,3,4))
+
+day_m1 = np.nanmean(pop_resp_all_cells[:,1], axis=(0))
+day_1 = np.nanmean(pop_resp_all_cells[:,3], axis=(0))
+plt.plot(day_m1)
+plt.plot(day_1)
+
+
+
 
