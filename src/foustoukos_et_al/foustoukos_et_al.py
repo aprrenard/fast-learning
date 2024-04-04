@@ -156,7 +156,6 @@ for ievent in range(50):
 plt.axvline(90, color='k')
 plt.axvline(271, color='k')
 
-%matplotlib qt
 d = temp.loc[(temp.cell_type=='wM1') & (temp.behavior_day.isin([-1, 1]))]
 sns.lineplot(x='time', y='activity', data=d, hue='cell_type', style='behavior_day', n_boot=100)
 
@@ -345,23 +344,22 @@ days = [-2, -1, 0, 1, 2]
 behavior_days = list(itertools.product(behavior_types, days))
 nwb_list = [nwb for nwb in nwb_list if nwb_read.get_bhv_type_and_training_day_index(nwb) in behavior_days]
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
-traces = make_events_aligned_array(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
+traces, metadata = make_events_aligned_array(nwb_list, rrs_keys, time_range, trial_selection, epoch_name)
 
-# Save acticity dict.
+# Save activity dict.
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-            'data_processed\\traces_non_motivated_trials.npy')
-np.save(save_path, traces)
+             'data_processed\\traces_non_motivated_trials.npy')
+np.save(save_path, {'data': traces, 'metadata':metadata})
 
 
 # PSTH's day -1 VS day +1 full population.
 # ----------------------------------------
 
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\activity_dict_non_motivated_trials.npy')
+read_path = ('C:\\Users\\aprenard\\recherches\\data\\traces_non_motivated_trials.npy')
 traces = np.load(read_path, allow_pickle=True)
 
 # Just look at GF data.
-traces = traces[15:]
+traces = traces[3:]
 
 # Substract baseline.
 traces = traces - np.nanmean(traces[:,:,:,:,:,:30], axis=5, keepdims=True)
@@ -372,7 +370,3 @@ day_m1 = np.nanmean(pop_resp_all_cells[:,1], axis=(0))
 day_1 = np.nanmean(pop_resp_all_cells[:,3], axis=(0))
 plt.plot(day_m1)
 plt.plot(day_1)
-
-
-
-
