@@ -137,7 +137,7 @@ for suite2p_folder in suite2p_folders:
 
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
-    iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)[:,0]
+    iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)
 
     # Set merged roi's to non-cells.
     iscell = set_merged_roi_to_non_cell(stat, iscell)
@@ -147,7 +147,7 @@ for suite2p_folder in suite2p_folders:
     # tifs as argument to Fissa.
     tif_path = os.path.join(suite2p_folder, 'reg_tif')
     reg_tif_list = os.listdir(tif_path)
-    reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext[1] in ['.tif', '.tiff']]
+    reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext(tif)[1] in ['.tif', '.tiff']]
     f = lambda x: int(x[6:-10])
     reg_tif_list = sorted(reg_tif_list, key=f)
     reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
@@ -183,7 +183,7 @@ for suite2p_folder in suite2p_folders:
             print(f'ROI {n} overlaps fully.')
         rois[i][ypix, xpix] = 1
 
-    print(f'Running Fissa separation for {mouse_id}.')
+    print(f'Running Fissa separation for {suite2p_folder}.')
     exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
     exp.separate()
 
