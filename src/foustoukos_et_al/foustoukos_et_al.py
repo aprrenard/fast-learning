@@ -334,8 +334,45 @@ axes[0].plot(Fneu[icell])
 axes[1].plot(F_fissa[icell])
 
 
-# Using numpy rather than pandas.
-# ###############################
+
+
+
+# Generate numpy dataset.
+# -----------------------
+
+# Select NWB files.
+excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
+db = read_excel_db(excel_path)
+mice = db.loc[db['2P_calcium_imaging']==True, 'subject_id'].unique()
+
+rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+time_range = (0,5)
+epoch_name = 'unmotivated'
+wh_rewarded = False
+behavior_types = ['auditory', 'whisker']
+days = [-2, -1, 0, 1, 2]
+
+nwb_path = server_path.get_experimenter_nwb_folder('AR')
+nwb_list = []
+# Reduce the number of files, restricting to mice with imaging.
+for mouse_id in mice:
+    nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
+nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
+nwb_list = [nwb for nwb in nwb_list if 'GF' in nwb or 'MI' in nwb]
+nwb_metadata = [nwb_read.get_session_metadata(nwb) for nwb in nwb_list]
+nwb_list_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
+                if (metadata['wh_reward']==1)
+                & ('twophoton' in metadata['session_type'])
+                & (metadata['behavior_type'] in behavior_types)
+                & (metadata['day'] in days)
+                ]
+nwb_list_non_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
+                if (metadata['wh_reward']==0)
+                & ('twophoton' in metadata['session_type'])
+                & (metadata['behavior_type'] in behavior_types)
+                & (metadata['day'] in days)
+                ]
+
 
 
 # Find unmotivated trials.
@@ -376,51 +413,18 @@ for nwb_file in nwb_list_rew + nwb_list_non_rew:
     
 df_non_motivated_trials = pd.DataFrame(temp, columns = ['mouse_id', 'session_id', 'stop_flag_GF', 'n_wh_miss_GF', 'n_wh_hit_GF', 'stop_flag_AR', 'n_wh_miss_AR', 'n_wh_hit_AR'])
 
-# Quick plot of behavior outcome.
-nwb_file = nwb_list_non_rew[3]
-table = nwb_read.get_trial_table(nwb_file)
+# # Quick plot of behavior outcome.
+# nwb_file = nwb_list_non_rew[3]
+# table = nwb_read.get_trial_table(nwb_file)
 
-table = table.reset_index()
-plt.scatter(table.loc[table.auditory_stim==1, 'id'], table.loc[table.auditory_stim==1, 'lick_flag'])
-plt.scatter(table.loc[table.whisker_stim==1, 'id'], table.loc[table.whisker_stim==1, 'lick_flag'])
-plt.scatter(table.loc[table.no_stim==1, 'id'], table.loc[table.no_stim==1, 'lick_flag'])
+# table = table.reset_index()
+# plt.scatter(table.loc[table.auditory_stim==1, 'id'], table.loc[table.auditory_stim==1, 'lick_flag'])
+# plt.scatter(table.loc[table.whisker_stim==1, 'id'], table.loc[table.whisker_stim==1, 'lick_flag'])
+# plt.scatter(table.loc[table.no_stim==1, 'id'], table.loc[table.no_stim==1, 'lick_flag'])
 
 
-# Generate numpy dataset.
-# -----------------------
-
-# Read excel database.
-excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
-db = read_excel_db(excel_path)
-mice = db.loc[db['2P_calcium_imaging']==True, 'subject_id'].unique()
-
-rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-time_range = (0,5)
-epoch_name = 'unmotivated'
-wh_rewarded = False
-behavior_types = ['auditory', 'whisker']
-days = [-2, -1, 0, 1, 2]
-
-nwb_path = server_path.get_experimenter_nwb_folder('AR')
-nwb_list = []
-# Reduce the number of files, restricting to mice with imaging.
-for mouse_id in mice:
-    nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
-nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
-nwb_list = [nwb for nwb in nwb_list if 'GF' in nwb or 'MI' in nwb]
-nwb_metadata = [nwb_read.get_session_metadata(nwb) for nwb in nwb_list]
-nwb_list_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
-                if (metadata['wh_reward']==1)
-                & ('twophoton' in metadata['session_type'])
-                & (metadata['behavior_type'] in behavior_types)
-                & (metadata['day'] in days)
-                ]
-nwb_list_non_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
-                if (metadata['wh_reward']==0)
-                & ('twophoton' in metadata['session_type'])
-                & (metadata['behavior_type'] in behavior_types)
-                & (metadata['day'] in days)
-                ]
+# Make PSTH dataset in numpy.
+# ---------------------------
 
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0], 'id': np.arange(50,300)}
 trial_selection = {'id': np.arange(200,300)}
@@ -451,19 +455,41 @@ test = table.loc[table[column_name].isin(column_requirements)]
 # PSTH's day -1 VS day +1 full population.
 # ----------------------------------------
 
-read_path = ('C:\\Users\\aprenard\\recherches\\data\\traces_non_motivated_trials.npy')
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\UM_rewarded.npy')
 traces = np.load(read_path, allow_pickle=True)
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\UM_rewarded_metadata.npy')
+metadata = np.load(read_path, allow_pickle=True).item()
+
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\UM_non_rewarded.npy')
+traces_non_rew = np.load(read_path, allow_pickle=True)
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\UM_non_rewarded_metadata.npy')
+metadata_non_rew = np.load(read_path, allow_pickle=True).item()
+
 
 # Just look at GF data.
-traces = traces[3:]
+traces = traces[:,:,:,:,:,30:]
+traces_non_rew = traces_non_rew[:,:,:,:,:,30:]
+traces = traces[2:]
+traces_non_rew = traces_non_rew[1:]
+
+# traces_non_rew = traces_non_rew[[1,3,4,5,6,7,8,9]]
 
 # Substract baseline.
 traces = traces - np.nanmean(traces[:,:,:,:,:,:30], axis=5, keepdims=True)
+traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 
-pop_resp_all_cells = np.nanmean(traces, axis=(2,3,4))
+# Plot responses across cells.
+day_m1 = np.nanmean(traces, axis=(4))
+day_m1 = np.nanmean(day_m1, axis=(0,2,3))[1]
+day_1 = np.nanmean(traces, axis=(4))
+day_1 = np.nanmean(day_1, axis=(0,2,3))[3]
 
-day_m1 = np.nanmean(pop_resp_all_cells[:,1], axis=(0))
-day_1 = np.nanmean(pop_resp_all_cells[:,3], axis=(0))
-plt.plot(day_m1)
-plt.plot(day_1)
+day_m1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_m1_non_rew = np.nanmean(day_m1_non_rew, axis=(0,2,3))[1]
+day_1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_1_non_rew = np.nanmean(day_1_non_rew, axis=(0,2,3))[3]
 
