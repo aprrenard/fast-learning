@@ -6,12 +6,16 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import itertools
+import pickle
 
 sys.path.append('C:\\Users\\aprenard\\recherches\\repos\\NWB_analysis')
 from analysis.psth_analysis import make_events_aligned_data_table, make_events_aligned_array
 from nwb_wrappers import nwb_reader_functions as nwb_read
 import nwb_utils.server_path as server_path
 
+%load_ext autoreload
+%autoreload 2
+%matplotlib qt
 
 def read_excel_db(excel_path):
     database = pd.read_excel(excel_path, converters={'session_day': str})
@@ -337,18 +341,16 @@ axes[1].plot(F_fissa[icell])
 
 
 
-# Generate numpy dataset.
-# -----------------------
-
 # Select NWB files.
+# -----------------
+
 excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
 db = read_excel_db(excel_path)
 mice = db.loc[db['2P_calcium_imaging']==True, 'subject_id'].unique()
 
 rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-time_range = (0,5)
-epoch_name = 'unmotivated'
-wh_rewarded = False
+time_range = (1,3)
+epoch_name = None
 behavior_types = ['auditory', 'whisker']
 days = [-2, -1, 0, 1, 2]
 
@@ -358,7 +360,9 @@ nwb_list = []
 for mouse_id in mice:
     nwb_list.extend([nwb for nwb in os.listdir(nwb_path) if mouse_id in nwb])
 nwb_list = sorted([os.path.join(nwb_path,nwb) for nwb in nwb_list])
+
 nwb_list = [nwb for nwb in nwb_list if 'GF' in nwb or 'MI' in nwb]
+
 nwb_metadata = [nwb_read.get_session_metadata(nwb) for nwb in nwb_list]
 nwb_list_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
                 if (metadata['wh_reward']==1)
@@ -382,110 +386,138 @@ nwb_list_non_rew = [nwb for nwb, metadata in zip(nwb_list, nwb_metadata)
 # Initialise df to check session stop criteria: when it happens and how many non motivated trials that gives.
 
 temp = []
+trial_idx_table_GF = []
+trial_idx_table_AR = []
+
+# Stop flags GF actually used.
+with open(save_yaml, 'r') as stream:
+    stop_flags_GF = yaml.load(stream, yaml.Loader)
+stop_flags_GF = pd.DataFrame(stop_flags_GF, columns=['session_id', 'stop_flag'])
+
 for nwb_file in nwb_list_rew + nwb_list_non_rew:
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
     table = nwb_read.get_trial_table(nwb_file)
-    table = table.reset_index()  # To recover the trial index 'id' as column.
-    table = table.loc[table.perf != 6]
     
-    wh_reward = nwb_read.get_session_metadata(nwb_file)['wh_reward']
+    flag_trial = stop_flags_GF.loc[stop_flags_GF.session_id==session_id, 'stop_flag'].values[0]
+    n_wh_miss = table.loc[(table.trial_id>flag_trial) & (table.whisker_stim == 1) & (table.lick_flag == 0)].shape[0]
+    n_wh_hit = table.loc[(table.trial_id>flag_trial) & (table.whisker_stim == 1) & (table.lick_flag == 1)].shape[0]
     
-    # Define session end as 3 audiotry miss.
-    f = lambda x: sum(x) == 0 
-    table['stop_flag_GF'] = table.lick_flag.rolling(window=3).agg(f) * (table.loc[::-1, 'lick_flag'].cumsum()[::-1] < 3)
-    if sum(table.stop_flag_GF==1) > 0:
-        flag_trial = table.loc[table.stop_flag_GF==1].iloc[0]['id']
-        n_wh_miss = table.loc[(table.id>flag_trial) & (table.whisker_stim == 1) & (table.lick_flag == 0)].shape[0]
-        n_wh_hit = table.loc[(table.id>flag_trial) & (table.whisker_stim == 1) & (table.lick_flag == 1)].shape[0]
-    else:
-        flag_trial = 'na'
-        n_wh_miss = 'na'
-        n_wh_hit = 'na'
+    # Get the indices of those trials.
+    non_mot_idx = table.loc[(table.trial_id>flag_trial), 'trial_id'].to_list()
+    trial_idx_table_GF.append([session_id, non_mot_idx])
 
     # Check if it is different from taking the misses once the experimenter played wh trials only
     # at the end of the session.
-    start_non_mot = (table.whisker_stim != table.whisker_stim.shift()).cumsum().idxmax()
-    n_wh_miss_2 = table.loc[(table.id>=start_non_mot) & (table.whisker_stim == 1) & (table.lick_flag == 0)].shape[0]
-    n_wh_hit_2 = table.loc[(table.id>=start_non_mot) & (table.whisker_stim == 1) & (table.lick_flag == 1)].shape[0]
-
-    temp.append([mouse_id, session_id, flag_trial, n_wh_miss, n_wh_hit, start_non_mot, n_wh_miss_2, n_wh_hit_2,])
+    # End of motivated block i.e. trial just before start of the 50 non-motivated trials.
+    end_mot = (table.whisker_stim != table.whisker_stim.shift()).cumsum().idxmax() - 1
+    n_wh_miss_2 = table.loc[(table.trial_id>end_mot) & (table.whisker_stim == 1) & (table.lick_flag == 0)].shape[0]
+    n_wh_hit_2 = table.loc[(table.trial_id>end_mot) & (table.whisker_stim == 1) & (table.lick_flag == 1)].shape[0]
     
-df_non_motivated_trials = pd.DataFrame(temp, columns = ['mouse_id', 'session_id', 'stop_flag_GF', 'n_wh_miss_GF', 'n_wh_hit_GF', 'stop_flag_AR', 'n_wh_miss_AR', 'n_wh_hit_AR'])
+    # Get the indices of those trials.
+    non_mot_idx = table.loc[(table.trial_id>end_mot), 'trial_id'].to_list()
+    trial_idx_table_AR.append([session_id, non_mot_idx])
 
-# # Quick plot of behavior outcome.
-# nwb_file = nwb_list_non_rew[3]
-# table = nwb_read.get_trial_table(nwb_file)
+    temp.append([mouse_id, session_id, flag_trial, n_wh_miss, n_wh_hit, end_mot, n_wh_miss_2, n_wh_hit_2,])
+stop_flag_table = pd.DataFrame(temp, columns = ['mouse_id', 'session_id', 'stop_flag_GF', 'n_wh_miss_GF', 'n_wh_hit_GF', 'stop_flag_AR', 'n_wh_miss_AR', 'n_wh_hit_AR'])
+trial_idx_table_GF = pd.DataFrame(trial_idx_table_GF, columns=['session_id', 'trial_idx'])
+trial_idx_table_AR = pd.DataFrame(trial_idx_table_AR, columns=['session_id', 'trial_idx'])
 
-# table = table.reset_index()
-# plt.scatter(table.loc[table.auditory_stim==1, 'id'], table.loc[table.auditory_stim==1, 'lick_flag'])
-# plt.scatter(table.loc[table.whisker_stim==1, 'id'], table.loc[table.whisker_stim==1, 'lick_flag'])
-# plt.scatter(table.loc[table.no_stim==1, 'id'], table.loc[table.no_stim==1, 'lick_flag'])
+stop_flag_table[['session_id', 'stop_flag_GF', 'n_wh_miss_GF', 'n_wh_hit_GF']]
+
+
+# Quick plot of behavior outcome.
+nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF305_02122020_132229.nwb'
+table = nwb_read.get_trial_table(nwb_file)
+table = table.reset_index()
+
+plt.scatter(table.loc[table.auditory_stim==1, 'id'], table.loc[table.auditory_stim==1, 'lick_flag'])
+plt.scatter(table.loc[table.whisker_stim==1, 'id'], table.loc[table.whisker_stim==1, 'lick_flag'])
+plt.scatter(table.loc[table.no_stim==1, 'id'], table.loc[table.no_stim==1, 'lick_flag'])
+
+nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF208_01102019_083121.nwb'
+trial_idx_table_GF.loc[trial_idx_table_GF.session_id=='GF208_01102019_083121', 'trial_idx'].values[0]
+stop_flag_table.loc[stop_flag_table.session_id=='GF208_01102019_083121']
+stop_flag_table.loc[stop_flag_table.mouse_id=='GF208']
 
 
 # Make PSTH dataset in numpy.
 # ---------------------------
 
-trial_selection = {'whisker_stim': [1], 'lick_flag':[0], 'id': np.arange(50,300)}
-trial_selection = {'id': np.arange(200,300)}
-traces, metadata = make_events_aligned_array(nwb_list, rrs_keys, time_range, trial_selection, None)
+# Exclude mice without non-motivated trials at the end.
+excluded = ['GF264', 'GF278', 'GF208', 'GF340']
+nwb_list_rew = [nwb_file for nwb_file in nwb_list_rew
+                if os.path.basename(nwb_file)[:5] not in excluded]
+nwb_list_non_rew = [nwb_file for nwb_file in nwb_list_non_rew
+                if os.path.basename(nwb_file)[:5] not in excluded]
 
-traces, metadata = make_events_aligned_array([nwb_file], rrs_keys, time_range, trial_selection, None)
+trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
+traces_rew, metadata_rew = make_events_aligned_array(nwb_list_rew, rrs_keys, time_range,
+                                             trial_selection, epoch_name, trial_idx_table_AR)
+traces_non_rew, metadata_non_rew = make_events_aligned_array(nwb_list_non_rew, rrs_keys, time_range,
+                                             trial_selection, epoch_name, trial_idx_table_AR)
+
+
+
+# table = nwb_read.get_trial_table(nwb_file)
+# table = table.reset_index()
+# table.loc[table['id'].isin(list(np.arange(150,300)))]
+
+# column_name = 'id'
+# column_requirements = np.arange(150,300)
+
+# column_values_type = type(table[column_name].values[0])
+# column_requirements = [column_values_type(requirement) for requirement in column_requirements]
+# test = table.loc[table[column_name].isin(column_requirements)]
 
 # Save activity dict.
+
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials.npz')
-np.savez(save_path, {'data': traces, 'metadata':metadata})
-
-
-nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF307_18112020_075939.nwb'
-
-table = nwb_read.get_trial_table(nwb_file)
-table = table.reset_index()
-table.loc[table['id'].isin(list(np.arange(150,300)))]
-
-column_name = 'id'
-column_requirements = np.arange(150,300)
-
-column_values_type = type(table[column_name].values[0])
-column_requirements = [column_values_type(requirement) for requirement in column_requirements]
-test = table.loc[table[column_name].isin(column_requirements)]
-
+             'data_processed\\traces_non_motivated_trials_rew_AR.npy')
+np.save(save_path, traces_rew)
+save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\traces_non_motivated_trials_rew_AR_metadata.pickle')
+metadata_rew['cell_types'] = list(metadata_rew['cell_types'])
+with open(save_path, 'wb') as fid:
+    pickle.dump(metadata_rew, fid)
+    
+save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\traces_non_motivated_trials_non_rew_AR.npy')
+np.save(save_path, traces_non_rew)
+save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\traces_non_motivated_trials_non_rew_AR_metadata.pickle')
+metadata_non_rew['cell_types'] = list(metadata_non_rew['cell_types'])
+with open(save_path, 'wb') as fid:
+    pickle.dump(metadata_non_rew, fid)
+    
 
 # PSTH's day -1 VS day +1 full population.
 # ----------------------------------------
 
 read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\UM_rewarded.npy')
-traces = np.load(read_path, allow_pickle=True)
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\UM_rewarded_metadata.npy')
-metadata = np.load(read_path, allow_pickle=True).item()
+             'data_processed\\traces_non_motivated_trials_rew_GF.npy')
+traces_rew = np.load(read_path, allow_pickle=True)
+# read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+#              'data_processed\\UM_rewarded_metadata.npy')
+# metadata = np.load(read_path, allow_pickle=True).item()
 
 read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\UM_non_rewarded.npy')
+             'data_processed\\traces_non_motivated_trials_non_rew_GF.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\UM_non_rewarded_metadata.npy')
-metadata_non_rew = np.load(read_path, allow_pickle=True).item()
-
-
-# Just look at GF data.
-traces = traces[:,:,:,:,:,30:]
-traces_non_rew = traces_non_rew[:,:,:,:,:,30:]
-traces = traces[2:]
-traces_non_rew = traces_non_rew[1:]
+# read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+#              'data_processed\\UM_non_rewarded_metadata.npy')
+# metadata_non_rew = np.load(read_path, allow_pickle=True).item()
 
 # traces_non_rew = traces_non_rew[[1,3,4,5,6,7,8,9]]
 
 # Substract baseline.
-traces = traces - np.nanmean(traces[:,:,:,:,:,:30], axis=5, keepdims=True)
+traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 
 # Plot responses across cells.
-day_m1 = np.nanmean(traces, axis=(4))
+day_m1 = np.nanmean(traces_rew, axis=(4))
 day_m1 = np.nanmean(day_m1, axis=(0,2,3))[1]
-day_1 = np.nanmean(traces, axis=(4))
+day_1 = np.nanmean(traces_rew, axis=(4))
 day_1 = np.nanmean(day_1, axis=(0,2,3))[3]
 
 day_m1_non_rew = np.nanmean(traces_non_rew, axis=(4))
@@ -493,3 +525,85 @@ day_m1_non_rew = np.nanmean(day_m1_non_rew, axis=(0,2,3))[1]
 day_1_non_rew = np.nanmean(traces_non_rew, axis=(4))
 day_1_non_rew = np.nanmean(day_1_non_rew, axis=(0,2,3))[3]
 
+f, axes = plt.subplots(1,2, sharey=True)
+axes[0].plot(day_m1)
+axes[0].plot(day_1)
+
+axes[1].plot(day_m1_non_rew)
+axes[1].plot(day_1_non_rew)
+
+# Projection neurons.
+
+
+# Plot responses across cells.
+day_m1_S2 = np.nanmean(traces_rew, axis=(4))
+day_m1_S2 = np.nanmean(day_m1_S2, axis=(0,3))[1,2]
+day_1_S2 = np.nanmean(traces_rew, axis=(4))
+day_1_S2 = np.nanmean(day_1_S2, axis=(0,3))[3,2]
+
+day_m1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_m1_S2_non_rew = np.nanmean(day_m1_S2_non_rew, axis=(0,3))[1,2]
+day_1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_1_S2_non_rew = np.nanmean(day_1_S2_non_rew, axis=(0,3))[3,2]
+
+# Plot responses across cells.
+day_m1_M1 = np.nanmean(traces_rew, axis=(4))
+day_m1_M1 = np.nanmean(day_m1_M1, axis=(0,3))[1,1]
+day_1_M1 = np.nanmean(traces_rew, axis=(4))
+day_1_M1 = np.nanmean(day_1_M1, axis=(0,3))[3,1]
+
+day_m1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_m1_M1_non_rew = np.nanmean(day_m1_M1_non_rew, axis=(0,3))[1,1]
+day_1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+day_1_M1_non_rew = np.nanmean(day_1_M1_non_rew, axis=(0,3))[3,1]
+
+f, axes = plt.subplots(2,2, sharey=True)
+
+axes[0,0].plot(day_m1_M1, color='k')
+axes[0,0].plot(day_1_M1, color='b')
+
+axes[0,1].plot(day_m1_S2, color='k')
+axes[0,1].plot(day_1_S2, color='r')
+
+axes[1,0].plot(day_m1_M1_non_rew, color='k')
+axes[1,0].plot(day_1_M1_non_rew, color='b')
+
+axes[1,1].plot(day_m1_S2_non_rew, color='k')
+axes[1,1].plot(day_1_S2_non_rew, color='r')
+
+
+
+# Count cells.
+
+np.sum(np.nansum(~np.isnan(traces_rew[:,0,:,:,0,0]), axis=(1,2)))
+np.sum(np.nansum(~np.isnan(traces_non_rew[:,0,:,:,0,0]), axis=(1,2)))
+
+np.sum(np.nansum(~np.isnan(traces_rew[:,0,2,:,0,0]), axis=(1)))
+np.sum(np.nansum(~np.isnan(traces_non_rew[:,0,2,:,0,0]), axis=(1)))
+
+# Count trials per session.
+np.nansum(~np.isnan(traces_rew[:,:,0,0,:,0]), axis=(2))
+np.nansum(~np.isnan(traces_non_rew[:,:,0,0,:,0]), axis=(2))
+
+traces_rew.shape
+
+
+# # ---------------
+# import yaml
+# import json
+# path = 'C:\\Users\\aprenard\\Downloads\\TrialStop-20240510T122435Z-001\\TrialStop'
+# save_yaml = 'C:\\Users\\aprenard\\recherches\\repos\\fast-learning\\docs\\stop_flag_GF.yaml'
+# stop_flags = []
+
+# mice = os.listdir(path)
+# for mouse in mice:
+#     mouse_path = os.path.join(path, mouse)
+#     sessions = os.listdir(mouse_path)
+#     for session in sessions:
+#         session_id = session[:-5]
+#         json_path = os.path.join(mouse_path, session)
+#         with open(json_path) as f:
+#             d = json.load(f)
+#             stop_flags.append([session_id, d])
+# with open(save_yaml, 'w') as stream:
+#     yaml.dump(stop_flags, stream)
