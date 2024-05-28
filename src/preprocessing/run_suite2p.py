@@ -30,9 +30,9 @@ def get_experimenter_analysis_folder(initials):
     return analysis_folder
 
 
-mice_ids = ['RD046']
+mice_ids = ['AR144']
 experimenter = 'AR'
-longitudinal = False
+longitudinal = True
 
 # set your options for running
 ops = default_ops() # populates ops with the default options
@@ -48,12 +48,12 @@ dbs = []
 if longitudinal:
     # Concatenate all sessions and run suite2p once per mouse.
     for mouse_id in mice_ids:
-        tiff_folders = os.path.join(server_path.get_data_folder(), mouse_id, 'Recording', 'Imaging')
+        tiff_folders = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
         tiff_folders = [os.path.join(tiff_folders, folder) for folder in os.listdir(tiff_folders)
                         if os.path.isdir(os.path.join(tiff_folders, folder))]
         # tiff_folders = ['D://AR//test_data']
         fast_disk = os.path.join('D:', 'suite2p', mouse_id)
-        save_path = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
+        save_path = os.path.join(get_experimenter_analysis_folder(experimenter),
                                  mouse_id)
         if not os.path.exists(fast_disk):
             os.mkdir(fast_disk)
@@ -71,9 +71,9 @@ if longitudinal:
             }
         dbs.append(db)
 else:
-    # Run suite2p for each session of each mouse.
+    # Run suite2p for each session.
     for mouse_id in mice_ids:
-        tiff_folders = os.path.join(server_path.get_data_folder(), mouse_id, 'Recording', 'Imaging')
+        tiff_folders = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
         tiff_folders = [os.path.join(tiff_folders, folder)
                         for folder in os.listdir(tiff_folders)
                         if os.path.isdir(os.path.join(tiff_folders, folder))]
@@ -81,7 +81,7 @@ else:
         for folder in tiff_folders:
             session_id = os.path.split(folder)[1]
             fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
-            save_path = os.path.join(server_path.get_experimenter_analysis_folder(experimenter),
+            save_path = os.path.join(get_experimenter_analysis_folder(experimenter),
                                      mouse_id, session_id)
             if not os.path.exists(fast_disk):
                 os.makedirs(fast_disk)

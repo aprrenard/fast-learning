@@ -15,94 +15,348 @@ import seaborn as sns
 # ----------------------------------------
 
 read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_rew_GF.npy')
+             'data_processed\\traces_non_motivated_trials_rew_AR.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-# read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-#              'data_processed\\UM_rewarded_metadata.npy')
-# metadata = np.load(read_path, allow_pickle=True).item()
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\traces_non_motivated_trials_rew_AR_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_rew = pickle.load(fid)
 
 read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_non_rew_GF.npy')
+             'data_processed\\traces_non_motivated_trials_non_rew_AR.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-# read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-#              'data_processed\\UM_non_rewarded_metadata.npy')
-# metadata_non_rew = np.load(read_path, allow_pickle=True).item()
-
-# traces_non_rew = traces_non_rew[[1,3,4,5,6,7,8,9]]
+read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
+             'data_processed\\traces_non_motivated_trials_non_rew_AR_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_non_rew = pickle.load(fid)
 
 # Substract baseline.
 traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 
-# Plot responses across cells.
-day_m1 = np.nanmean(traces_rew[:1], axis=(4))
-day_m1 = np.nanmean(day_m1, axis=(0,2,3))[1]
-day_1 = np.nanmean(traces_rew[:1], axis=(4))
-day_1 = np.nanmean(day_1, axis=(0,2,3))[3]
-
-day_m1_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_m1_non_rew = np.nanmean(day_m1_non_rew, axis=(0,2,3))[1]
-day_1_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_1_non_rew = np.nanmean(day_1_non_rew, axis=(0,2,3))[3]
-
-f, axes = plt.subplots(1,2, sharey=True)
-axes[0].plot(day_m1)
-axes[0].plot(day_1)
-
-axes[1].plot(day_m1_non_rew)
-axes[1].plot(day_1_non_rew)
-
-# Projection neurons.
-
-
-# Plot responses across cells.
-day_m1_S2 = np.nanmean(traces_rew, axis=(4))
-day_m1_S2 = np.nanmean(day_m1_S2, axis=(0,3))[1,2]
-day_1_S2 = np.nanmean(traces_rew, axis=(4))
-day_1_S2 = np.nanmean(day_1_S2, axis=(0,3))[3,2]
-
-day_m1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_m1_S2_non_rew = np.nanmean(day_m1_S2_non_rew, axis=(0,3))[1,2]
-day_1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_1_S2_non_rew = np.nanmean(day_1_S2_non_rew, axis=(0,3))[3,2]
-
-# Plot responses across cells.
-day_m1_M1 = np.nanmean(traces_rew, axis=(4))
-day_m1_M1 = np.nanmean(day_m1_M1, axis=(0,3))[1,1]
-day_1_M1 = np.nanmean(traces_rew, axis=(4))
-day_1_M1 = np.nanmean(day_1_M1, axis=(0,3))[3,1]
-
-day_m1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_m1_M1_non_rew = np.nanmean(day_m1_M1_non_rew, axis=(0,3))[1,1]
-day_1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
-day_1_M1_non_rew = np.nanmean(day_1_M1_non_rew, axis=(0,3))[3,1]
-
-f, axes = plt.subplots(2,2, sharey=True)
-
-axes[0,0].plot(day_m1_M1, color='k')
-axes[0,0].plot(day_1_M1, color='b')
-
-axes[0,1].plot(day_m1_S2, color='k')
-axes[0,1].plot(day_1_S2, color='r')
-
-axes[1,0].plot(day_m1_M1_non_rew, color='k')
-axes[1,0].plot(day_1_M1_non_rew, color='b')
-
-axes[1,1].plot(day_m1_S2_non_rew, color='k')
-axes[1,1].plot(day_1_S2_non_rew, color='r')
+# traces_non_rew = traces_non_rew[[1,3,4,5,6,7,8,9]]
 
 
 
-# Coun  t cells.
+# Convert psth to pandas.
+# #######################
+
+
+nmice, ndays, ntypes = traces_rew.shape[:3]
+ncells = traces_rew.shape[2] * traces_rew.shape[3]
+df_psth_rew = []
+days = ['D-2', 'D-1', 'D0', 'D+1', 'D+2']
+for imouse in range(nmice):
+    for isession in range(ndays):
+        cell_count = 0
+        for itype in range(ntypes):
+            ncells = np.sum(~np.isnan(traces_rew[imouse, isession, itype, :, 0, 0]))
+            for icell in range(ncells):
+                response = np.nanmean(traces_rew[imouse, isession, itype, icell], axis=0)
+                df = pd.DataFrame([], columns = ['time', 'activity', 'roi', 'cell_type', 'session_id', 'mouse_id'])
+                df['time'] = np.arange(traces_rew.shape[5]) / 30
+                df['activity'] = response
+                df['roi'] = cell_count
+                df['cell_type'] = metadata_rew['cell_types'][itype]
+                df['mouse_id'] = metadata_rew['mice'][imouse]
+                df['session_id'] = days[isession]
+                df_psth_rew.append(df)
+                cell_count += 1
+
+df_psth_rew = pd.concat(df_psth_rew, axis=0, ignore_index=True)
+df_psth_rew['reward_group'] = 'R+'
+
+nmice, ndays, ntypes = traces_non_rew.shape[:3]
+ncells = traces_non_rew.shape[2] * traces_non_rew.shape[3]
+df_psth_non_rew = []
+days = ['D-2', 'D-1', 'D0', 'D+1', 'D+2']
+for imouse in range(nmice):
+    for isession in range(ndays):
+        cell_count = 0
+        for itype in range(ntypes):
+            ncells = np.sum(~np.isnan(traces_non_rew[imouse, isession, itype, :, 0, 0]))
+            for icell in range(ncells):
+                response = np.nanmean(traces_non_rew[imouse, isession, itype, icell], axis=0)
+                df = pd.DataFrame([], columns = ['time', 'activity', 'roi', 'cell_type', 'session_id', 'mouse_id'])
+                df['time'] = np.arange(traces_non_rew.shape[5]) / 30
+                df['activity'] = response
+                df['roi'] = cell_count
+                df['cell_type'] = metadata_non_rew['cell_types'][itype]
+                df['mouse_id'] = metadata_non_rew['mice'][imouse]
+                df['session_id'] = days[isession]
+                df_psth_non_rew.append(df)
+                cell_count += 1
+
+df_psth_non_rew = pd.concat(df_psth_non_rew, ignore_index=True)
+df_psth_non_rew['reward_group'] = 'R-'
+df_psth = pd.concat((df_psth_rew, df_psth_non_rew), ignore_index=True)
+
+
+
+# Count cells.
+# ------------
 
 np.sum(np.nansum(~np.isnan(traces_rew[:,0,:,:,0,0]), axis=(1,2)))
 np.sum(np.nansum(~np.isnan(traces_non_rew[:,0,:,:,0,0]), axis=(1,2)))
 
-np.nansum(~np.isnan(traces_rew[:,0,2,:,0,0]), axis=(1))
+np.nansum(~np.isnan(traces_rew[:,0,1,:,0,0]), axis=(1))
 np.nansum(~np.isnan(traces_non_rew[:,0,1,:,0,0]), axis=(1))
 
 # Count trials per session.
 np.nansum(~np.isnan(traces_rew[:,:,0,0,:,0]), axis=(2))
 np.nansum(~np.isnan(traces_non_rew[:,:,0,0,:,0]), axis=(2))
 
-traces_rew.shape
+
+# mouse_id = 'AR133'
+# far_red_file = f"\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_id}\\projection_neurons\\FarRedRois.npy"
+# red_file = f"\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_id}\\projection_neurons\\RedRois.npy"
+# red = np.load(red_file, allow_pickle=True)
+# far_red = np.load(far_red_file, allow_pickle=True)
+# print(f"mouse {mouse_id} red {red.size} far red {far_red.size}")
+
+# from nwb_wrappers import nwb_reader_functions as nwb_read
+# nwb = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\AR133_20240424_130306.nwb"
+# rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+# rrs = nwb_read.get_cell_indices_by_cell_type(nwb, rrs_keys)
+
+# # Plot responses across cells.
+# day_m1 = np.nanmean(traces_rew, axis=(4))
+# day_m1 = np.nanmean(day_m1, axis=(0,2,3))[1]
+# day_1 = np.nanmean(traces_rew, axis=(4))
+# day_1 = np.nanmean(day_1, axis=(0,2,3))[3]
+
+# day_m1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_m1_non_rew = np.nanmean(day_m1_non_rew, axis=(0,2,3))[1]
+# day_1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_1_non_rew = np.nanmean(day_1_non_rew, axis=(0,2,3))[3]
+
+# f, axes = plt.subplots(1,2, sharey=True)
+# axes[0].plot(day_m1)
+# axes[0].plot(day_1)
+
+# axes[1].plot(day_m1_non_rew)
+# axes[1].plot(day_1_non_rew)
+
+
+
+# # Projection neurons.
+# # -------------------
+
+# # Plot responses across cells.
+# day_m1_S2 = np.nanmean(traces_rew, axis=(4))
+# day_m1_S2 = np.nanmean(day_m1_S2, axis=(0,3))[1,2]
+# day_1_S2 = np.nanmean(traces_rew, axis=(4))
+# day_1_S2 = np.nanmean(day_1_S2, axis=(0,3))[3,2]
+
+# day_m1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_m1_S2_non_rew = np.nanmean(day_m1_S2_non_rew, axis=(0,3))[1,2]
+# day_1_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_1_S2_non_rew = np.nanmean(day_1_S2_non_rew, axis=(0,3))[3,2]
+
+# # Plot responses across cells.
+# day_m1_M1 = np.nanmean(traces_rew, axis=(4))
+# day_m1_M1 = np.nanmean(day_m1_M1, axis=(0,3))[1,1]
+# day_1_M1 = np.nanmean(traces_rew, axis=(4))
+# day_1_M1 = np.nanmean(day_1_M1, axis=(0,3))[3,1]
+
+# day_m1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_m1_M1_non_rew = np.nanmean(day_m1_M1_non_rew, axis=(0,3))[1,1]
+# day_1_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# day_1_M1_non_rew = np.nanmean(day_1_M1_non_rew, axis=(0,3))[3,1]
+
+# f, axes = plt.subplots(2,2, sharey=True)
+
+# axes[0,0].plot(day_m1_M1, color='k')
+# axes[0,0].plot(day_1_M1, color='b')
+
+# axes[0,1].plot(day_m1_S2, color='k')
+# axes[0,1].plot(day_1_S2, color='r')
+
+# axes[1,0].plot(day_m1_M1_non_rew, color='k')
+# axes[1,0].plot(day_1_M1_non_rew, color='b')
+
+# axes[1,1].plot(day_m1_S2_non_rew, color='k')
+# axes[1,1].plot(day_1_S2_non_rew, color='r')
+
+
+
+
+# # Plot the 5 days for each mouse.
+# # ###############################
+
+# sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+#               rc={'font.sans-serif':'Arial'})
+# palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+
+# # psth_rew = np.nanmean(traces_rew, axis=(4))
+# # psth_rew = np.nanmean(psth_rew, axis=(3))
+
+# # psth_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# # psth_non_rew = np.nanmean(psth_non_rew, axis=(3))
+
+# # TODO: add ROI in metadata dict. 
+
+
+
+# nmice = psth_rew.shape[0]
+# for imouse in range(nmice):
+#     f, axes = plt.subplots(1,5, sharey=True, figsize=(16,3.2))
+#     mouse = metadata_rew['mice'][imouse]
+#     f.suptitle(f'{mouse} R+')
+#     for iday in range(5):
+#         axes[iday].plot(psth_rew[imouse, iday], color=palette[0])
+    
+# nmice = psth_non_rew.shape[0]
+# for imouse in range(nmice):
+#     f, axes = plt.subplots(1,5, sharey=True, figsize=(16,3.2))
+#     mouse = metadata_non_rew['mice'][imouse]
+#     f.suptitle(f'{mouse} R-')
+#     for iday in range(5):
+#         axes[iday].plot(psth_non_rew[imouse, iday], color=palette[0])
+
+
+
+# # Projection neurons for each mouse.
+# # ##################################
+
+# sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+#               rc={'font.sans-serif':'Arial'})
+# palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+
+# # Plot responses across cells.
+# psth_S2_rew = np.nanmean(traces_rew, axis=(4))
+# psth_S2_rew = np.nanmean(psth_S2_rew, axis=(3))[:,:,2]
+
+# psth_S2_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# psth_S2_non_rew = np.nanmean(psth_S2_non_rew, axis=(3))[:,:,2]
+
+# # Plot responses across cells.
+# psth_M1_rew = np.nanmean(traces_rew, axis=(4))
+# psth_M1_rew = np.nanmean(psth_M1_rew, axis=(3))[:,:,1]
+
+# psth_M1_non_rew = np.nanmean(traces_non_rew, axis=(4))
+# psth_M1_non_rew = np.nanmean(psth_M1_non_rew, axis=(3))[:,:,1]
+
+# nmice = psth_rew.shape[0]
+# for imouse in range(nmice):
+#     f, axes = plt.subplots(1,5, sharey=True, figsize=(18,3.2))
+#     mouse = metadata_rew['mice'][imouse]
+#     f.suptitle(f'{mouse} R+')
+#     for iday in range(5):
+#         axes[iday].plot(psth_S2_rew[imouse, iday], color=palette[2])
+#         axes[iday].plot(psth_M1_rew[imouse, iday], color=palette[1])
+
+# nmice = psth_non_rew.shape[0]
+# for imouse in range(nmice):
+#     f, axes = plt.subplots(1,5, sharey=True, figsize=(18,3.2))
+#     mouse = metadata_non_rew['mice'][imouse]
+#     f.suptitle(f'{mouse} R-')
+#     for iday in range(5):
+#         axes[iday].plot(psth_S2_non_rew[imouse, iday], color=palette[2])
+#         axes[iday].plot(psth_M1_non_rew[imouse, iday], color=palette[1])
+
+
+
+
+
+
+sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
+palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+
+mice_rew = df_psth.loc[df_psth.reward_group=='R+', 'mouse_id'].unique()
+mice_non_rew = df_psth.loc[df_psth.reward_group=='R-', 'mouse_id'].unique()
+
+
+
+# psth across mice
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])]
+sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
+            kind='line', hue='session_id')
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1']) & (df_psth.cell_type.isin(['wM1','wS2']))]
+sns.relplot(data=data, x='time', y='activity', errorbar='se', row='reward_group', col='session_id',
+            kind='line', palette=palette[1:], hue='cell_type')
+
+
+
+
+# Rewarded whole pop
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[:5])]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  errorbar='se', facet_kws={'ylim':(-0.02,0.1)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[5:10])]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  errorbar='se', facet_kws={'ylim':(-0.02,0.06)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[10:15])]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  errorbar='se', facet_kws={'ylim':(-0.02,0.06)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+# Rewarded projection neurosn
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[:5]) & (df_psth.cell_type != 'na')]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  hue='cell_type', errorbar='se', facet_kws={'ylim':(-0.02,0.2)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[5:10]) & (df_psth.cell_type != 'na')]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  hue='cell_type', errorbar='se', facet_kws={'ylim':(-0.02,0.1)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[10:15]) & (df_psth.cell_type != 'na')]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  hue='cell_type', errorbar='se', facet_kws={'ylim':(-0.02,0.1)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+# Non reward whole pop
+
+data = df_psth.loc[(df_psth.mouse_id.isin(mice_non_rew[:5]))]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  errorbar='se', facet_kws={'ylim':(-0.02,0.06)})
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[(df_psth.mouse_id.isin(mice_non_rew[5:10]))]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  errorbar='se', facet_kws={'ylim':(-0.02,0.06)})
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+# Non rewarded projectors
+
+data = df_psth.loc[(df_psth.mouse_id.isin(mice_non_rew[:5])) & (df_psth.cell_type != 'na')]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  hue='cell_type', errorbar='se', facet_kws={'ylim':(-0.02,0.2)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
+data = df_psth.loc[(df_psth.mouse_id.isin(mice_non_rew[5:10])) & (df_psth.cell_type != 'na')]
+fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
+                  hue='cell_type', errorbar='se', facet_kws={'ylim':(-0.02,0.1)}, legend=None)
+fig.set_titles(col_template='{col_name}')
+fig.tight_layout()
+
+
