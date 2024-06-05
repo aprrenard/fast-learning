@@ -24,7 +24,7 @@ from src.utils.utils_excel import read_excel_db
 
 excel_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\mice_info\\session_metadata.xlsx'
 db = read_excel_db(excel_path)
-experimenters = ['AR']
+experimenters = ['AR', 'GF', 'MI']
 
 mice_rew = db.loc[(db['2P_calcium_imaging']==True)
                   & (db.exclude != 'exclude')
@@ -61,21 +61,26 @@ nwb_list_non_rew = [nwb for nwb, metadata in nwb_metadata.items()
                 & (metadata['day'] in days)
                 ]
 
-if 'GF' in experimenters:
-    # Reorder nwb list in chronological order mouse wise (GF does not use americain dates).
-    temp = []
-    for mouse in mice_rew:
-        l = [nwb for nwb in nwb_list_rew if mouse in nwb]
-        l = sorted(l, key=lambda x: datetime.strptime(x[-19:-11], '%d%m%Y'))
-        temp.extend(l)
-    nwb_list_rew = temp
+def get_date(x):
+    if x[-25:-23] in ['GF', 'MI']:
+        return datetime.strptime(x[-19:-11], '%d%m%Y')
+    else:
+        return datetime.strptime(x[-19:-11], '%Y%m%d')
 
-    temp = []
-    for mouse in mice_non_rew:
-        l = [nwb for nwb in nwb_list_non_rew if mouse in nwb]
-        l = sorted(l, key=lambda x: datetime.strptime(x[-19:-11], '%d%m%Y'))
-        temp.extend(l)
-    nwb_list_non_rew = temp
+# Reorder nwb list in chronological order mouse wise (GF does not use americain dates).
+temp = []
+for mouse in mice_rew:
+    l = [nwb for nwb in nwb_list_rew if mouse in nwb]
+    l = sorted(l, key=get_date)
+    temp.extend(l)
+nwb_list_rew = temp
+
+temp = []
+for mouse in mice_non_rew:
+    l = [nwb for nwb in nwb_list_non_rew if mouse in nwb]
+    l = sorted(l, key=get_date)
+    temp.extend(l)
+nwb_list_non_rew = temp
 
 
 # Find unmotivated trials.
@@ -140,10 +145,11 @@ trial_idx_table_AR = pd.DataFrame(trial_idx_table_AR, columns=['session_id', 'tr
 
 
 # # Quick plot of behavior outcome.
-# nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF208_02102019_094122.nwb'
+# nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF264_02072020_104646.nwb'
 # table = nwb_read.get_trial_table(nwb_file)
 # table = table.reset_index()
 
+# plt.figure()
 # plt.scatter(table.loc[table.auditory_stim==1, 'id'], table.loc[table.auditory_stim==1, 'lick_flag'])
 # plt.scatter(table.loc[table.whisker_stim==1, 'id'], table.loc[table.whisker_stim==1, 'lick_flag'])
 # plt.scatter(table.loc[table.no_stim==1, 'id'], table.loc[table.no_stim==1, 'lick_flag'])
@@ -158,8 +164,7 @@ trial_idx_table_AR = pd.DataFrame(trial_idx_table_AR, columns=['session_id', 'tr
 # --------------------------------
 
 # Exclude mice without non-motivated trials at the end.
-# excluded = ['GF264', 'GF278', 'GF208', 'GF340']
-excluded = []
+excluded = ['GF264', 'GF278', 'GF208', 'GF340']
 nwb_list_rew = [nwb_file for nwb_file in nwb_list_rew
                 if os.path.basename(nwb_file)[:5] not in excluded]
 nwb_list_non_rew = [nwb_file for nwb_file in nwb_list_non_rew
@@ -172,11 +177,6 @@ cell_types = ['na', 'wM1', 'wS2']
 rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
 time_range = (1,3)
 epoch_name = None
-
-# traces_rew, metadata_rew = make_events_aligned_array(nwb_list_rew, rrs_keys, time_range,
-#                                                      trial_selection, epoch_name, cell_types, trial_idx)
-# traces_non_rew, metadata_non_rew = make_events_aligned_array(nwb_list_non_rew, rrs_keys, time_range,
-#                                                              trial_selection, epoch_name, cell_types, trial_idx)
 
 traces_rew, metadata_rew = make_events_aligned_array(nwb_list_rew, rrs_keys, time_range,
                                                      trial_selection, epoch_name, cell_types, trial_idx)
@@ -198,22 +198,23 @@ traces_non_rew, metadata_non_rew = make_events_aligned_array(nwb_list_non_rew, r
 # Save activity dict.
 
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_rew_AR.npy')
+             'data_processed\\traces_non_motivated_trials_rew_common.npy')
 np.save(save_path, traces_rew)
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_rew_AR_metadata.pickle')
+             'data_processed\\traces_non_motivated_trials_rew_common_metadata.pickle')
 metadata_rew['cell_types'] = list(metadata_rew['cell_types'])
 with open(save_path, 'wb') as fid:
     pickle.dump(metadata_rew, fid)
 
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_non_rew_AR.npy')
+             'data_processed\\traces_non_motivated_trials_non_rew_common.npy')
 np.save(save_path, traces_non_rew)
 save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_non_rew_AR_metadata.pickle')
+             'data_processed\\traces_non_motivated_trials_non_rew_common_metadata.pickle')
 metadata_non_rew['cell_types'] = list(metadata_non_rew['cell_types'])
 with open(save_path, 'wb') as fid:
     pickle.dump(metadata_non_rew, fid)
+
 
 # save_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
 #              'data_processed\\traces_non_motivated_trials_rew_GF_epoch.npy')
@@ -225,10 +226,16 @@ with open(save_path, 'wb') as fid:
 # np.save(save_path, traces_non_rew)
 
 
+# Generate dataset of motivated trials with all three stimulus types.
+# ###################################################################
+
+
+
+
+
 
 # Make pandas dataset to check that I have the same than with numpy.
 # ##################################################################
-
 
 trial_idx = trial_idx_table_GF
 trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
@@ -239,7 +246,16 @@ traces_rew_pd = make_events_aligned_data_table(nwb_list_rew, rrs_keys, time_rang
 traces_non_rew_pd = make_events_aligned_data_table(nwb_list_non_rew, rrs_keys, time_range,
                                                 trial_selection, epoch_name, True, trial_idx)
 
+stop_flag = {session_id: trial_idx_table_GF.loc[trial_idx_table_GF.session_id==session_id, 'trial_idx'].values[0]
+             for session_id in trial_idx_table_GF.session_id.unique()}
+save_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data_processed\\stop_flag_GF.yaml'
+with open(save_path, 'w') as outfile:
+    yaml.safe_dump(stop_flag, outfile)
 
+with open(save_path, 'r') as fid:
+    test = yaml.safe_load(fid)
+
+trial_idx_table_GF.loc[trial_idx_table_GF.session_id=='GF264_02072020_104646', 'trial_idx'].to_list()
 
 
 # traces_non_rew_pd.loc[(traces_non_rew_pd.mouse_id.isin(['GF208']))].cell_type.unique()
@@ -312,37 +328,76 @@ plt.plot(days[4])
 
 import json
 
-nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF208_03102019_102126.nwb'
+nwb_file = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR144_20240518_193553.nwb'
 rrs_fissa = nwb_read.get_roi_response_serie_data(nwb_file, ['ophys', 'fluorescence_all_cells', 'F_cor'])
 rrs_dff = nwb_read.get_roi_response_serie_data(nwb_file, ['ophys', 'fluorescence_all_cells', 'dff'])
-
-fissa_file = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\FISSASessionData\\GF208\\GF208_03102019\\F_fissa.npy"
-baseline_file = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Baselines\\GF208\\GF208_03102019\\baselines.npy"
-dff_json = "\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\FoustoukosData\\Data\\GF208\\Recordings\\CalciumData\\GF208_03102019_102126\\trial_0001\\dffRois.json"
+rrs_dff.shape
+fissa_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Georgios_Foustoukos\FISSASessionData\GF264\GF264_02072020\F_fissa.npy"
+baseline_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Georgios_Foustoukos\Baselines\GF264\GF264_02072020\baselines.npy"
+dff_json = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Georgios_Foustoukos\FoustoukosData\Data\GF264\Recordings\CalciumData\GF264_02072020_104646\trial_0252\dffRois.json"
 fissa = np.load(fissa_file, allow_pickle=True)
 f0 = np.load(baseline_file, allow_pickle=True)
-
 with open(dff_json, 'r') as stream:
     dff = json.load(stream)
 dff = np.array(dff)
 
-plt.plot(rrs_fissa[0])
-plt.plot(fissa[0], linestyle='--')
+result_file = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Georgios_Foustoukos\FoustoukosData\Data\GF264\Recordings\BehaviourFiles\GF264_02072020_104646\Results.txt'
+df = pd.read_csv(result_file, sep=r'\s+', engine='python')
+df.trial_number
+df.loc[df.Perf==6]
+df.loc[df.Perf!=6]
+
+plt.figure()
+plt.plot(np.mean(rrs_dff[:,-303:], axis=0))
+plt.plot(np.mean(dff[:,:], axis=0))
+
+plt.figure()
+plt.plot(np.mean(rrs_dff[:,-303:], axis=0)[30:150])
+plt.plot(np.mean(dff[:,:], axis=0)[30:150])
+
 
 
 plt.plot(rrs_dff[0])
-plt.plot(fissa[0]/f0[0,1], linestyle='--')
+trial_table = nwb_read.get_trial_table(nwb_file)
+trial_table.trial_id
 
-plt.plot(rrs_dff[0,:500])
-plt.plot(dff[0,:500])
+ts = nwb_read.get_roi_response_serie_timestamps(nwb_file, ['ophys', 'fluorescence_all_cells', 'dff'])
+ts.shape
+rrs_dff.shape
+
+ts[-303]
+# last frame 3404.8333333333335
+
+traces_rew
+
+# Flatten mean response across cells
+a = np.nanmean(traces_rew[1,1,:,:,:52,:], axis=(0,1))
+a.shape
+a = a.flatten()
+b = np.nanmean(rrs_dff, axis=0)
+
+f, axes = plt.subplots(2,1)
+axes[0].plot(b[-303:])
+axes[1].plot(a[-120:])
 
 
-plt.plot(fissa[0,:500]/f0[0,0,:500], linestyle='--')
-plt.plot(dff[0,:500])
+a.shape
+b.shape
+rrs_dff.shape
 
-np.mean(rrs_dff[0,:500])
-np.mean(dff[0])
+metadata_rew
 
+traces_rew.shape
+np.sum(~(np.isnan(traces_rew[1,1,0,0,:,0])))
+np.sum(~(np.isnan(traces_rew[1,1,:,:,0,0])))
+
+
+
+path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR144\suite2p\plane0\F.npy"
+d = np.load(path)
+
+plt.plot(d[0])
+# 3260.900000
 
 
 # # ---------------
