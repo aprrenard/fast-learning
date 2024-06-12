@@ -1,6 +1,6 @@
 """This script generates PSTH numpy arrays from lists of NWB files.
 """
-
+import os
 import pickle
 
 import matplotlib.pyplot as plt
@@ -11,6 +11,9 @@ from scipy.stats import wilcoxon
 from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
 
+
+PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
+# PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
 
 def remove_nan_segments_from_axis(array, axis):
     t = [i for i in range(array.ndim) if i != axis]
@@ -89,6 +92,9 @@ def compute_lmi(data, nshuffles=10000):
     '''
     Compute ROC analysis and Learning modulation index for each cell in data.
     Data: np array of shape (mouse, day, type, cell, trial).
+
+    Assumes only 5 days (sessions) are given.
+    LMI are computed on days D-2, D-1 together VERSUS D+1, D+2 together.
     '''
     nmouse, nsession, ntype, ncell, _ = data.shape
 
@@ -127,11 +133,11 @@ def compute_lmi(data, nshuffles=10000):
                     lmi_p[imouse, itype, icell] = 1
                 else:
                     lmi_p[imouse, itype, icell] = 0
-                        
+
     # Extend lmi arrays on session dim.
     lmi = np.concatenate([lmi[:,np.newaxis] for _ in range(nsession)], axis=1)
     lmi_p = np.concatenate([lmi_p[:,np.newaxis] for _ in range(nsession)], axis=1)
-    
+
     return lmi, lmi_p
 
 
@@ -140,28 +146,21 @@ def compute_lmi(data, nshuffles=10000):
 # #######################################
 
 # Load numpy datasets.
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_rew_GF.npy')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_rew_common.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_rew_GF_metadata.pickle')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_rew = pickle.load(fid)
 
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_non_rew_GF.npy')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_common.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = ('\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\'
-             'data_processed\\traces_non_motivated_trials_non_rew_GF_metadata.pickle')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_non_rew = pickle.load(fid)
 
 # Substract baseline.
 traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
-
-# excluded = ['GF264', 'GF278', 'GF208', 'GF340']
-
 
 # Convert psth to pandas.
 df_psth = convert_psth_np_to_pd(traces_rew, traces_non_rew)
@@ -430,15 +429,15 @@ def select_responsive_cell_wilcoxon(data, thr=0.01, resp_win=slice(30,36,1), bas
 
 
 # Load numpy datasets.
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_rew = pickle.load(fid)
 
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_non_rew = pickle.load(fid)
 
@@ -459,29 +458,60 @@ responsive_mask_rew = select_responsive_cell_wilcoxon(traces_rew, thr=0.01, resp
 responsive_mask_non_rew = select_responsive_cell_wilcoxon(traces_non_rew, thr=0.01, resp_win=RESP_WIN, base_win=BASE_WIN)
 
 # Save masks.
-save_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_rew.npy')
+save_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_rew_common.npy')
 np.save(save_path, responsive_mask_rew)
-save_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_non_rew.npy')
+save_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_non_rew_common.npy')
 np.save(save_path, responsive_mask_non_rew)
+
+
+# PSTH analysis with responsive cells.
+# ####################################
+
+# Load numpy datasets.
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common.npy')
+traces_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_rew = pickle.load(fid)
+
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common.npy')
+traces_non_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_non_rew = pickle.load(fid)
+
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_rew_common.npy')
+np.load(read_path, allow_pickle=True)
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\responsive_mask_non_rew_common.npy')
+np.load(read_path, allow_pickle=True)
 
 traces_rew[~responsive_mask_rew] = np.nan
 traces_non_rew[~responsive_mask_non_rew] = np.nan
 df_psth_resp = convert_psth_np_to_pd(traces_rew, traces_non_rew)
 
+
 # Count prop of responsive cells.
+# -------------------------------
+
 (~np.isnan(traces_rew[:,0,:,:,0,0])).sum() / 2628
 (~np.isnan(traces_non_rew[:,0,:,:,0,0])).sum() / 1926
 
 
-psth_rew = np.nanmean(traces_rew, axis=4)
+# Plot PSTH's.
+# ------------
 
-psth_flat = psth
+sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
+
+# all days
+palette = sns.color_palette(['#238443', '#d51a1c'])
+sns.relplot(data=df_psth, x='time', y='activity', errorbar='se', col='session_id',
+            kind='line', hue='reward_group',
+            hue_order=['R+','R-'], palette=palette)
+plt.ylim([-0.005,0.05])
 
 
-# D-1 VS D+1
-data = df_psth_resp.loc[df_psth_resp.session_id.isin(['D-1', 'D+1'])]
-sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
-            kind='line', hue='session_id')
+
 
 
 # #####################################################
@@ -493,15 +523,27 @@ sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group'
 
 read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF_metadata.pickle')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_rew_GF_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_rew = pickle.load(fid)
 
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF.npy')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_GF.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF_metadata.pickle')
+read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_GF_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_non_rew = pickle.load(fid)
+
+# read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF.npy')
+# traces_rew = np.load(read_path, allow_pickle=True)
+# read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_rew_GF_metadata.pickle')
+# with open(read_path, 'rb') as fid:
+#     metadata_rew = pickle.load(fid)
+
+# read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF.npy')
+# traces_non_rew = np.load(read_path, allow_pickle=True)
+# read_path = (r'E:\anthony\analysis\data_processed\traces_non_motivated_trials_non_rew_GF_metadata.pickle')
+# with open(read_path, 'rb') as fid:
+#     metadata_non_rew = pickle.load(fid)
 
 # Baseline substraction.
 traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
@@ -520,8 +562,8 @@ resp_rew = np.nanmean(traces_rew[:,:,:,:,:,RESP_WIN], axis=5)
 resp_non_rew = np.nanmean(traces_non_rew[:,:,:,:,:,RESP_WIN], axis=5)
 
 # Compute modulation index.
-lmi_rew, lmi_p_rew = compute_lmi(resp_rew)
-lmi_non_rew, lmi_p_non_rew = compute_lmi(resp_non_rew)
+lmi_rew, lmi_p_rew = compute_lmi(resp_rew, nshuffles=1000)
+lmi_non_rew, lmi_p_non_rew = compute_lmi(resp_non_rew, nshuffles=1000)
 
 # Save LMI.
 save_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\lmi_rew.npy')
