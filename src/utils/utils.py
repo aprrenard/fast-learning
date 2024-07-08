@@ -53,3 +53,4 @@ def ci_bootstrap(data, nboot=1000, ci=95):
     ci_right = np.percentile(means, ci+(100-ci)/2)
 
     return ci_left, ci_right
+

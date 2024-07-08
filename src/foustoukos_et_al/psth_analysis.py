@@ -8,12 +8,18 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.stats import wilcoxon
+from scipy.stats import mannwhitneyu
 from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
 
+# Set plot parameters.
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.rcParams['svg.fonttype'] = 'none'
 
-PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
-# PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
+# PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
+PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
+
 
 def remove_nan_segments_from_axis(array, axis):
     t = [i for i in range(array.ndim) if i != axis]
@@ -23,69 +29,66 @@ def remove_nan_segments_from_axis(array, axis):
     return array[tuple(slices)]
 
 
-def convert_psth_np_to_pd(traces_rew, traces_non_rew, lmi_rew=None, lmi_non_rew=None):
+def convert_psth_np_to_pd(data, metadata, reward_group, lmi_rew=None, axis='cell'):
 
-    nmice, ndays, ntypes = traces_rew.shape[:3]
-    ncells = traces_rew.shape[2] * traces_rew.shape[3]
-    df_psth_rew = []
+    nmice, ndays, ntypes = data.shape[:3]
+    ncells = data.shape[2] * data.shape[3]
+    df_list = []
     if ndays == 5:
         days = ['D-2', 'D-1', 'D0', 'D+1', 'D+2']
     elif ndays == 6:
         days = ['D-3', 'D-2', 'D-1', 'D0', 'D+1', 'D+2']
+    elif ndays == 3:
+        days = ['D0', 'D+1', 'D+2']
     for imouse in range(nmice):
         for isession in range(ndays):
-            cell_count = 0
             for itype in range(ntypes):
-                ncells = np.sum(~np.isnan(traces_rew[imouse, isession, itype, :, 0, 0]))
-                for icell in range(ncells):
-                    if np.all(np.isnan(traces_rew[imouse, isession, itype, icell])):
-                        continue
-                    response = np.nanmean(traces_rew[imouse, isession, itype, icell], axis=0)
-                    df = pd.DataFrame([], columns = ['time', 'activity', 'roi', 'cell_type', 'session_id', 'mouse_id'])
-                    df['time'] = np.arange(traces_rew.shape[5]) / 30
-                    df['activity'] = response
-                    df['roi'] = cell_count
-                    df['cell_type'] = metadata_rew['cell_types'][itype]
-                    df['mouse_id'] = metadata_rew['mice'][imouse]
-                    df['session_id'] = days[isession]
-                    if lmi_rew is not None:
-                        df['lmi'] = lmi_rew[imouse, isession, itype, icell]
-                    
-                    df_psth_rew.append(df)
-                    cell_count += 1
+                
+                
+                if axis == 'cell':
+                    ncells = np.sum(~np.isnan(data[imouse, isession, itype, :, 0, 0]))
+                    counter = 0
+                    for icell in range(ncells):
+                        if np.all(np.isnan(data[imouse, isession, itype, icell])):
+                            continue
+                        response = np.nanmean(data[imouse, isession, itype, icell], axis=0)
+                        df = pd.DataFrame([], columns = ['time', 'activity', 'roi', 'cell_type', 'session_id', 'mouse_id'])
+                        df['time'] = np.arange(data.shape[5]) / 30
+                        df['activity'] = response
+                        df['roi'] = counter
+                        df['cell_type'] = metadata['cell_types'][itype]
+                        df['mouse_id'] = metadata['mice'][imouse]
+                        df['session_id'] = days[isession]
+                        if lmi_rew is not None:
+                            df['lmi'] = lmi_rew[imouse, isession, itype, icell]
+                        
+                        df_list.append(df)
+                        counter += 1
+                        
+                elif axis == 'event':
+                    nevents = np.sum(~np.isnan(data[imouse, isession, itype, 0, :, 0]))
+                    counter = 0
+                    for ievent in range(nevents):
+                        if np.all(np.isnan(data[imouse, isession, itype, :, ievent])):
+                            continue
+                        response = np.nanmean(data[imouse, isession, itype, :, ievent], axis=0)
+                        df = pd.DataFrame([], columns = ['time', 'activity', 'event', 'cell_type', 'session_id', 'mouse_id'])
+                        df['time'] = np.arange(data.shape[5]) / 30
+                        df['activity'] = response
+                        df['event'] = counter
+                        df['cell_type'] = metadata['cell_types'][itype]
+                        df['mouse_id'] = metadata['mice'][imouse]
+                        df['session_id'] = days[isession]
+                        if lmi_rew is not None:
+                            df['lmi'] = lmi_rew[imouse, isession, itype, ievent]
+                        
+                        df_list.append(df)
+                        counter += 1
 
-    df_psth_rew = pd.concat(df_psth_rew, axis=0, ignore_index=True)
-    df_psth_rew['reward_group'] = 'R+'
+    df = pd.concat(df_list, axis=0, ignore_index=True)
+    df['reward_group'] = reward_group
 
-    nmice, ndays, ntypes = traces_non_rew.shape[:3]
-    ncells = traces_non_rew.shape[2] * traces_non_rew.shape[3]
-    df_psth_non_rew = []
-    for imouse in range(nmice):
-        for isession in range(ndays):
-            cell_count = 0
-            for itype in range(ntypes):
-                ncells = np.sum(~np.isnan(traces_non_rew[imouse, isession, itype, :, 0, 0]))
-                for icell in range(ncells):
-                    if np.all(np.isnan(traces_non_rew[imouse, isession, itype, icell])):
-                        continue
-                    response = np.nanmean(traces_non_rew[imouse, isession, itype, icell], axis=0)
-                    df = pd.DataFrame([], columns = ['time', 'activity', 'roi', 'cell_type', 'session_id', 'mouse_id'])
-                    df['time'] = np.arange(traces_non_rew.shape[5]) / 30
-                    df['activity'] = response
-                    df['roi'] = cell_count
-                    df['cell_type'] = metadata_non_rew['cell_types'][itype]
-                    df['mouse_id'] = metadata_non_rew['mice'][imouse]
-                    df['session_id'] = days[isession]
-                    if lmi_non_rew is not None:
-                        df['lmi'] = lmi_non_rew[imouse, isession, itype, icell]
-                    df_psth_non_rew.append(df)
-                    cell_count += 1
-
-    df_psth_non_rew = pd.concat(df_psth_non_rew, ignore_index=True)
-    df_psth_non_rew['reward_group'] = 'R-'
-    df_psth = pd.concat((df_psth_rew, df_psth_non_rew), ignore_index=True)
-
-    return df_psth
+    return df
 
 
 def compute_lmi(data, nshuffles=10000):
@@ -146,21 +149,24 @@ def compute_lmi(data, nshuffles=10000):
 # #######################################
 
 # Load numpy datasets.
-read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_rew_common.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_rew_common_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_rew = pickle.load(fid)
 
-read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_common.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = (r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\traces_non_motivated_trials_non_rew_common_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common_metadata.pickle')
 with open(read_path, 'rb') as fid:
-    metadata_non_rew = pickle.load(fid)
+    metadata_non_rew = pickle.load(fid)           
 
 # Substract baseline.
 traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
 traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+
+# Remove my two shitty mice.
+traces_rew = traces_rew[:-2]
 
 # Convert psth to pandas.
 df_psth = convert_psth_np_to_pd(traces_rew, traces_non_rew)
@@ -184,8 +190,8 @@ df_psth.loc[(df_psth.mouse_id=='AR144') & (df_psth.session_id=='D-2'), 'activity
 # Count cells.
 # ------------
 
-np.sum(np.nansum(~np.isnan(traces_rew[:,0,:,:,0,0]), axis=(1,2)))
-np.sum(np.nansum(~np.isnan(traces_non_rew[:,0,:,:,0,0]), axis=(1,2)))
+np.sum(np.nansum(~np.isnan(traces_rew[:,2,[1],:,0,0]), axis=(1,2)))
+np.sum(np.nansum(~np.isnan(traces_non_rew[:,2,[1],:,0,0]), axis=(1,2)))
 
 np.nansum(~np.isnan(traces_rew[:,0,1,:,0,0]), axis=(1))
 np.nansum(~np.isnan(traces_non_rew[:,0,1,:,0,0]), axis=(1))
@@ -197,58 +203,184 @@ np.nansum(~np.isnan(traces_non_rew[:,:,0,0,:,0]), axis=(2))
 
 
 
-sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-              rc={'font.sans-serif':'Arial'})
-palette = sns.color_palette(['#212120', '#3351ff', '#c959af'])
+# Figure 3.
+# ---------
 
+sns.set_theme(context='poster', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
+
+
+
+# PSTH.
+data = df_psth.loc[df_psth.session_id.isin(['D-2', 'D-1', 'D0', 'D+1','D+2'])]
+# data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'time'], as_index=False).agg({'activity':np.nanmean})
+fig, (ax1, ax2) = plt.subplots(2,1, sharex=True, sharey=True)
+palette = sns.color_palette(['#212120', '#238443',])
+palette = sns.color_palette(['#212120', '#d51a1c'])
+palette = sns.color_palette('viridis')
+sns.lineplot(data=data.loc[data.reward_group=='R+'], x='time', y='activity', errorbar='se',
+            hue='session_id', ax=ax1, palette=palette, hue_order=['D-2', 'D-1', 'D0', 'D+1','D+2'])
+sns.lineplot(data=data.loc[data.reward_group=='R-'], x='time', y='activity', errorbar='se',
+            hue='session_id', ax=ax2, palette=palette, hue_order=['D-2', 'D-1', 'D0', 'D+1','D+2'])
+
+palette = sns.color_palette(['#238443', '#d51a1c'])
+sns.lineplot(data=data.loc[data.session_id=='D-1'], x='time', y='activity', errorbar='se',
+            hue='reward_group', palette=palette, hue_order=['R-', 'R+'])
+fig = sns.relplot(data=data.loc[data.session_id=='D-1'], x='time', y='activity', errorbar='se', col='mouse_id',
+            row='reward_group', palette=palette,  kind='line')
+fig.set_titles(col_template='{col_name}')
+
+df_psth.loc[df_psth.reward_group=='R+', 'mouse_id'].unique()
+
+
+
+# Plot PSTH.
+# ----------
+
+sns.set_theme(context='poster', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
 mice_rew = df_psth.loc[df_psth.reward_group=='R+', 'mouse_id'].unique()
 mice_non_rew = df_psth.loc[df_psth.reward_group=='R-', 'mouse_id'].unique()
-
-
 
 # psth across days and all cells
 
 # all days
-# data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+2'])]
-palette = sns.color_palette(['#238443', '#d51a1c'])
-sns.relplot(data=df_psth, x='time', y='activity', errorbar='se', col='session_id',
+data = df_psth.loc[(df_psth.time>=0.5) & (df_psth.time<=3)]
+sns.relplot(data=data, x='time', y='activity', errorbar='se', col='session_id',
             kind='line', hue='reward_group',
-            hue_order=['R+','R-'], palette=palette)
-plt.ylim([-0.005,0.05])
+            hue_order=['R-','R+'], palette=sns.color_palette(['#fe0404ff', '#0da50dff']))
+# plt.ylim([-0.005,0.05])
 
 # D-1 VS D+1
+fig, (ax1, ax2) = plt.subplots(2,1, sharex=True, sharey=True)
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1']) & (df_psth.reward_group=='R+')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=ax1, palette=sns.color_palette(['#212120','#0da50dff']))
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1']) & (df_psth.reward_group=='R-')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=ax2, palette=sns.color_palette(['#212120','#fe0404ff']))
+ax1.set_ylim(-0.005,0.06)
+ax2.set_ylim(-0.005,0.06)
+sns.despine()
+
+# Response peak point plot and test.
 data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])]
-sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
-            kind='line', hue='session_id')
+data = data.loc[(data.time>=1) & (data.time<=1.180)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'cell_type', 'roi'],
+                    as_index=False).agg({'activity':np.nanmax})
 
-# D-1 VS D0
-data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D0'])]
-sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
-            kind='line', hue='session_id')
+fig, (ax1, ax2) = plt.subplots(2,1, sharex=True, sharey=True)
+data1 = data.loc[(data.reward_group=='R+')]
+sns.pointplot(data=data1, x='session_id', y='activity', errorbar='se',
+            ax=ax1, order=['D-1','D+1'], color='#0da50dff')
+data2 = data.loc[(data.reward_group=='R-')]
+sns.pointplot(data=data2, x='session_id', y='activity', errorbar='se',
+            ax=ax2, order=['D-1','D+1'], color='#fe0404ff')
+ax1.set_ylim(0.0,0.06)
+ax2.set_ylim(0.0,0.06)
+sns.despine()
 
-# D-1 VS D+2
-data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+2'])]
-sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
-            kind='line', hue='session_id')
+# Stats
+samples = data.loc[(data.reward_group=='R+')]
+g1 = samples.loc[samples.session_id=='D-1', 'activity'].to_numpy()
+g2 = samples.loc[samples.session_id=='D+1', 'activity'].to_numpy()
+wilcoxon(g1, g2)
+
+
+
+# Same for the projectors.
+fig, axes = plt.subplots(2,2, sharex=True, sharey=True)
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.cell_type=='wM1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=axes[0,0], palette=sns.color_palette(['#212120','#3351ff']))
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.cell_type=='wS2')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=axes[0,1], palette=sns.color_palette(['#212120','#c959af']))
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.cell_type=='wM1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=axes[1,0], palette=sns.color_palette(['#212120','#3351ff']))
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.cell_type=='wS2')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='session_id', ax=axes[1,1], palette=sns.color_palette(['#212120','#c959af']))
+for ax in axes.flatten():
+    ax.set_ylim(-0.01,0.08)
+# ax2.set_ylim(-0.005,0.06)
+sns.despine()
+
+
+# Response peak point plot and test.
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])]
+data = data.loc[(data.time>=1) & (data.time<=1.300)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'cell_type', 'roi'],
+                    as_index=False).agg({'activity':np.nanmax})
+
+fig, (ax1, ax2) = plt.subplots(2,1, sharex=True, sharey=True)
+data1 = data.loc[(data.reward_group=='R+') & (data.cell_type=='wM1')]
+sns.pointplot(data=data1, x='session_id', y='activity', errorbar='se',
+            ax=ax1, order=['D-1','D+1'], color='#3351ff')
+data1 = data.loc[(data.reward_group=='R+') & (data.cell_type=='wS2')]
+sns.pointplot(data=data1, x='session_id', y='activity', errorbar='se',
+            ax=ax1, order=['D-1','D+1'], color='#c959af')
+data2 = data.loc[(data.reward_group=='R-') & (data.cell_type=='wM1')]
+sns.pointplot(data=data2, x='session_id', y='activity', errorbar='se',
+            ax=ax2, order=['D-1','D+1'], color='#3351ff')
+data2 = data.loc[(data.reward_group=='R-') & (data.cell_type=='wS2')]
+sns.pointplot(data=data2, x='session_id', y='activity', errorbar='se',
+            ax=ax2, order=['D-1','D+1'], color='#c959af')
+ax1.set_ylim(0,0.1)
+ax2.set_ylim(0,0.1)
+sns.despine()
+
+# Stats
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])]
+data = data.loc[(data.time>=1) & (data.time<=1.3)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'cell_type', 'roi'],
+                    as_index=False).agg({'activity':np.nanmean})
+
+data1 = data.loc[(data.reward_group=='R+') & (data.cell_type=='wM1')]
+g1 = data1.loc[data1.session_id=='D-1', 'activity'].to_numpy()
+g2 = data1.loc[data1.session_id=='D+1', 'activity'].to_numpy()
+wilcoxon(g1, g2)
+
+data1 = data.loc[(data.reward_group=='R+') & (data.cell_type=='wS2')]
+g1 = data1.loc[data1.session_id=='D-1', 'activity'].to_numpy()
+g2 = data1.loc[data1.session_id=='D+1', 'activity'].to_numpy()
+wilcoxon(g1, g2)
+
+data1 = data.loc[(data.reward_group=='R-') & (data.cell_type=='wM1')]
+g1 = data1.loc[data1.session_id=='D-1', 'activity'].to_numpy()
+g2 = data1.loc[data1.session_id=='D+1', 'activity'].to_numpy()
+wilcoxon(g1, g2)
+
+
 
 # for projectors
 # all days
 # data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+2'])]
 palette = sns.color_palette(['#3351ff', '#c959af'])
-data = df_psth.loc[ (df_psth.cell_type.isin(['wM1','wS2']))]
+data = df_psth.loc[(df_psth.cell_type.isin(['wM1','wS2']))]
+data = data.loc[(data.time>=0.5) & (data.time<=3)]
 fig = sns.relplot(data=data, x='time', y='activity', errorbar='se', row='reward_group', col='session_id',
             kind='line', palette=palette, hue='cell_type')
 fig.set_titles(col_template='{col_name}')
+plt.ylim([-0.01,0.08])
 
 # D-1 VS D+1 for projection neurons
 data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1']) & (df_psth.cell_type.isin(['wM1','wS2']))]
 sns.relplot(data=data, x='time', y='activity', errorbar='se', row='reward_group', col='session_id',
             kind='line', palette=palette[1:], hue='cell_type')
-plt.ylim([-0.02,0.1])
+plt.ylim([-0.0,0.1])
 
 
 # same plot for across populations rather than cells
-
 data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])]
 data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'time'], as_index=False).agg({'activity':np.nanmean})
 sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group',
@@ -256,7 +388,7 @@ sns.relplot(data=data, x='time', y='activity', errorbar='se', col='reward_group'
 
 
 
-# Rewarded one plot per mouse
+# One plot per mouse.
 
 data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[:5])]
 fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
@@ -279,7 +411,7 @@ fig.set_titles(col_template='{col_name}')
 fig.tight_layout()
 
 
-# Rewarded one plot per mouse projection neurons
+# One plot per mouse projection neurons
 
 data = df_psth.loc[df_psth.mouse_id.isin(mice_rew[:5]) & (df_psth.cell_type != 'na')]
 fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
@@ -302,7 +434,7 @@ fig.set_titles(col_template='{col_name}')
 fig.tight_layout()
 
 
-# Non reward once plot per mouse
+# Non rewarded once plot per mouse
 
 data = df_psth.loc[(df_psth.mouse_id.isin(mice_non_rew[:5]))]
 fig = sns.relplot(data=data, x='time', y='activity', row='mouse_id', col='session_id', kind='line',
@@ -396,6 +528,401 @@ ax = plt.gca()
 ax.set_xlabel('Performance at D0')
 ax.set_ylabel('population average dff D0 - D-1')
 
+
+# ##############################
+# PSTH during the whisker day 0.
+# ##############################
+
+sns.set_theme(context='poster', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
+
+# Plot again D-1 VS D+1 for the projectors but two populations on the same plot.
+palette = sns.color_palette(['#3351ff','#c959af'])
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group', 'time'], as_index=False).agg({'activity':np.nanmean})
+
+fig, axes = plt.subplots(2,2, sharex=True, sharey=True)
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.session_id=='D-1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,0], palette=palette)
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.session_id=='D+1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,1], palette=palette)
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R-') 
+                   & (df_psth.session_id=='D-1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,0], palette=palette)
+
+data = df_psth.loc[df_psth.session_id.isin(['D-1', 'D+1'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.session_id=='D+1')]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,1], palette=palette)
+
+for ax in axes.flatten():
+    ax.set_ylim(-0.01,0.08)
+# ax2.set_ylim(-0.005,0.06)
+sns.despine()
+
+
+# 5 first WH vs remaining WH vs WH misses
+# #######################################
+
+# Load numpy datasets.
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WH_trials_rew_common.npy')
+wh_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WH_trials_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_wh_rew = pickle.load(fid)
+    
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WH_trials_non_rew_common.npy')
+wh_non_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WH_trials_non_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_wh_non_rew = pickle.load(fid)
+    
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WM_trials_rew_common.npy')
+wm_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WM_trials_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_wm_rew = pickle.load(fid)
+    
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WM_trials_non_rew_common.npy')
+wm_non_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'WM_trials_non_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_wm_non_rew = pickle.load(fid)
+
+# Substract baseline.
+wh_rew = wh_rew - np.nanmean(wh_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+wh_non_rew = wh_non_rew - np.nanmean(wh_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+wm_rew = wm_rew - np.nanmean(wm_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+wm_non_rew = wm_non_rew - np.nanmean(wm_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+
+wh_rew = wh_rew[:-2]
+wm_rew = wm_rew[:-2]
+
+# Non motivated trials.
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common.npy')
+um_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_um_rew = pickle.load(fid)
+
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common.npy')
+um_non_rew = np.load(read_path, allow_pickle=True)
+read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common_metadata.pickle')
+with open(read_path, 'rb') as fid:
+    metadata_um_non_rew = pickle.load(fid)           
+
+# Substract baseline.
+um_rew = um_rew - np.nanmean(um_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+um_non_rew = um_non_rew - np.nanmean(um_non_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
+
+# Remove my two shitty mice.
+um_rew = um_rew[:-2]
+
+# Convert to pandas.
+df_wh_rew = convert_psth_np_to_pd(wh_rew, metadata_wh_rew, 'R+', lmi_rew=None, axis='event')
+df_wh_rew['event_type'] = 'WH'
+df_wh_rew['motivation'] = 'm'
+df_wm_rew = convert_psth_np_to_pd(wm_rew, metadata_wm_rew, 'R+', lmi_rew=None, axis='event')
+df_wm_rew['event_type'] = 'WM'
+df_wm_rew['motivation'] = 'm'
+df_wh_non_rew = convert_psth_np_to_pd(wh_non_rew, metadata_wh_non_rew, 'R-', lmi_rew=None, axis='event')
+df_wh_non_rew['event_type'] = 'WH'
+df_wh_non_rew['motivation'] = 'm'
+df_wm_non_rew = convert_psth_np_to_pd(wm_non_rew, metadata_wm_non_rew, 'R-', lmi_rew=None, axis='event')
+df_wm_non_rew['event_type'] = 'WM'
+df_wm_non_rew['motivation'] = 'm'
+
+# Convert psth to pandas.
+df_um_rew = convert_psth_np_to_pd(um_rew, metadata_um_rew, 'R+', lmi_rew=None, axis='event')
+df_um_rew['event_type'] = 'WH'
+df_um_rew['motivation'] = 'um'
+df_um_non_rew = convert_psth_np_to_pd(um_non_rew, metadata_um_non_rew, 'R-', lmi_rew=None, axis='event')
+df_um_non_rew['event_type'] = 'WH'
+df_um_non_rew['motivation'] = 'um'
+
+df_psth = pd.concat((df_wh_rew, df_wm_rew, df_wh_non_rew, df_wm_non_rew, df_um_rew, df_um_non_rew), ignore_index=True)
+# Remove single wS2 cell.
+df_psth.loc[(df_psth.mouse_id=='AR131') & (df_psth.cell_type=='wS2'), 'activity'] = np.nan
+# Remove sessions with baseline aberrations.
+df_psth.loc[(df_psth.mouse_id=='GF308') & (df_psth.session_id=='D-3'), 'activity'] = np.nan
+df_psth.loc[(df_psth.mouse_id=='GF208') & (df_psth.session_id=='D-2'), 'activity'] = np.nan
+df_psth.loc[(df_psth.mouse_id=='MI075') & (df_psth.session_id=='D-3'), 'activity'] = np.nan
+df_psth.loc[(df_psth.mouse_id=='AR144') & (df_psth.session_id=='D-2'), 'activity'] = np.nan
+
+
+
+
+
+
+sns.set_theme(context='poster', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+              rc={'font.sans-serif':'Arial'})
+
+fig, axes = plt.subplots(2,3, sharex=True, sharey=True)
+palette = sns.color_palette(['#3351ff','#c959af'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event<10)
+                   & (df_psth.motivation=='m')
+                   ]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,0], palette=palette, hue_order=['wM1', 'wS2'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                    & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event>=10)]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,1], palette=palette, hue_order=['wM1', 'wS2'])
+   
+# data = df_psth.loc[df_psth.session_id.isin(['D0'])
+#                    & (df_psth.cell_type.isin(['wM1','wS2']))
+#                    & (df_psth.time<=3)
+#                    & (df_psth.reward_group=='R+')
+#                    & (df_psth.event_type=='WM')
+#                    & (df_psth.event<5)]
+# sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+#             hue='cell_type', ax=axes[0,2], palette=palette, hue_order=['wM1', 'wS2'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                                      & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WM')
+                   & (df_psth.event>=10)]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,2], palette=palette, hue_order=['wM1', 'wS2'])
+   
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event<10)]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,0], palette=palette, hue_order=['wM1', 'wS2'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event>=10)]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,1], palette=palette, hue_order=['wM1', 'wS2'])
+
+# data = df_psth.loc[df_psth.session_id.isin(['D0'])
+#                    & (df_psth.cell_type.isin(['wM1','wS2']))
+#                    & (df_psth.time<=3)
+#                    & (df_psth.reward_group=='R-')
+#                    & (df_psth.event_type=='WM')
+#                    & (df_psth.event<5)]
+# sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+#             hue='cell_type', ax=axes[1,2], palette=palette, hue_order=['wM1', 'wS2'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time<=3)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WM')
+                   & (df_psth.event>=10)]
+sns.lineplot(data=data, x='time', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,2], palette=palette, hue_order=['wM1', 'wS2'])
+for ax in axes.flatten():
+    ax.set_ylim(-.02, 0.08)
+sns.despine() 
+ 
+
+# Quantification point plots and stats.
+
+fig, axes = plt.subplots(2,4, sharex=True, sharey=True)
+palette = sns.color_palette(['#3351ff','#c959af'])
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event<10)
+                   & (df_psth.motivation=='m')
+                   ]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,0], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[0,0].title.set_text(p)
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                    & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event>=10)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,1], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[0,1].title.set_text(p)
+
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                                      & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WM')
+                   & (df_psth.event>=10)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,2], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[0,2].title.set_text(p)
+
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='um')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R+')
+                   & (df_psth.event_type=='WH')]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[0,3], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[0,3].title.set_text(p)
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event<10)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,0], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[1,0].title.set_text(p)
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WH')
+                   & (df_psth.event>=10)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,1], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[1,1].title.set_text(p)
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='m')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WM')
+                   & (df_psth.event>=10)]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,2], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[1,2].title.set_text(p)
+
+data = df_psth.loc[df_psth.session_id.isin(['D0'])
+                   & (df_psth.motivation=='um')
+                   & (df_psth.cell_type.isin(['wM1','wS2']))
+                   & (df_psth.time>=1)
+                   & (df_psth.time<=2)
+                   & (df_psth.reward_group=='R-')
+                   & (df_psth.event_type=='WH')]
+data = data.groupby(['mouse_id', 'session_id', 'reward_group','cell_type'], as_index=False).agg({'activity':np.nanmean})
+sns.barplot(data=data, x='cell_type', y='activity', errorbar='se',
+            hue='cell_type', ax=axes[1,3], palette=palette, hue_order=['wM1', 'wS2'], estimator=np.nanmean)
+g1 = data.loc[data.cell_type=='wM1', 'activity'].to_numpy()
+g1 = g1[~np.isnan(g1)]
+g2 = data.loc[data.cell_type=='wS2', 'activity'].to_numpy()
+g2 = g2[~np.isnan(g2)]
+_, p = mannwhitneyu(g1,g2)
+axes[1,3].title.set_text(p)
+
+for ax in axes.flatten():
+    ax.set_ylim(0, 0.06)
+sns.despine()
+
+ 
 
 # ################################
 # Select whisker responsive cells.

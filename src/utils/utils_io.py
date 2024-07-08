@@ -1,8 +1,10 @@
+from datetime import datetime
+
 import pandas as pd
 
 
-def read_excel_db(excel_path):
-    database = pd.read_excel(excel_path, converters={'session_day': str})
+def read_excel_db(db_path):
+    database = pd.read_excel(db_path, converters={'day': str})
 
     # Remove empty lines.
     database = database.loc[~database.isna().all(axis=1)]
@@ -10,7 +12,7 @@ def read_excel_db(excel_path):
     # Change yes/no columns to booleans.
     database = database.replace('yes', True)
     database = database.replace('no', False)
-    database = database.astype({'2P_calcium_imaging': bool,
+    database = database.astype({'two_p_imaging': bool,
                                 'optogenetic': bool,'pharmacology': bool})
 
     return database
