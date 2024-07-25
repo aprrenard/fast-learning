@@ -1,0 +1,980 @@
+NWB_CI_GENERAL:
+  switch_group1:
+  - - RD004_20230616_151824
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230616_151824_2023_11_18.14-14-18.nwb
+  - - RD004_20230622_144303
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230622_144303_2023_11_18.14-14-49.nwb
+  - - RD004_20230624_140315
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230624_140315_2023_11_18.14-15-12.nwb
+  - - RD004_20230625_142212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230625_142212_2023_11_18.14-15-26.nwb
+  - - RD004_20230627_143603
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230627_143603_2023_11_18.14-15-47.nwb
+  - - RD004_20230628_143408
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230628_143408_2023_11_18.14-16-00.nwb
+  - - RD004_20230629_141917
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230629_141917_2023_11_18.14-16-12.nwb
+  - - RD030_20231104_140306
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231104_140306_2023_11_18.15-04-15.nwb
+  - - RD030_20231105_131002
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231105_131002_2023_11_18.15-04-21.nwb
+  - - RD030_20231106_124658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231106_124658_2023_11_18.15-04-32.nwb
+  - - RD030_20231108_144525
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231108_144525_2023_11_18.15-04-39.nwb
+  - - RD030_20231110_094857
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231110_094857_2023_11_18.15-04-54.nwb
+  - - RD030_20231113_133727
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231113_133727_2023_11_18.15-04-57.nwb
+  - - RD030_20231115_132725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231115_132725_2023_11_18.15-05-15.nwb
+  - - RD030_20231116_134939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231116_134939_2023_11_18.15-05-21.nwb
+  - - RD030_20231117_145541
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231117_145541_2023_11_18.15-05-28.nwb
+  - - RD030_20231118_143032
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231118_143032_2023_11_19.16-01-42.nwb
+  - - RD030_20231120_134618
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231120_134618_2023_11_21.09-16-34.nwb
+  - - RD030_20231122_134934
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231122_134934_2023_11_22.18-34-51.nwb
+  - - RD030_20231124_104504
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231124_104504_2023_11_27.09-32-30.nwb
+  switch_group2:
+  - - RD001_20230622_133319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230622_133319_2023_11_18.14-03-28.nwb
+  - - RD001_20230628_131427
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230628_131427_2023_11_18.14-04-08.nwb
+  - - RD002_20230616_141251
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230616_141251_2023_11_18.14-06-39.nwb
+  - - RD002_20230623_125701
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230623_125701_2023_11_18.14-07-00.nwb
+  - - RD002_20230625_133203
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230625_133203_2023_11_18.14-07-12.nwb
+  - - RD002_20230629_130904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230629_130904_2023_11_18.14-07-45.nwb
+  - - RD003_20230620_134031
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230620_134031_2023_11_18.14-10-00.nwb
+  - - RD003_20230623_133722
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230623_133722_2023_11_18.14-10-22.nwb
+  - - RD003_20230625_135204
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230625_135204_2023_11_18.14-10-38.nwb
+  - - RD003_20230627_135615
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230627_135615_2023_11_18.14-10-56.nwb
+  - - RD004_20230616_151824
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230616_151824_2023_11_18.14-14-18.nwb
+  - - RD004_20230622_144303
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230622_144303_2023_11_18.14-14-49.nwb
+  - - RD004_20230624_140315
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230624_140315_2023_11_18.14-15-12.nwb
+  - - RD004_20230625_142212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230625_142212_2023_11_18.14-15-26.nwb
+  - - RD004_20230627_143603
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230627_143603_2023_11_18.14-15-47.nwb
+  - - RD004_20230628_143408
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230628_143408_2023_11_18.14-16-00.nwb
+  - - RD004_20230629_141917
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230629_141917_2023_11_18.14-16-12.nwb
+  - - RD005_20230622_150912
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230622_150912_2023_11_18.14-19-12.nwb
+  - - RD005_20230624_145511
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230624_145511_2023_11_18.14-19-31.nwb
+  - - RD005_20230625_145023
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230625_145023_2023_11_18.14-19-39.nwb
+  - - RD005_20230628_151311
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230628_151311_2023_11_18.14-20-02.nwb
+  - - RD005_20230629_151627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230629_151627_2023_11_18.14-20-12.nwb
+  - - RD030_20231104_140306
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231104_140306_2023_11_18.15-04-15.nwb
+  - - RD030_20231105_131002
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231105_131002_2023_11_18.15-04-21.nwb
+  - - RD030_20231106_124658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231106_124658_2023_11_18.15-04-32.nwb
+  - - RD030_20231108_144525
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231108_144525_2023_11_18.15-04-39.nwb
+  - - RD030_20231110_094857
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231110_094857_2023_11_18.15-04-54.nwb
+  - - RD030_20231113_133727
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231113_133727_2023_11_18.15-04-57.nwb
+  - - RD030_20231115_132725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231115_132725_2023_11_18.15-05-15.nwb
+  - - RD030_20231116_134939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231116_134939_2023_11_18.15-05-21.nwb
+  - - RD030_20231117_145541
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231117_145541_2023_11_18.15-05-28.nwb
+  - - RD030_20231118_143032
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231118_143032_2023_11_19.16-01-42.nwb
+  - - RD030_20231120_134618
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231120_134618_2023_11_21.09-16-34.nwb
+  - - RD030_20231122_134934
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231122_134934_2023_11_22.18-34-51.nwb
+  - - RD030_20231124_104504
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231124_104504_2023_11_27.09-32-30.nwb
+  switch_group3:
+  - - RD001_20230622_133319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230622_133319_2023_11_18.14-03-28.nwb
+  - - RD001_20230628_131427
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230628_131427_2023_11_18.14-04-08.nwb
+  - - RD002_20230616_141251
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230616_141251_2023_11_18.14-06-39.nwb
+  - - RD002_20230623_125701
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230623_125701_2023_11_18.14-07-00.nwb
+  - - RD002_20230625_133203
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230625_133203_2023_11_18.14-07-12.nwb
+  - - RD002_20230629_130904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230629_130904_2023_11_18.14-07-45.nwb
+  - - RD003_20230620_134031
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230620_134031_2023_11_18.14-10-00.nwb
+  - - RD003_20230623_133722
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230623_133722_2023_11_18.14-10-22.nwb
+  - - RD003_20230625_135204
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230625_135204_2023_11_18.14-10-38.nwb
+  - - RD003_20230627_135615
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230627_135615_2023_11_18.14-10-56.nwb
+  - - RD004_20230616_151824
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230616_151824_2023_11_18.14-14-18.nwb
+  - - RD004_20230622_144303
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230622_144303_2023_11_18.14-14-49.nwb
+  - - RD004_20230624_140315
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230624_140315_2023_11_18.14-15-12.nwb
+  - - RD004_20230625_142212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230625_142212_2023_11_18.14-15-26.nwb
+  - - RD004_20230627_143603
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230627_143603_2023_11_18.14-15-47.nwb
+  - - RD004_20230628_143408
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230628_143408_2023_11_18.14-16-00.nwb
+  - - RD004_20230629_141917
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230629_141917_2023_11_18.14-16-12.nwb
+  - - RD005_20230622_150912
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230622_150912_2023_11_18.14-19-12.nwb
+  - - RD005_20230624_145511
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230624_145511_2023_11_18.14-19-31.nwb
+  - - RD005_20230625_145023
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230625_145023_2023_11_18.14-19-39.nwb
+  - - RD005_20230628_151311
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230628_151311_2023_11_18.14-20-02.nwb
+  - - RD005_20230629_151627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230629_151627_2023_11_18.14-20-12.nwb
+  - - RD027_20231121_150735
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231121_150735_2023_11_21.18-53-06.nwb
+  - - RD029_20231116_142849
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD029_20231116_142849_2023_11_18.15-01-58.nwb
+  - - RD030_20231104_140306
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231104_140306_2023_11_18.15-04-15.nwb
+  - - RD030_20231105_131002
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231105_131002_2023_11_18.15-04-21.nwb
+  - - RD030_20231106_124658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231106_124658_2023_11_18.15-04-32.nwb
+  - - RD030_20231108_144525
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231108_144525_2023_11_18.15-04-39.nwb
+  - - RD030_20231110_094857
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231110_094857_2023_11_18.15-04-54.nwb
+  - - RD030_20231113_133727
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231113_133727_2023_11_18.15-04-57.nwb
+  - - RD030_20231115_132725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231115_132725_2023_11_18.15-05-15.nwb
+  - - RD030_20231116_134939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231116_134939_2023_11_18.15-05-21.nwb
+  - - RD030_20231117_145541
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231117_145541_2023_11_18.15-05-28.nwb
+  - - RD030_20231118_143032
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231118_143032_2023_11_19.16-01-42.nwb
+  - - RD030_20231120_134618
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231120_134618_2023_11_21.09-16-34.nwb
+  - - RD030_20231122_134934
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231122_134934_2023_11_22.18-34-51.nwb
+  - - RD030_20231124_104504
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231124_104504_2023_11_27.09-32-30.nwb
+  - - RD032_20231115_144109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231115_144109_2023_11_18.15-12-49.nwb
+  - - RD032_20231117_154621
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231117_154621_2023_11_18.15-13-15.nwb
+  - - RD032_20231118_154238
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231118_154238_2023_11_19.16-02-07.nwb
+  - - RD032_20231122_152926
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231122_152926_2023_11_22.18-35-15.nwb
+  - - RD032_20231124_122401
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231124_122401_2023_11_27.09-32-55.nwb
+  - - RD032_20231129_134313
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231129_134313_2023_11_29.15-54-19.nwb
+  switch_group4:
+  - - RD001_20230622_133319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230622_133319_2023_11_18.14-03-28.nwb
+  - - RD001_20230628_131427
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD001_20230628_131427_2023_11_18.14-04-08.nwb
+  - - RD002_20230616_141251
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230616_141251_2023_11_18.14-06-39.nwb
+  - - RD002_20230623_125701
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230623_125701_2023_11_18.14-07-00.nwb
+  - - RD002_20230625_133203
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230625_133203_2023_11_18.14-07-12.nwb
+  - - RD002_20230629_130904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD002_20230629_130904_2023_11_18.14-07-45.nwb
+  - - RD003_20230620_134031
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230620_134031_2023_11_18.14-10-00.nwb
+  - - RD003_20230623_133722
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230623_133722_2023_11_18.14-10-22.nwb
+  - - RD003_20230625_135204
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230625_135204_2023_11_18.14-10-38.nwb
+  - - RD003_20230627_135615
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD003_20230627_135615_2023_11_18.14-10-56.nwb
+  - - RD004_20230616_151824
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230616_151824_2023_11_18.14-14-18.nwb
+  - - RD004_20230622_144303
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230622_144303_2023_11_18.14-14-49.nwb
+  - - RD004_20230624_140315
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230624_140315_2023_11_18.14-15-12.nwb
+  - - RD004_20230625_142212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230625_142212_2023_11_18.14-15-26.nwb
+  - - RD004_20230627_143603
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230627_143603_2023_11_18.14-15-47.nwb
+  - - RD004_20230628_143408
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230628_143408_2023_11_18.14-16-00.nwb
+  - - RD004_20230629_141917
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD004_20230629_141917_2023_11_18.14-16-12.nwb
+  - - RD005_20230622_150912
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230622_150912_2023_11_18.14-19-12.nwb
+  - - RD005_20230624_145511
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230624_145511_2023_11_18.14-19-31.nwb
+  - - RD005_20230625_145023
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230625_145023_2023_11_18.14-19-39.nwb
+  - - RD005_20230628_151311
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230628_151311_2023_11_18.14-20-02.nwb
+  - - RD005_20230629_151627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD005_20230629_151627_2023_11_18.14-20-12.nwb
+  - - RD030_20231104_140306
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231104_140306_2023_11_18.15-04-15.nwb
+  - - RD030_20231105_131002
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231105_131002_2023_11_18.15-04-21.nwb
+  - - RD030_20231106_124658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231106_124658_2023_11_18.15-04-32.nwb
+  - - RD030_20231108_144525
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231108_144525_2023_11_18.15-04-39.nwb
+  - - RD030_20231110_094857
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231110_094857_2023_11_18.15-04-54.nwb
+  - - RD030_20231113_133727
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231113_133727_2023_11_18.15-04-57.nwb
+  - - RD030_20231115_132725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231115_132725_2023_11_18.15-05-15.nwb
+  - - RD030_20231116_134939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231116_134939_2023_11_18.15-05-21.nwb
+  - - RD030_20231117_145541
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231117_145541_2023_11_18.15-05-28.nwb
+  - - RD030_20231118_143032
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231118_143032_2023_11_19.16-01-42.nwb
+  - - RD030_20231120_134618
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231120_134618_2023_11_21.09-16-34.nwb
+  - - RD030_20231122_134934
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231122_134934_2023_11_22.18-34-51.nwb
+  - - RD030_20231124_104504
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231124_104504_2023_11_27.09-32-30.nwb
+  - - RD032_20231115_144109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231115_144109_2023_11_18.15-12-49.nwb
+  - - RD032_20231117_154621
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231117_154621_2023_11_18.15-13-15.nwb
+  - - RD032_20231118_154238
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231118_154238_2023_11_19.16-02-07.nwb
+  - - RD032_20231122_152926
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231122_152926_2023_11_22.18-35-15.nwb
+  - - RD032_20231124_122401
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231124_122401_2023_11_27.09-32-55.nwb
+  - - RD032_20231129_134313
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231129_134313_2023_11_29.15-54-19.nwb
+NWB_CI_LSENS:
+  GF_post-learning+1_R+:
+  - - GF264_05072020_131045
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF264_05072020_131045.nwb
+  - - GF305_30112020_110255
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF305_30112020_110255.nwb
+  - - GF306_30112020_133249
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF306_30112020_133249.nwb
+  - - GF307_20112020_082942
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF307_20112020_082942.nwb
+  - - GF308_20112020_122826
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF308_20112020_122826.nwb
+  - - GF310_20112020_150929
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF310_20112020_150929.nwb
+  - - GF311_20112020_171609
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF311_20112020_171609.nwb
+  - - GF313_30112020_154904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF313_30112020_154904.nwb
+  - - GF314_30112020_171906
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF314_30112020_171906.nwb
+  - - GF317_18122020_104834
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF317_18122020_104834.nwb
+  - - GF318_18122020_132105
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF318_18122020_132105.nwb
+  - - GF323_11012021_084126
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF323_11012021_084126.nwb
+  - - GF333_25012021_141608
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF333_25012021_141608.nwb
+  - - GF334_25012021_163843
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF334_25012021_163843.nwb
+  GF_post-learning+1_R-:
+  - - GF208_03102019_102126
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF208_03102019_102126.nwb
+  - - GF319_27122020_135842
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF319_27122020_135842.nwb
+  - - GF340_01022021_131205
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF340_01022021_131205.nwb
+  - - GF348_01062021_095758
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF348_01062021_095758.nwb
+  - - GF350_01062021_122420
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF350_01062021_122420.nwb
+  - - MI062_03102021_103851
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI062_03102021_103851.nwb
+  - - MI069_22122021_090212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI069_22122021_090212.nwb
+  - - MI072_22122021_132651
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI072_22122021_132651.nwb
+  - - MI075_22122021_152806
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI075_22122021_152806.nwb
+  - - MI076_22122021_114039
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI076_22122021_114039.nwb
+  GF_pre-learning-1_R+:
+  - - GF264_02072020_104646
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF264_02072020_104646.nwb
+  - - GF305_28112020_103938
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF305_28112020_103938.nwb
+  - - GF306_28112020_125555
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF306_28112020_125555.nwb
+  - - GF307_18112020_075939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF307_18112020_075939.nwb
+  - - GF308_18112020_093627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF308_18112020_093627.nwb
+  - - GF310_18112020_122252
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF310_18112020_122252.nwb
+  - - GF311_18112020_151838
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF311_18112020_151838.nwb
+  - - GF313_28112020_154236
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF313_28112020_154236.nwb
+  - - GF314_28112020_171800
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF314_28112020_171800.nwb
+  - - GF317_16122020_082007
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF317_16122020_082007.nwb
+  - - GF318_16122020_095516
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF318_16122020_095516.nwb
+  - - GF323_08012021_083725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF323_08012021_083725.nwb
+  - - GF333_22012021_135939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF333_22012021_135939.nwb
+  - - GF334_22012021_153815
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF334_22012021_153815.nwb
+  - - GF348_30052021_110107
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF348_30052021_110107.nwb
+  Muscimol_context:
+  - - RD027_20231121_150735
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231121_150735_2023_11_21.18-53-06.nwb
+  - - RD027_20231122_134228
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231122_134228_2023_11_22.18-34-29.nwb
+  - - RD027_20231123_160124
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231123_160124_2023_11_24.10-53-46.nwb
+  - - RD027_20231124_103617
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231124_103617_2023_11_27.09-32-16.nwb
+  - - RD027_20231129_124737
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD027_20231129_124737_2023_11_29.15-53-38.nwb
+  - - RD030_20231105_131002
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231105_131002_2023_11_18.15-04-21.nwb
+  - - RD030_20231106_124658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231106_124658_2023_11_18.15-04-32.nwb
+  - - RD030_20231108_144525
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231108_144525_2023_11_18.15-04-39.nwb
+  - - RD030_20231109_105130
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231109_105130_2023_11_18.15-04-46.nwb
+  - - RD030_20231110_094857
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD030_20231110_094857_2023_11_18.15-04-54.nwb
+  - - RD032_20231120_145310
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231120_145310_2023_11_21.09-16-57.nwb
+  - - RD032_20231121_163220
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231121_163220_2023_11_21.18-53-50.nwb
+  - - RD032_20231122_152926
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231122_152926_2023_11_22.18-35-15.nwb
+  - - RD032_20231123_190800
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231123_190800_2023_11_24.10-54-29.nwb
+  - - RD032_20231124_122401
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD032_20231124_122401_2023_11_27.09-32-55.nwb
+  Post-learning+1:
+  - - GF208_03102019_102126
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF208_03102019_102126.nwb
+  - - GF264_05072020_131045
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF264_05072020_131045.nwb
+  - - GF305_30112020_110255
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF305_30112020_110255.nwb
+  - - GF306_30112020_133249
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF306_30112020_133249.nwb
+  - - GF307_20112020_082942
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF307_20112020_082942.nwb
+  - - GF308_20112020_122826
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF308_20112020_122826.nwb
+  - - GF310_20112020_150929
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF310_20112020_150929.nwb
+  - - GF311_20112020_171609
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF311_20112020_171609.nwb
+  - - GF313_30112020_154904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF313_30112020_154904.nwb
+  - - GF314_30112020_171906
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF314_30112020_171906.nwb
+  - - GF317_18122020_104834
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF317_18122020_104834.nwb
+  - - GF318_18122020_132105
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF318_18122020_132105.nwb
+  - - GF319_27122020_135842
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF319_27122020_135842.nwb
+  - - GF323_11012021_084126
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF323_11012021_084126.nwb
+  - - GF333_25012021_141608
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF333_25012021_141608.nwb
+  - - GF334_25012021_163843
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF334_25012021_163843.nwb
+  - - GF340_01022021_131205
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF340_01022021_131205.nwb
+  - - GF348_01062021_095758
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF348_01062021_095758.nwb
+  - - GF350_01062021_122420
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF350_01062021_122420.nwb
+  - - MI062_03102021_103851
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI062_03102021_103851.nwb
+  - - MI069_22122021_090212
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI069_22122021_090212.nwb
+  - - MI072_22122021_132651
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI072_22122021_132651.nwb
+  - - MI075_22122021_152806
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI075_22122021_152806.nwb
+  - - MI076_22122021_114039
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI076_22122021_114039.nwb
+  Pre-learning-1:
+  - - GF208_01102019_083121
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF208_01102019_083121.nwb
+  - - GF264_02072020_104646
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF264_02072020_104646.nwb
+  - - GF305_28112020_103938
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF305_28112020_103938.nwb
+  - - GF306_28112020_125555
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF306_28112020_125555.nwb
+  - - GF307_18112020_075939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF307_18112020_075939.nwb
+  - - GF308_18112020_093627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF308_18112020_093627.nwb
+  - - GF310_18112020_122252
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF310_18112020_122252.nwb
+  - - GF311_18112020_151838
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF311_18112020_151838.nwb
+  - - GF313_28112020_154236
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF313_28112020_154236.nwb
+  - - GF314_28112020_171800
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF314_28112020_171800.nwb
+  - - GF317_16122020_082007
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF317_16122020_082007.nwb
+  - - GF318_16122020_095516
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF318_16122020_095516.nwb
+  - - GF319_25122020_142951
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF319_25122020_142951.nwb
+  - - GF323_08012021_083725
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF323_08012021_083725.nwb
+  - - GF333_22012021_135939
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF333_22012021_135939.nwb
+  - - GF334_22012021_153815
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF334_22012021_153815.nwb
+  - - GF340_30012021_125418
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF340_30012021_125418.nwb
+  - - GF348_30052021_110107
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF348_30052021_110107.nwb
+  - - GF350_30052021_123155
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\GF350_30052021_123155.nwb
+  - - MI062_01102021_091233
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI062_01102021_091233.nwb
+  - - MI069_20122021_095058
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI069_20122021_095058.nwb
+  - - MI072_20122021_125805
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI072_20122021_125805.nwb
+  - - MI075_20122021_155245
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI075_20122021_155245.nwb
+  - - MI076_20122021_113038
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\MI076_20122021_113038.nwb
+  learning_25mT_AB_AR_RD:
+  - - AB096_20240219_105336
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240219_105336.nwb
+  - - AB096_20240220_132957
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240220_132957.nwb
+  - - AB096_20240221_131022
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240221_131022.nwb
+  - - AB096_20240222_124627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240222_124627.nwb
+  - - AB097_20240219_101325
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240219_101325.nwb
+  - - AB097_20240220_123253
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240220_123253.nwb
+  - - AB097_20240221_143209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240221_143209.nwb
+  - - AB097_20240222_132623
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240222_132623.nwb
+  - - AR121_20240122_131451
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR121_20240122_131451.nwb
+  - - AR122_20240123_172653
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR122_20240123_172653.nwb
+  - - AR123_20240121_171829
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR123_20240121_171829.nwb
+  - - AR127_20240223_131820
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR127_20240223_131820.nwb
+  - - RD038_20231227_135136
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231227_135136.nwb
+  - - RD038_20231228_112320
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231228_112320.nwb
+  - - RD038_20231229_100052
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231229_100052.nwb
+  - - RD039_20231227_135441
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231227_135441.nwb
+  - - RD039_20231228_115250
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231228_115250.nwb
+  - - RD039_20231229_101359
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231229_101359.nwb
+  - - RD040_20231227_140932
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231227_140932.nwb
+  - - RD040_20231228_120544
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231228_120544.nwb
+  - - RD040_20231229_104515
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231229_104515.nwb
+  - - RD041_20231227_141209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231227_141209.nwb
+  - - RD041_20231228_121629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231228_121629.nwb
+  - - RD041_20231229_110402
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231229_110402.nwb
+  - - RD042_20240212_095850
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240212_095850.nwb
+  - - RD042_20240213_092658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240213_092658.nwb
+  - - RD042_20240214_095003
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240214_095003.nwb
+  - - RD042_20240215_101056
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240215_101056.nwb
+  - - RD043_20240212_100542
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240212_100542.nwb
+  - - RD043_20240213_101600
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240213_101600.nwb
+  - - RD043_20240214_105456
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240214_105456.nwb
+  - - RD043_20240215_102127
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240215_102127.nwb
+  - - RD044_20240212_111319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240212_111319.nwb
+  - - RD044_20240213_113622
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240213_113622.nwb
+  - - RD044_20240214_123109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240214_123109.nwb
+  - - RD044_20240215_111827
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240215_111827.nwb
+  - - RD045_20240212_111946
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240212_111946.nwb
+  - - RD045_20240213_142557
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240213_142557.nwb
+  - - RD045_20240214_145333
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240214_145333.nwb
+  - - RD045_20240215_112915
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240215_112915.nwb
+  opto_psyco:
+  - - PB165_20231025_140702
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231025_140702_2023_12_01.14-57-28.nwb
+  - - PB165_20231026_141916
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231026_141916_2023_12_01.14-57-34.nwb
+  - - PB165_20231027_110608
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231027_110608_2023_12_01.14-57-38.nwb
+  - - PB165_20231028_125950
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231028_125950_2023_12_01.14-57-50.nwb
+  - - PB165_20231030_135215
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231030_135215_2023_12_01.14-57-55.nwb
+  - - PB165_20231030_144006
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231030_144006_2023_12_01.14-58-00.nwb
+  - - PB165_20231031_124301
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231031_124301_2023_12_01.14-58-08.nwb
+  - - PB165_20231101_122027
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231101_122027_2023_12_01.14-58-20.nwb
+  - - PB165_20231102_112629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231102_112629_2023_12_01.14-58-27.nwb
+  - - PB165_20231103_113920
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231103_113920_2023_12_01.14-58-41.nwb
+  - - PB165_20231106_112443
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231106_112443_2023_12_01.14-58-48.nwb
+  - - PB165_20231107_124230
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231107_124230_2023_12_01.14-58-56.nwb
+  - - PB165_20231108_104615
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231108_104615_2023_12_01.14-59-06.nwb
+  - - PB165_20231109_105726
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231109_105726_2023_12_01.14-59-17.nwb
+  - - PB165_20231110_103506
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231110_103506_2023_12_01.14-59-28.nwb
+  - - PB165_20231111_134454
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231111_134454_2023_12_01.14-59-37.nwb
+  - - PB165_20231115_144956
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231115_144956_2023_12_01.14-59-54.nwb
+  - - PB165_20231116_115704
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231116_115704_2023_12_01.15-00-10.nwb
+  - - PB165_20231121_123419
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231121_123419_2023_12_01.15-00-17.nwb
+  - - PB165_20231122_092352
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231122_092352_2023_12_01.15-00-30.nwb
+  - - PB165_20231123_113642
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231123_113642_2023_12_01.15-00-43.nwb
+  - - PB165_20231124_145031
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231124_145031_2023_12_01.15-00-59.nwb
+  - - PB165_20231130_105037
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231130_105037_2023_12_01.16-08-07.nwb
+  - - PB165_20231201_101931
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231201_101931_2023_12_02.10-53-01.nwb
+  - - PB165_20231202_110906
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231202_110906_2023_12_03.15-04-30.nwb
+  - - PB165_20231203_133045
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231203_133045_2023_12_07.13-39-55.nwb
+  - - PB165_20231205_113439
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231205_113439_2023_12_07.13-40-09.nwb
+  - - PB165_20231206_111749
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231206_111749_2023_12_07.13-40-21.nwb
+  - - PB165_20231207_104539
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231207_104539_2023_12_11.13-12-21.nwb
+  - - PB165_20231208_095650
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231208_095650_2023_12_11.13-12-35.nwb
+  - - PB165_20231209_140012
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231209_140012_2023_12_11.13-12-52.nwb
+  - - PB165_20231210_140744
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB165_20231210_140744_2023_12_11.13-13-13.nwb
+  - - PB166_20231030_152943
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231030_152943_2023_12_01.15-04-40.nwb
+  - - PB166_20231031_135730
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231031_135730_2023_12_01.15-04-50.nwb
+  - - PB166_20231101_140153
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231101_140153_2023_12_01.15-05-02.nwb
+  - - PB166_20231102_123504
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231102_123504_2023_12_01.15-05-15.nwb
+  - - PB166_20231103_135233
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231103_135233_2023_12_01.15-05-29.nwb
+  - - PB166_20231106_121459
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231106_121459_2023_12_01.15-05-36.nwb
+  - - PB166_20231107_142033
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231107_142033_2023_12_01.15-05-40.nwb
+  - - PB166_20231108_135308
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231108_135308_2023_12_01.15-05-49.nwb
+  - - PB166_20231108_151309
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231108_151309_2023_12_01.15-05-50.nwb
+  - - PB166_20231109_124356
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231109_124356_2023_12_01.15-05-59.nwb
+  - - PB166_20231110_140103
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231110_140103_2023_12_01.15-06-10.nwb
+  - - PB166_20231111_150801
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231111_150801_2023_12_01.15-06-16.nwb
+  - - PB166_20231116_142450
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231116_142450_2023_12_01.15-06-25.nwb
+  - - PB166_20231121_135120
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231121_135120_2023_12_01.15-06-35.nwb
+  - - PB166_20231122_112633
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231122_112633_2023_12_01.15-06-45.nwb
+  - - PB166_20231123_134246
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231123_134246_2023_12_01.15-06-57.nwb
+  - - PB166_20231130_123904
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231130_123904_2023_12_01.16-08-14.nwb
+  - - PB166_20231201_114010
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231201_114010_2023_12_02.10-53-14.nwb
+  - - PB166_20231202_130359
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231202_130359_2023_12_03.15-04-42.nwb
+  - - PB166_20231204_100117
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231204_100117_2023_12_07.13-40-30.nwb
+  - - PB166_20231205_135846
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB166_20231205_135846_2023_12_07.13-40-44.nwb
+  - - PB168_20231025_164226
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231025_164226_2023_12_01.15-08-30.nwb
+  - - PB168_20231026_114123
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231026_114123_2023_12_01.15-08-35.nwb
+  - - PB168_20231027_151919
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231027_151919_2023_12_01.15-08-48.nwb
+  - - PB168_20231030_180052
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231030_180052_2023_12_01.15-08-58.nwb
+  - - PB168_20231031_164151
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231031_164151_2023_12_01.15-09-08.nwb
+  - - PB168_20231101_171204
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231101_171204_2023_12_01.15-09-19.nwb
+  - - PB168_20231102_155106
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231102_155106_2023_12_01.15-09-28.nwb
+  - - PB168_20231106_131423
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231106_131423_2023_12_01.15-09-34.nwb
+  - - PB168_20231107_145401
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231107_145401_2023_12_01.15-09-44.nwb
+  - - PB168_20231108_155534
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231108_155534_2023_12_01.15-09-59.nwb
+  - - PB168_20231109_142835
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231109_142835_2023_12_01.15-10-05.nwb
+  - - PB168_20231110_163619
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231110_163619_2023_12_01.15-10-18.nwb
+  - - PB168_20231111_160255
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231111_160255_2023_12_01.15-10-28.nwb
+  - - PB168_20231116_154936
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231116_154936_2023_12_01.15-10-35.nwb
+  - - PB168_20231121_152807
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231121_152807_2023_12_01.15-10-44.nwb
+  - - PB168_20231122_150840
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231122_150840_2023_12_01.15-10-57.nwb
+  - - PB168_20231123_153012
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231123_153012_2023_12_01.15-11-09.nwb
+  - - PB168_20231124_104119
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231124_104119_2023_12_01.15-11-34.nwb
+  - - PB168_20231130_140629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231130_140629_2023_12_01.16-08-20.nwb
+  - - PB168_20231201_141357
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231201_141357_2023_12_02.10-53-22.nwb
+  - - PB168_20231202_145327
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231202_145327_2023_12_03.15-04-56.nwb
+  - - PB168_20231204_111810
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231204_111810_2023_12_07.13-40-55.nwb
+  - - PB168_20231205_155012
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231205_155012_2023_12_07.13-41-09.nwb
+  - - PB168_20231206_132221
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231206_132221_2023_12_07.13-41-20.nwb
+  - - PB168_20231207_130323
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231207_130323_2023_12_11.13-13-25.nwb
+  - - PB168_20231208_151737
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231208_151737_2023_12_11.13-13-36.nwb
+  - - PB168_20231209_155750
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231209_155750_2023_12_11.13-13-49.nwb
+  - - PB168_20231210_160205
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Pol_Bech\NWB\PB168_20231210_160205_2023_12_11.13-13-57.nwb
+  whisker_learning_25mT_AB:
+  - - AB096_20240219_105336
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240219_105336.nwb
+  - - AB096_20240220_132957
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240220_132957.nwb
+  - - AB096_20240221_131022
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240221_131022.nwb
+  - - AB096_20240222_124627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240222_124627.nwb
+  - - AB097_20240219_101325
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240219_101325.nwb
+  - - AB097_20240220_123253
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240220_123253.nwb
+  - - AB097_20240221_143209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240221_143209.nwb
+  - - AB097_20240222_132623
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240222_132623.nwb
+  whisker_learning_25mT_AB_AR_RD:
+  - - AB096_20240219_105336
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240219_105336.nwb
+  - - AB096_20240220_132957
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240220_132957.nwb
+  - - AB096_20240221_131022
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240221_131022.nwb
+  - - AB097_20240219_101325
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240219_101325.nwb
+  - - AB097_20240220_123253
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240220_123253.nwb
+  - - AB097_20240221_143209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240221_143209.nwb
+  - - AB097_20240222_132623
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240222_132623.nwb
+  - - AR121_20240119_143337
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR121_20240119_143337.nwb
+  - - AR121_20240120_171335
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR121_20240120_171335.nwb
+  - - AR121_20240121_162637
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR121_20240121_162637.nwb
+  - - AR122_20240119_150732
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR122_20240119_150732.nwb
+  - - AR122_20240120_163038
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR122_20240120_163038.nwb
+  - - AR122_20240121_154833
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR122_20240121_154833.nwb
+  - - AR123_20240119_153631
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR123_20240119_153631.nwb
+  - - AR123_20240120_174250
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR123_20240120_174250.nwb
+  - - AR123_20240121_171829
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR123_20240121_171829.nwb
+  - - AR127_20240223_131820
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR127_20240223_131820.nwb
+  - - AR127_20240224_140853
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR127_20240224_140853.nwb
+  - - AR127_20240225_142858
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB\AR127_20240225_142858.nwb
+  - - RD038_20231227_135136
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231227_135136.nwb
+  - - RD038_20231228_112320
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231228_112320.nwb
+  - - RD038_20231229_100052
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231229_100052.nwb
+  - - RD039_20231227_135441
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231227_135441.nwb
+  - - RD039_20231228_115250
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231228_115250.nwb
+  - - RD039_20231229_101359
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231229_101359.nwb
+  - - RD040_20231227_140932
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231227_140932.nwb
+  - - RD040_20231228_120544
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231228_120544.nwb
+  - - RD040_20231229_104515
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231229_104515.nwb
+  - - RD041_20231227_141209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231227_141209.nwb
+  - - RD041_20231228_121629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231228_121629.nwb
+  - - RD041_20231229_110402
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231229_110402.nwb
+  - - RD042_20240212_095850
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240212_095850.nwb
+  - - RD042_20240213_092658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240213_092658.nwb
+  - - RD042_20240214_095003
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240214_095003.nwb
+  - - RD042_20240215_101056
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240215_101056.nwb
+  - - RD043_20240212_100542
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240212_100542.nwb
+  - - RD043_20240213_101600
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240213_101600.nwb
+  - - RD043_20240214_105456
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240214_105456.nwb
+  - - RD043_20240215_102127
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240215_102127.nwb
+  - - RD044_20240212_111319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240212_111319.nwb
+  - - RD044_20240213_113622
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240213_113622.nwb
+  - - RD044_20240214_123109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240214_123109.nwb
+  - - RD044_20240215_111827
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240215_111827.nwb
+  - - RD045_20240212_111946
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240212_111946.nwb
+  - - RD045_20240213_142557
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240213_142557.nwb
+  - - RD045_20240214_145333
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240214_145333.nwb
+  - - RD045_20240215_112915
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240215_112915.nwb
+  whisker_learning_25mT_AB_RD:
+  - - AB096_20240219_105336
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240219_105336.nwb
+  - - AB096_20240220_132957
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240220_132957.nwb
+  - - AB096_20240221_131022
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240221_131022.nwb
+  - - AB096_20240222_124627
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB096_20240222_124627.nwb
+  - - AB097_20240219_101325
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240219_101325.nwb
+  - - AB097_20240220_123253
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240220_123253.nwb
+  - - AB097_20240221_143209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240221_143209.nwb
+  - - AB097_20240222_132623
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Axel_Bisi\NWBFull\AB097_20240222_132623.nwb
+  - - RD038_20231227_135136
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231227_135136.nwb
+  - - RD038_20231228_112320
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231228_112320.nwb
+  - - RD038_20231229_100052
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231229_100052.nwb
+  - - RD039_20231227_135441
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231227_135441.nwb
+  - - RD039_20231228_115250
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231228_115250.nwb
+  - - RD039_20231229_101359
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231229_101359.nwb
+  - - RD040_20231227_140932
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231227_140932.nwb
+  - - RD040_20231228_120544
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231228_120544.nwb
+  - - RD040_20231229_104515
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231229_104515.nwb
+  - - RD041_20231227_141209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231227_141209.nwb
+  - - RD041_20231228_121629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231228_121629.nwb
+  - - RD041_20231229_110402
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231229_110402.nwb
+  - - RD042_20240212_095850
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240212_095850.nwb
+  - - RD042_20240213_092658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240213_092658.nwb
+  - - RD042_20240214_095003
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240214_095003.nwb
+  - - RD042_20240215_101056
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240215_101056.nwb
+  - - RD043_20240212_100542
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240212_100542.nwb
+  - - RD043_20240213_101600
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240213_101600.nwb
+  - - RD043_20240214_105456
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240214_105456.nwb
+  - - RD043_20240215_102127
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240215_102127.nwb
+  - - RD044_20240212_111319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240212_111319.nwb
+  - - RD044_20240213_113622
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240213_113622.nwb
+  - - RD044_20240214_123109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240214_123109.nwb
+  - - RD044_20240215_111827
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240215_111827.nwb
+  - - RD045_20240212_111946
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240212_111946.nwb
+  - - RD045_20240213_142557
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240213_142557.nwb
+  - - RD045_20240214_145333
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240214_145333.nwb
+  - - RD045_20240215_112915
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240215_112915.nwb
+  whisker_learning_25mT_RD:
+  - - RD038_20231227_135136
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231227_135136.nwb
+  - - RD038_20231228_112320
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231228_112320.nwb
+  - - RD038_20231229_100052
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD038_20231229_100052.nwb
+  - - RD039_20231227_135441
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231227_135441.nwb
+  - - RD039_20231228_115250
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231228_115250.nwb
+  - - RD039_20231229_101359
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD039_20231229_101359.nwb
+  - - RD040_20231227_140932
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231227_140932.nwb
+  - - RD040_20231228_120544
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231228_120544.nwb
+  - - RD040_20231229_104515
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD040_20231229_104515.nwb
+  - - RD041_20231227_141209
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231227_141209.nwb
+  - - RD041_20231228_121629
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231228_121629.nwb
+  - - RD041_20231229_110402
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD041_20231229_110402.nwb
+  - - RD042_20240212_095850
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240212_095850.nwb
+  - - RD042_20240213_092658
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240213_092658.nwb
+  - - RD042_20240214_095003
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240214_095003.nwb
+  - - RD042_20240215_101056
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD042_20240215_101056.nwb
+  - - RD043_20240212_100542
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240212_100542.nwb
+  - - RD043_20240213_101600
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240213_101600.nwb
+  - - RD043_20240214_105456
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240214_105456.nwb
+  - - RD043_20240215_102127
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD043_20240215_102127.nwb
+  - - RD044_20240212_111319
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240212_111319.nwb
+  - - RD044_20240213_113622
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240213_113622.nwb
+  - - RD044_20240214_123109
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240214_123109.nwb
+  - - RD044_20240215_111827
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD044_20240215_111827.nwb
+  - - RD045_20240212_111946
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240212_111946.nwb
+  - - RD045_20240213_142557
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240213_142557.nwb
+  - - RD045_20240214_145333
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240214_145333.nwb
+  - - RD045_20240215_112915
+    - \\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Robin_Dard\NWB\RD045_20240215_112915.nwb
