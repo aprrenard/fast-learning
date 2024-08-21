@@ -167,6 +167,14 @@ trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), colu
 for nwb_file in nwb_list:
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
+    
+    # Check if dataset is already created.
+    save_dir = os.path.join(processed_data_dir, mouse_id, session_id)
+    os.makedirs(save_dir, exist_ok=True)
+    save_path_data = os.path.join(save_dir, 'tensor_4d.npy')
+    save_path_metadata = os.path.join(save_dir, 'tensor_4d_metadata.pickle')
+    if os.path.exists(save_path_data):
+        continue
 
     # Parameters for tensor array.
     cell_types = ['na', 'wM1', 'wS2']
@@ -226,12 +234,8 @@ for nwb_file in nwb_list:
     tensor = tensor.astype(np.float16)
 
     # Save dataset.
-    save_dir = os.path.join(processed_data_dir, mouse_id, session_id)
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, 'tensor_4d.npy')
-    np.save(save_path, tensor)
-    save_path = os.path.join(save_dir, 'tensor_4d_metadata.pickle')
-    with open(save_path, 'wb') as f:
+    np.save(save_path_data, tensor)
+    with open(save_path_metadata, 'wb') as f:
         pickle.dump(metadata_stacked, f)
 
 
