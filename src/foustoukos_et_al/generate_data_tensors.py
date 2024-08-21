@@ -222,6 +222,8 @@ for nwb_file in nwb_list:
     tensor = np.full(new_shape, np.nan)
     for i, arr in enumerate(stack):
         tensor[:, i, :arr.shape[1], :] = arr
+    # Reduce precision to save space.
+    tensor = tensor.astype(np.float16)
 
     # Save dataset.
     save_dir = os.path.join(processed_data_dir, mouse_id, session_id)
