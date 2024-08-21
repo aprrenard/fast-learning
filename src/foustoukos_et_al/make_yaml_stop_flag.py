@@ -73,7 +73,7 @@ for nwb_file in nwb_list:
                          & (table.whisker_stim == 1)
                          & (table.lick_flag == 1)].shape[0]
     trial_count.append([mouse_id, session_id, start, n_wh_miss, n_wh_hit])
-
+# 
 # Save yaml files.
 yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\stop_flags_sensory_map.yaml'
 with open(yaml_save, 'w') as stream:
@@ -110,7 +110,7 @@ nwb_list = [os.path.join(nwb_path, f + '.nwb') for f in nwb_list]
 stop_flags = {}
 trial_indices = {}
 
-for nwb_file in nwb_list:
+for nwb_file in nwb_list[:10]:
 
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
@@ -120,7 +120,8 @@ for nwb_file in nwb_list:
     # If a session does not contain auditory trials, keep whole session.
     # This happens for some test sessions of the GF mice.
     if table.auditory_stim.sum() == 0:
-        stop_flags[session_id] = (0, int(table.index.max()))
+        stop = table.loc[table.auditory_stim==1, 'trial_id'].idxmax()
+        stop_flags[session_id] = (0, int(stop))
         trial_indices[session_id] = table['trial_id'].to_list()
         continue
 
@@ -134,13 +135,17 @@ for nwb_file in nwb_list:
     # followed by no more than three hits in the rest of the session.
     if three_aud_misses.sum() == 0:
         # In case no three auditory misses keep the whole session.
-        stop = table.index.max()
+        stop = table.loc[table.auditory_stim==1, 'trial_id'].idxmax()
     else:
         stop = three_aud_misses.loc[three_aud_misses.index>two_hits_left].idxmax()
+        # Stop three trials before the three auditory misses.
+        position = three_aud_misses.index.get_loc(stop)
+        stop = three_aud_misses.index[position - 3]
+        
     # Exceptions.
     if session_id == 'AR115_20231116_142507':
         stop = 35
-    stop_flags[session_id] = (0, stop)
+    stop_flags[session_id] = (0, int(stop))
 
     # Get the indices of those trials.
     trial_ids = table.loc[(table.index<=stop), 'trial_id'].to_list()
@@ -149,7 +154,7 @@ for nwb_file in nwb_list:
 # Save yaml files.
 yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\stop_flags_end_session.yaml'
 with open(yaml_save, 'w') as stream:
-    yaml.dump(stop_flags, stream)
+    yaml.safe_dump(stop_flags, stream)
 yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\trial_indices_end_session.yaml'
 with open(yaml_save, 'w') as stream:
-    yaml.dump(trial_indices, stream)
+    yaml.safe_dump(trial_indices, stream)
