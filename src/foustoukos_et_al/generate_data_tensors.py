@@ -12,7 +12,6 @@ import seaborn as sns
 import yaml
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
-import nwb_utils.utils_io as io
 from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
@@ -212,16 +211,19 @@ for nwb_file in nwb_list:
         metadatas.append(metadata)
 
     # Remove None given by empty trial types.
-    trial_type_labels = [trial_type_labels[i] for i in range(len(trial_type_labels)) if stack[i] is not None]
+    trial_type_labels = [trial_type_labels[i]
+                         for i in range(len(trial_type_labels))
+                         if stack[i] is not None]
     metadatas = [metadata for metadata in metadatas if metadata is not None]
     stack = [traces for traces in stack if traces is not None]
     # Concatenate trial indices for each trial type.
-    metadata_trials = [metadatas[i]['trials'] for i in range(len(metadatas))]
-    metadata_trials = np.concatenate(metadata_trials, axis=0)
+    # metadata_trials = [metadatas[i]['trials'] for i in range(len(metadatas))]
+    # metadata_trials = np.concatenate(metadata_trials, axis=0)
     # Note that metadata is the same for all trial types
     # (same cells) except for trial ids.
     metadata_stacked = metadatas[0]
-    metadata_stacked['trials'] = metadata_trials
+    metadata_stacked['trials'] = {i: metadatas[i]
+                                  for i in range(len(trial_type_labels))}
     metadata_stacked['trial_types'] = trial_type_labels
 
     # Stack trial type to shape (n_cells, n_trial_type, n_trials, n_t).
