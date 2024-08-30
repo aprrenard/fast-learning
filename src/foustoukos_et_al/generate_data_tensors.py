@@ -3,7 +3,6 @@
 
 import os
 import pickle
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,9 +11,44 @@ import seaborn as sns
 import yaml
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+import src.utils.utils_io as io
+import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
+
+
+# =============================================================================
+# Test responsive cells.
+# =============================================================================
+
+# db_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
+# db = io.read_excel_db(db_path)
+
+
+# def filter_nwb_based_on_excel_db(db_path, nwb_path, experimenters, exclude_cols, **filters):
+    
+#     nwb_list = io.read_excel_db(db_path)
+#     for key, val in filters.items():
+#         if type(val) is list:
+#             nwb_list = nwb_list.loc[(nwb_list[key].isin(val))]
+#         else:
+#             nwb_list = nwb_list.loc[(nwb_list[key]==val)]
+
+#     # Remove excluded sessions.
+#     for col in exclude_cols:
+#         nwb_list = nwb_list.loc[(nwb_list[col]!='exclude')]
+    
+#     nwb_list = list(nwb_list.session_id)
+#     nwb_list = [os.path.join(nwb_path, f + '.nwb') for f in nwb_list]
+
+#     if experimenters:
+#         nwb_list = [nwb for nwb in nwb_list if os.path.basename(nwb)[-25:-23] in experimenters]
+
+#     return nwb_list
+
+
+
 
 
 # =============================================================================
@@ -41,7 +75,7 @@ time_range = (1,3)
 epoch_name = None
 
 
-traces, metadata = make_events_aligned_array(nwb_list, rrs_keys,
+traces, metadata = make_events_aligned_array_6d(nwb_list, rrs_keys,
                                              time_range, trial_selection,
                                              epoch_name, cell_types,
                                              trial_indices)
@@ -130,7 +164,6 @@ metadata_path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\dat
 with open(metadata_path, 'rb') as fid:
     metadata = pickle.load(fid)
 data = np.load(data_path)
-
 
 
 
