@@ -120,7 +120,7 @@ for nwb_file in nwb_list[:10]:
     # If a session does not contain auditory trials, keep whole session.
     # This happens for some test sessions of the GF mice.
     if table.auditory_stim.sum() == 0:
-        stop = table.loc[table.auditory_stim==1, 'trial_id'].idxmax()
+        stop = table.trial_id.idxmax()
         stop_flags[session_id] = (0, int(stop))
         trial_indices[session_id] = table['trial_id'].to_list()
         continue
@@ -133,8 +133,8 @@ for nwb_file in nwb_list[:10]:
     three_aud_misses = three_aud_misses.rolling(window=3).sum() == 0
     # Stop flag is the first occurence of three auditory misses in a row
     # followed by no more than three hits in the rest of the session.
+    # In case no three auditory misses keep the whole session.
     if three_aud_misses.sum() == 0:
-        # In case no three auditory misses keep the whole session.
         stop = table.loc[table.auditory_stim==1, 'trial_id'].idxmax()
     else:
         stop = three_aud_misses.loc[three_aud_misses.index>two_hits_left].idxmax()
