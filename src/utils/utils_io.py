@@ -16,7 +16,7 @@ def read_excel_db(db_path):
     return database
 
 
-def select_sessions_from_db(db_path, experimenters, exclude_cols, nwb_path=None, **filters):
+def select_sessions_from_db(db_path, nwb_path, experimenters, exclude_cols, **filters):
     """Select sessions from excel database on filters.
     Return a list of session ids or nwb file paths.
 
@@ -44,12 +44,16 @@ def select_sessions_from_db(db_path, experimenters, exclude_cols, nwb_path=None,
     if experimenters:
         session_list = [session for session in session_list
                         if session[:2] in experimenters]
-    # If nwb_path is provided, return nwb file paths.
-    # Otherwise, return session ids.
-    if nwb_path:
-        session_list = [os.path.join(nwb_path, f + '.nwb') for f in session_list]
+    nwb_paths = [os.path.join(nwb_path, f + '.nwb') for f in session_list]
     
-    return session_list
+    return session_list, nwb_paths
+
+
+def get_reward_group_from_db(db_path, session_id):
+    db = read_excel_db(db_path)
+    reward_group = db.loc[db['session_id']==session_id, 'reward_group'].values[0]
+
+    return reward_group
 
 
 def read_group_yaml(group_yaml_path):
