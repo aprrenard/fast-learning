@@ -67,18 +67,17 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
     mice_dataset = []
     for mouse_id in mouse_list:
         # Get sessions for that mouse.
-        # This assumes the order of the session days is preserved.
-        session_list = [session_id for session_id in session_list if mouse_id in session_id]
+        sessions = [session_id for session_id in session_list if mouse_id in session_id]
         # Load the datasets and metadata for each session.
-        sessions = []
+        session_data = []
         sessions_metadata = []
-        for session_id in session_list:
+        for session_id in sessions:
             data, metadata = load_session_2p_imaging(mouse_id, session_id, data_dir)
-            sessions.append(data)
+            session_data.append(data)
             sessions_metadata.append(metadata)
 
         days = []
-        for i, arr in enumerate(sessions):
+        for i, arr in enumerate(session_data):
             data = extract_trials(arr, sessions_metadata[i], trial_type, n_trials)
             if data is not None:
                 days.append(data)
