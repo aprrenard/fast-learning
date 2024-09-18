@@ -185,8 +185,10 @@ for suite2p_folder in suite2p_folders:
 
     print(f'Running Fissa separation for {suite2p_folder}.')
     exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
-    exp.separate()
-
+    exp.separate(max_iter=20000)
+    
+    # TODO: use convergence result to remove cells that didn't converge.
+    
     # Extract and reshape corrected traces to (ncells, nt).
     ncells, ntifs = exp.result.shape
     nt = exp.result[0,0][0].shape[0]

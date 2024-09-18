@@ -16,7 +16,9 @@ def read_excel_db(db_path):
     return database
 
 
-def select_sessions_from_db(db_path, nwb_path, experimenters, exclude_cols, **filters):
+def select_sessions_from_db(db_path, nwb_path, experimenters=None,
+                            exclude_cols=['exclude', 'two_p_exclude'],
+                            **filters):
     """Select sessions from excel database on filters.
     Return a list of session ids or nwb file paths.
 
@@ -39,14 +41,17 @@ def select_sessions_from_db(db_path, nwb_path, experimenters, exclude_cols, **fi
     # Remove excluded sessions.
     for col in exclude_cols:
         db = db.loc[(db[col]!='exclude')]
-    
+        
+    mice_list = list(db.subject_id.unique())
     session_list = list(db.session_id)
     if experimenters:
         session_list = [session for session in session_list
                         if session[:2] in experimenters]
+        mice_list = [mouse for mouse in mice_list
+                     if mouse[:2] in experimenters]
     nwb_paths = [os.path.join(nwb_path, f + '.nwb') for f in session_list]
     
-    return session_list, nwb_paths
+    return session_list, nwb_paths, mice_list, db
 
 
 def get_reward_group_from_db(db_path, session_id):
@@ -71,5 +76,4 @@ def read_stop_flags_and_indices_yaml(stop_flag_yaml_path, trial_indices_path):
     trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
     
     return stop_flags, trial_indices
-
 

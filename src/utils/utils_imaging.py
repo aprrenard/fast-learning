@@ -13,8 +13,57 @@ def load_session_2p_imaging(mouse_id, session_id, dir_path):
     return data, metadata
 
 
-def extract_trials(arr, metadata, trial_type, n_trials):
-    """Extract an arrya of shape (n_neurons, n_trials, n_timepoints)
+def substract_baseline(arr, time_axis, baseline_win):
+    """Substract the mean of the baseline window from the array.
+
+    Args:
+        arr (numpy.array): Array of shape (n_neurons, n_trials, n_timepoints).
+        time_axis (int): Axis of the timepoints.
+        baseline_window (tuple): Tuple of two integers indicating the start and
+        end of the baseline window.
+
+    Returns:
+        numpy.array: Array of shape (n_neurons, n_trials, n_timepoints).
+    """
+    ndims = arr.ndim
+    slices = [slice(None),] * ndims
+    slices[time_axis] = slice(baseline_win[0], baseline_win[1])
+    baseline = np.nanmean(arr[*slices], axis=time_axis, keepdims=True)
+    arr = arr - baseline
+    return arr
+
+# TODO pad beginning or end
+# give list of axis to pad 
+
+def pad_arrays(arrays, side='end', dims=None, pad_value=np.nan):
+    ndims = arrays[0].ndim
+    if dims is None:
+        dims = range(ndims)
+    for idim in dims:
+        max_shape = max(arr.shape[idim] for arr in arrays)
+        for i, arr in enumerate(arrays):
+            if arr.shape[idim] < max_shape:
+                if side == 'beginning':
+                    pad_width = [(0, 0)] * ndims
+                    pad_width[idim] = (max_shape - arr.shape[idim], 0)
+                elif side == 'end':
+                    pad_width = [(0, 0)] * ndims
+                    pad_width[idim] = (0, max_shape - arr.shape[idim])
+                arrays[i] = np.pad(arr, pad_width, mode='constant', constant_values=pad_value)
+    return arrays
+
+
+def stack_sessions(arrays, axis=1):
+    # Pad trial type dim for those sessions without WH and WM trials.
+    # These two trials types are the first two.
+    arrays = pad_arrays(arrays, side='beginning', dims=[1], pad_value=np.nan)
+    # Pad the number of trials for each session.
+    arrays = pad_arrays(arrays, side='end', dims=[2], pad_value=np.nan)
+    return np.stack(arrays, axis=axis)
+
+
+def extract_trials(arr, metadata, trial_type, n_trials=None):
+    """Extract an array of shape (n_neurons, n_trials, n_timepoints)
     for a given trial type.
     As nan values are not desirable to run dimensionailty reduction or
     decoding, to solve inconsistencies in the number of trials between
@@ -40,9 +89,10 @@ def extract_trials(arr, metadata, trial_type, n_trials):
     data = data[:, :n_trials]
     # Remove nan values at the end of the trial dimension.
     data = data[:, ~np.isnan(data).all(axis=(0,2))]
-    # Repeat last trial if less than required number of trials.
-    if data.shape[1] < n_trials:
-        data = np.concatenate([data, np.tile(data[:,[-1]], (1, n_trials - data.shape[1], 1))], axis=1)
+    if n_trials is not None:
+        # Repeat last trial if less than required number of trials.
+        if data.shape[1] < n_trials:
+            data = np.concatenate([data, np.tile(data[:,[-1]], (1, n_trials - data.shape[1], 1))], axis=1)
     return data
 
 
@@ -84,6 +134,10 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
         days = np.concatenate(days, axis=1)
         mice_dataset.append(days)
 
+    print('dataset shapes')
+    for arr in mice_dataset:
+        print(arr.shape)
+    
     X = np.concatenate(mice_dataset, axis=0)
 
     return X
