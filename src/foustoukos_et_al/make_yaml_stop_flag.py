@@ -2,20 +2,22 @@
 index for each session to know when to cut the session.
 """
 import os
+import sys
 
 import yaml
 import matplotlib.pyplot as plt
 
+sys.path.append(r'H:\anthony\repos\NWB_analysis')
 from nwb_wrappers import nwb_reader_functions as nwb_read
-from src.utils.utils_io import read_excel_db
+from src.utils import utils_io as io
 
 
 # =============================================================================
 # Path configuation.
 # =============================================================================
 
-nwb_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
-excel_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
+nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
+db_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
 
 
 # =============================================================================
@@ -25,12 +27,12 @@ excel_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_i
 # Find the trial index of the first whisker trial of this block.
 
 # List nwb files.
-nwb_list = read_excel_db(excel_path)
-nwb_list = nwb_list.loc[(nwb_list['exclude']!='exclude')]
-nwb_list = nwb_list.loc[(nwb_list['two_p_imaging'] == 'yes')
-                        & (nwb_list['sensory_mapping'] == 'yes')]
-nwb_list = list(nwb_list.session_id)
-nwb_list = [os.path.join(nwb_path, f + '.nwb') for f in nwb_list]
+session_list, nwb_list, mice, db_filtered = io.select_sessions_from_db(
+                                                db_path,
+                                                nwb_dir,
+                                                two_p_imaging='yes',
+                                                sensory_mapping='yes',
+                                                exclude_cols=[])
 
 stop_flags = {}
 trial_indices = {}
@@ -74,10 +76,10 @@ for nwb_file in nwb_list:
     trial_count.append([mouse_id, session_id, start, n_wh_miss, n_wh_hit])
 
 # Save yaml files.
-yaml_save = r'C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/stop_flags_sensory_map.yaml'
+yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\stop_flags_sensory_map.yaml'
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(stop_flags, stream)
-yaml_save = r'C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/trial_indices_sensory_map.yaml'
+yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_sensory_map.yaml'
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(trial_indices, stream)
 
@@ -101,15 +103,15 @@ with open(yaml_save, 'w') as stream:
 # hits in the rest.
 
 # List nwb files.
-nwb_list = read_excel_db(excel_path)
+nwb_list = read_excel_db(db_path)
 nwb_list = nwb_list.loc[(nwb_list['exclude']!='exclude')]
 nwb_list = list(nwb_list.session_id)
-nwb_list = [os.path.join(nwb_path, f + '.nwb') for f in nwb_list]
+nwb_list = [os.path.join(nwb_dir, f + '.nwb') for f in nwb_list]
 
 stop_flags = {}
 trial_indices = {}
 
-for nwb_file in nwb_list[:10]:
+for nwb_file in nwb_list:
 
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
@@ -151,9 +153,9 @@ for nwb_file in nwb_list[:10]:
     trial_indices[session_id] = trial_ids
 
 # Save yaml files.
-yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\stop_flags_end_session.yaml'
+yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\stop_flags_end_session.yaml'
 with open(yaml_save, 'w') as stream:
-    yaml.safe_dump(stop_flags, stream)
-yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\trial_indices_end_session.yaml'
+    yaml.dump(stop_flags, stream)
+yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_end_session.yaml'
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(trial_indices, stream)
