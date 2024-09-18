@@ -3,9 +3,8 @@ index for each session to know when to cut the session.
 """
 import os
 
-import pandas as pd
-import matplotlib.pyplot as plt
 import yaml
+import matplotlib.pyplot as plt
 
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.utils.utils_io import read_excel_db
@@ -15,8 +14,8 @@ from src.utils.utils_io import read_excel_db
 # Path configuation.
 # =============================================================================
 
-nwb_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB'
-excel_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
+nwb_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
+excel_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
 
 
 # =============================================================================
@@ -46,12 +45,12 @@ for nwb_file in nwb_list:
 
     # Beginning of the whisker sensory mapping block.
     # Find final segment of one's in the whisker_stim column.
+    
     start = table.whisker_stim != table.whisker_stim.shift()
-    plt.plot(start.cumsum())
     start = int(start.cumsum().idxmax())
-    # If more than 50 trial of whisker stimulation, keep only the last 50.
-    if table.loc[start:].shape[0] > 50:
-        start = start + table.loc[start:].shape[0] - 50
+    # Select the index that leaves 50 whisker misses.
+    start = table.loc[(table.lick_flag == 0) & (table.index >= start)].iloc[-50:].index[0]
+    
     # Exceptions.
     if session_id == 'AR132_20240427_122605':
         start = 578
@@ -73,19 +72,19 @@ for nwb_file in nwb_list:
                          & (table.whisker_stim == 1)
                          & (table.lick_flag == 1)].shape[0]
     trial_count.append([mouse_id, session_id, start, n_wh_miss, n_wh_hit])
-# 
+
 # Save yaml files.
-yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\stop_flags_sensory_map.yaml'
+yaml_save = r'C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/stop_flags_sensory_map.yaml'
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(stop_flags, stream)
-yaml_save = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\stop_flags\trial_indices_sensory_map.yaml'
+yaml_save = r'C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/trial_indices_sensory_map.yaml'
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(trial_indices, stream)
 
 # # Sanity check.
 # trial_count = pd.DataFrame(trial_count, columns = ['mouse_id', 'session_id', 'start', 'n_wh_miss', 'n_wh_hit'])
 
-# nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\AR115_20231116_142507.nwb'
+# nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\AR135_20240424_160805.nwb'
 # table = nwb_read.get_trial_table(nwb_file)
 # table = table.reset_index()
 # plt.figure()
