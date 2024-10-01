@@ -22,12 +22,11 @@ plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['svg.fonttype'] = 'none'
 
 
-def compute_performance(table, session_id, db_path, block_size=20):
+def compute_performance(table, session_id, reward_group, block_size=20):
     
     table['session_id'] = session_id
     table['mouse_id'] = session_id[:5]
     # Get reward group from session metadata.
-    reward_group = io.get_reward_group_from_db(db_path, session_id)
     table['reward_group'] = reward_group
 
     # Add trial number for each stimulus.
@@ -79,7 +78,7 @@ def compute_performance(table, session_id, db_path, block_size=20):
 
     return table
 
-def plot_single_mouse_performance_across_days(df,mouse_id,color_palette):
+def plot_single_mouse_performance_across_days(df, mouse_id, color_palette):
     """ Plots performance of a single mouse across all auditory and whisker sessions.
 
     Args:
@@ -230,25 +229,7 @@ def plot_average_across_days(data,mice,reward_group,palette,nmax_trials=300,ax=N
     ax.set_ylabel('Lick probability')
 
 
-def plot_perf_across_blocks(data,mice,reward_group,palette,nmax_trials=300,ax=None):
-    data = data.loc[(data.mouse_id.isin(mice)) & (data.session_day=='0') & (data.trial <=nmax_trials) & (data.early_lick==0)]
-    data = data.groupby(['mouse_id','session_id','session_day', 'block'], as_index=False).agg(np.mean)
 
-    sns.lineplot(data=data, x='block', y='hr_c', estimator=np.mean, color=palette[4] ,alpha=1, legend=False, marker='o', errorbar='ci', err_style='band', ax=ax)
-    sns.lineplot(data=data, x='block', y='hr_a', estimator=np.mean, color=palette[0] ,alpha=1, legend=False, marker='o', errorbar='ci', err_style='band', ax=ax)
-    color_wh = palette[2]
-    if reward_group=='R-':
-        color_wh = palette[3]
-    sns.lineplot(data=data, x='block', y='hr_w', estimator=np.mean, color=color_wh ,alpha=1, legend=False, marker='o', errorbar='ci', err_style='band', ax=ax)
-
-    nblocks = data.block.max()
-    if np.isnan(nblocks):
-        nblocks = 0
-    ax.set_xticks(range(nblocks))
-    ax.set_ylim([0,1.1])
-    ax.set_yticks([i*0.2 for i in range(6)])
-    ax.set_xlabel('Block (20 trials)')
-    ax.set_ylabel('Lick probability')
 
 
 # data = table
@@ -583,8 +564,89 @@ def plot_perf_across_blocks(data,mice,reward_group,palette,nmax_trials=300,ax=No
 #     # data = data.sort_values(['mouse_id','session_id','trial_number']).reset_index(drop=True)
 
 #     return data
-if __name__ == '__main__':
 
+def plot_perf_across_blocks(table,reward_group, palette, nmax_trials=300, ax=None):
+
+
+    table = table.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg({
+        'hr_c': 'mean',
+        'hr_a': 'mean',
+        'hr_w': 'mean'
+    })
+
+
+    sns.lineplot(data=table, x='block_id', y='hr_c', estimator='mean',
+                 color=palette[5], alpha=1, legend=False, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
+    sns.lineplot(data=table, x='block_id', y='hr_a', estimator='mean',
+                 color=palette[0], alpha=1, legend=False, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
+    color_wh = palette[2]
+    if reward_group=='R-':
+        color_wh = palette[3]
+    sns.lineplot(data=table, x='block_id', y='hr_w', estimator='mean',
+                 color=color_wh ,alpha=1, legend=False, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
+
+    nblocks = table.block_id.max()
+    if np.isnan(nblocks):
+        nblocks = 0
+    if not ax:
+        ax = plt.gca()
+    ax.set_xticks(range(nblocks))
+    ax.set_ylim([0,1.1])
+    ax.set_yticks([i*0.2 for i in range(6)])
+    ax.set_xlabel('Block (20 trials)')
+    ax.set_ylabel('Lick probability')
+
+
+if __name__ == '__main__':
+    
+    nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Lana_Smith/NWB'
+    session_list = ['MS039_20240305_085825.nwb',
+                    'MS041_20240305_123141.nwb',
+                    'MS065_20240421_150811.nwb',
+                    'MS067_20240422_152536.nwb',
+                    'MS069_20240422_154117.nwb',
+                    'MS128_20240926_111219.nwb',
+                    'MS129_20240926_112052.nwb',
+                    'MS130_20240925_112915.nwb',
+                    'MS131_20240926_120457.nwb',
+                    'MS135_20240925_133312.nwb']
+    
+    # session_list = ['MS061_20240421_144950.nwb',
+    #                 'MS066_20240422_143733.nwb',
+    #                 'MS066_20240422_143733.nwb',
+    #                 'MS127_20240926_105210.nwb',
+    #                 'MS132_20240925_115907.nwb',
+    #                 'MS133_20240925_121916.nwb',
+    #                 'MS134_20240925_114817.nwb']
+
+    nwb_list = [os.path.join(nwb_dir, nwb) for nwb in session_list]
+    reward_group = 'R+'
+    
+    table = []
+    for nwb, session in zip(nwb_list, session_list):
+        df = nwb_read.get_trial_table(nwb)
+        df = df.reset_index()
+        df.rename(columns={'id': 'trial_id'}, inplace=True)
+        df = compute_performance(df, session, reward_group)
+        table.append(df)
+    table = pd.concat(table)
+    table['day'] = '0'
+    table = table.astype({'mouse_id':str,
+                          'session_id':str,
+                          'day':str})
+    
+    table = table.loc[table.block_id<=17]
+    sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
+    palette = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
+    plt.figure(figsize=(15,6))
+    plot_perf_across_blocks(table, reward_group, palette, nmax_trials=300, ax=None)
+    sns.despine()
+    
+    
+    
     # Read behavior results.
     SESSIONS_DB_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
     # SESSIONS_DB_PATH = 'C:\\Users\\aprenard\\recherches\\fast-learning\\docs\\sessions_muscimol_GF.xlsx'
