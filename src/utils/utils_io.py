@@ -5,10 +5,13 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import yaml
+import warnings
 
 
 def read_excel_db(db_path):
-    database = pd.read_excel(db_path, converters={'day': str})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        database = pd.read_excel(db_path, converters={'day': str})
 
     # Remove empty lines.
     database = database.loc[~database.isna().all(axis=1)]

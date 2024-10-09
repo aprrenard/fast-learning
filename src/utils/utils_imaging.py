@@ -2,6 +2,7 @@ import os
 import pickle
 
 import numpy as np
+import warnings
 
 
 def load_session_2p_imaging(mouse_id, session_id, dir_path):
@@ -10,7 +11,7 @@ def load_session_2p_imaging(mouse_id, session_id, dir_path):
     data = np.load(array_path)
     with open(tensor_metadata_path, 'rb') as f:
         metadata = pickle.load(f)
-    return data, metadata
+    return np.float32(data), metadata
 
 
 def substract_baseline(arr, time_axis, baseline_win):
@@ -28,7 +29,9 @@ def substract_baseline(arr, time_axis, baseline_win):
     ndims = arr.ndim
     slices = [slice(None),] * ndims
     slices[time_axis] = slice(baseline_win[0], baseline_win[1])
-    baseline = np.nanmean(arr[*slices], axis=time_axis, keepdims=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        baseline = np.nanmean(arr[*slices], axis=time_axis, keepdims=True)
     arr = arr - baseline
     return arr
 
@@ -85,8 +88,10 @@ def extract_trials(arr, metadata, trial_type, n_trials=None):
         print(f"Trial type '{trial_type}' is not present in the metadata.")
         return None
     data = arr[:, metadata['trial_types'].index(trial_type)]
-    # Keep only the first n_trials.
-    data = data[:, :n_trials]
+    
+    if n_trials is not None:
+        # Keep only the first n_trials.
+        data = data[:, :n_trials]
     # Remove nan values at the end of the trial dimension.
     data = data[:, ~np.isnan(data).all(axis=(0,2))]
     if n_trials is not None:
