@@ -3,7 +3,9 @@ import pickle
 
 import numpy as np
 import warnings
-
+from sklearn.metrics import auc, roc_curve
+from sklearn.utils import shuffle
+from scipy.stats import percentileofscore
 
 def load_session_2p_imaging(mouse_id, session_id, dir_path):
     array_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d.npy")
@@ -65,7 +67,7 @@ def stack_sessions(arrays, axis=1):
     return np.stack(arrays, axis=axis)
 
 
-def extract_trials(arr, metadata, trial_type, n_trials=None):
+def extract_trials(arr, metadata, trial_type, n_trials=None, repeat_last_trial=False):
     """Extract an array of shape (n_neurons, n_trials, n_timepoints)
     for a given trial type.
     As nan values are not desirable to run dimensionailty reduction or
@@ -92,16 +94,17 @@ def extract_trials(arr, metadata, trial_type, n_trials=None):
     if n_trials is not None:
         # Keep only the first n_trials.
         data = data[:, :n_trials]
+        print(f'here {data.shape}')
     # Remove nan values at the end of the trial dimension.
     data = data[:, ~np.isnan(data).all(axis=(0,2))]
-    if n_trials is not None:
+    if n_trials is not None and repeat_last_trial:
         # Repeat last trial if less than required number of trials.
         if data.shape[1] < n_trials:
             data = np.concatenate([data, np.tile(data[:,[-1]], (1, n_trials - data.shape[1], 1))], axis=1)
     return data
 
 
-def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_trials):
+def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_trials=None):
     """Return a 4d array of shape (n_neurons, n_trials, n_timepoints)
     for a given trial type and number of trials. This array can then be used
     to create X for dimensionality reduction and decoding. For each mouse,
@@ -146,3 +149,43 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
     X = np.concatenate(mice_dataset, axis=0)
 
     return X
+
+
+def compute_lmi(data_pre, data_post, nshuffles=10000):
+    '''
+    Compute ROC analysis and Learning modulation index for each cell in data.
+    data_pre: np array of shape (cell, trial).
+    data_post: np array of shape (cell, trial).
+
+    LMI are computed on days D-2, D-1 together VERSUS D+1, D+2 together.
+    '''
+    
+    ncell = data_pre.shape[0]
+
+    lmi = np.full(ncell, np.nan)
+    lmi_p = np.full(ncell, np.nan)
+
+    for icell in range(ncell):
+        print(f'LMI computation: {icell+1}/{ncell} cells', end='\r')
+        
+        X_pre = data_pre[icell]
+        X_post = data_post[icell]
+        X = np.r_[X_pre, X_post]
+        y = np.r_[[0 for _ in range(X_pre.shape[0])], [1 for _ in range(X_post.shape[0])]]
+        
+        fpr, tpr, _ = roc_curve(y, X)
+        roc_auc = auc(fpr, tpr)
+        lmi[icell] = (roc_auc - 0.5) * 2
+        
+        # Test significativity of LMI values with shuffles.
+        if nshuffles:
+            roc_auc_shuffle = np.zeros(nshuffles)
+            for ishuffle in range(nshuffles):
+                y_shuffle = shuffle(y, random_state=ishuffle)
+                fpr, tpr, _ = roc_curve(y_shuffle, X)
+                roc_auc_shuffle[ishuffle] = auc(fpr, tpr)
+            lmi_p[icell] = percentileofscore(roc_auc_shuffle, roc_auc) / 100
+        else:
+            lmi_p[icell] = np.nan
+
+    return lmi, lmi_p
