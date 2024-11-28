@@ -110,112 +110,116 @@ def get_experimenter_analysis_folder(initials):
     return analysis_folder
 
 
-mice_ids = ['RD046']
-experimenter = 'AR'
-longitudinal = False
+def run_fissa(mice_ids, experimenter, longitudinal=True):
 
-suite2p_folders = []
-if longitudinal:
-    for mouse_id in mice_ids:
-        suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
-                                    mouse_id, 'suite2p', 'plane0')
-        suite2p_folders.append(suite2p_folder)
-else:
-    for mouse_id in mice_ids:
-        # List sessions with imaging.
-        sessions = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
-        sessions = [os.path.join(sessions, folder)
-                        for folder in os.listdir(sessions)
-                        if os.path.isdir(os.path.join(sessions, folder))]
-        sessions = [os.path.split(folder)[1] for folder in sessions]
-        for session_id in sessions:
+    suite2p_folders = []
+    if longitudinal:
+        for mouse_id in mice_ids:
             suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
-                                          mouse_id, session_id, 'suite2p', 'plane0')
+                                        mouse_id, 'suite2p', 'plane0')
             suite2p_folders.append(suite2p_folder)
+    else:
+        for mouse_id in mice_ids:
+            # List sessions with imaging.
+            sessions = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
+            sessions = [os.path.join(sessions, folder)
+                            for folder in os.listdir(sessions)
+                            if os.path.isdir(os.path.join(sessions, folder))]
+            sessions = [os.path.split(folder)[1] for folder in sessions]
+            for session_id in sessions:
+                suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
+                                            mouse_id, session_id, 'suite2p', 'plane0')
+                suite2p_folders.append(suite2p_folder)
 
-for suite2p_folder in suite2p_folders:
+    for suite2p_folder in suite2p_folders:
 
-    stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
-    ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
-    iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)
+        stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
+        ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
+        iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)
 
-    # Set merged roi's to non-cells.
-    iscell = set_merged_roi_to_non_cell(stat, iscell)
-    
-    # The registered tifs in the reg-tif folder created by suite2p
-    # are not lexicographically ordered. Reorder them and give list of
-    # tifs as argument to Fissa.
-    tif_path = os.path.join(suite2p_folder, 'reg_tif')
-    reg_tif_list = os.listdir(tif_path)
-    reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext(tif)[1] in ['.tif', '.tiff']]
-    f = lambda x: int(x[6:-10])
-    reg_tif_list = sorted(reg_tif_list, key=f)
-    reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
+        # Set merged roi's to non-cells.
+        iscell = set_merged_roi_to_non_cell(stat, iscell)
+        
+        # The registered tifs in the reg-tif folder created by suite2p
+        # are not lexicographically ordered. Reorder them and give list of
+        # tifs as argument to Fissa.
+        tif_path = os.path.join(suite2p_folder, 'reg_tif')
+        reg_tif_list = os.listdir(tif_path)
+        reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext(tif)[1] in ['.tif', '.tiff']]
+        f = lambda x: int(x[6:-10])
+        reg_tif_list = sorted(reg_tif_list, key=f)
+        reg_tif_list = [os.path.join(tif_path, tif) for tif in reg_tif_list]
 
-    # Get image size
-    Lx = ops['Lx']
-    Ly = ops['Ly']
+        # Get image size
+        Lx = ops['Lx']
+        Ly = ops['Ly']
 
-    # Get the cell ids
-    ncells = len(stat)
-    cell_ids = np.arange(ncells)  # assign each cell an ID, starting from 0.
-    cell_ids = cell_ids[iscell[:,0]==1]  # only keep the ROIs that are actually cells.
-    num_rois = len(cell_ids)
+        # Get the cell ids
+        ncells = len(stat)
+        cell_ids = np.arange(ncells)  # assign each cell an ID, starting from 0.
+        cell_ids = cell_ids[iscell[:,0]==1]  # only keep the ROIs that are actually cells.
+        num_rois = len(cell_ids)
 
-    # Generate ROI masks in a format usable by FISSA (in this case, a list of masks)
-    rois = [np.zeros((Ly, Lx), dtype=bool) for _ in range(num_rois)]
+        # Generate ROI masks in a format usable by FISSA (in this case, a list of masks)
+        rois = [np.zeros((Ly, Lx), dtype=bool) for _ in range(num_rois)]
 
-    for i, n in enumerate(cell_ids):
-        # i is the position in cell_ids, and n is the actual cell number
-        # Don't remove overlapping pixels of merges.
-        if 'imerge' in stat[0].keys():
-            if np.array(stat[n]['imerge']).any():
-                ypix = stat[n]['ypix']
-                xpix = stat[n]['xpix']
+        for i, n in enumerate(cell_ids):
+            # i is the position in cell_ids, and n is the actual cell number
+            # Don't remove overlapping pixels of merges.
+            if 'imerge' in stat[0].keys():
+                if np.array(stat[n]['imerge']).any():
+                    ypix = stat[n]['ypix']
+                    xpix = stat[n]['xpix']
+                else:
+                    ypix = stat[n]['ypix'][~stat[n]['overlap']]
+                    xpix = stat[n]['xpix'][~stat[n]['overlap']]
             else:
                 ypix = stat[n]['ypix'][~stat[n]['overlap']]
                 xpix = stat[n]['xpix'][~stat[n]['overlap']]
-        else:
-            ypix = stat[n]['ypix'][~stat[n]['overlap']]
-            xpix = stat[n]['xpix'][~stat[n]['overlap']]
 
-        if (np.sum(xpix) == 0 or np.sum(ypix) == 0):
-            print(f'ROI {n} overlaps fully.')
-        rois[i][ypix, xpix] = 1
+            if (np.sum(xpix) == 0 or np.sum(ypix) == 0):
+                print(f'ROI {n} overlaps fully.')
+            rois[i][ypix, xpix] = 1
 
-    print(f'Running Fissa separation for {suite2p_folder}.')
-    exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
-    exp.separate(max_iter=20000)
-    
-    # TODO: use convergence result to remove cells that didn't converge.
-    
-    # Extract and reshape corrected traces to (ncells, nt).
-    ncells, ntifs = exp.result.shape
-    nt = exp.result[0,0][0].shape[0]
-    F_cor = []
-    for icell in range(ncells):
-        tmp = []
-        for itif in range(ntifs):
-            tmp.append(exp.result[icell,itif][0])
-        F_cor.append(np.concatenate(tmp))
-    F_cor = np.vstack(F_cor)
+        print(f'Running Fissa separation for {suite2p_folder}.')
+        exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
+        exp.separate()
+                
+        # Extract and reshape corrected traces to (ncells, nt).
+        # Cells that did not converge will be set to non-cells in iscell at NWB conversion.
+        ncells, ntifs = exp.result.shape
+        nt = exp.result[0,0][0].shape[0]
+        F_cor = []
+        for icell in range(ncells):
+            tmp = []
+            for itif in range(ntifs):
+                tmp.append(exp.result[icell,itif][0])
+            F_cor.append(np.concatenate(tmp))
+        F_cor = np.vstack(F_cor)
 
-    # Same for raw traces.
-    ncells, ntifs = exp.result.shape
-    nt = exp.raw[0,0][0].shape[0]
-    F_raw = []
-    for icell in range(ncells):
-        tmp = []
-        for itif in range(ntifs):
-            tmp.append(exp.raw[icell,itif][0])
-        F_raw.append(np.concatenate(tmp))
-    F_raw = np.vstack(F_raw)
+        # Same for raw traces.
+        ncells, ntifs = exp.result.shape
+        nt = exp.raw[0,0][0].shape[0]
+        F_raw = []
+        for icell in range(ncells):
+            tmp = []
+            for itif in range(ntifs):
+                tmp.append(exp.raw[icell,itif][0])
+            F_raw.append(np.concatenate(tmp))
+        F_raw = np.vstack(F_raw)
 
-    F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
-    
-    # Saving data.
-    np.save(os.path.join(suite2p_folder, 'F_cor'), F_cor)
-    np.save(os.path.join(suite2p_folder, 'F_raw'), F_raw)
-    np.save(os.path.join(suite2p_folder, 'F0'), F0)
-    np.save(os.path.join(suite2p_folder, 'dff'), dff)
-    print(f'Data saved.')
+        F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
+        
+        # Saving data.
+        np.save(os.path.join(suite2p_folder, 'F_cor'), F_cor)
+        np.save(os.path.join(suite2p_folder, 'F_raw'), F_raw)
+        np.save(os.path.join(suite2p_folder, 'F0'), F0)
+        np.save(os.path.join(suite2p_folder, 'dff'), dff)
+        print(f'Data saved.')
+
+
+if __name__ == '__main__':
+
+    mice_ids = ['AR156']
+    experimenter = 'AR'
+    longitudinal = False

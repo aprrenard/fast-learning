@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
+# import cv2
 from ScanImageTiffReader import ScanImageTiffReader
 from scipy.signal import find_peaks
 import tifffile as tiff
@@ -11,11 +11,11 @@ import tifffile as tiff
 # Log continuous.
 # ###############
 
-path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\special_sessions\\AR099'
+path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\special_sessions\\AR163'
 
-log1 = np.fromfile(os.path.join(path, 'Training', 'AR099_20230804_111449', 'log_continuous.bin'))
+log1 = np.fromfile(os.path.join(path, 'Training', 'AR163_20241125_153447', 'log_continuous.bin'))
 log2 = np.fromfile(os.path.join(path, 'Training', 'AR099_20230804_111449_UM', 'log_continuous.bin'))
-
+# 
 # Cut last ttl up from first session due to stopping, fuse and save.
 log = np.concatenate([log1[:-12000], log2])
 
@@ -183,3 +183,15 @@ tiff = tiff[:-(141495-139504)]
 save_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\need_fix\\AR141\\AR141_20240520\\imaging\\AR141_20240520_1\\AR141_20240520_00003_cor.tif'
 tiff.imsave(save_path, tiff)
 
+# Checking n imaging frames for AR163
+
+path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/data/AR163/Training/AR163_20241125_153447/log_continuous.bin'
+log = np.fromfile(path)
+
+
+galvo_events = find_peaks(log[1::6], distance=100, prominence=1)[0]
+print(galvo_events.size)
+print(galvo_events.size/30/3600)
+
+tiff_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/data/AR163/Recording/Imaging/AR163_20241125_153447/AR163_20241125_153447.tif"
+nframes = ScanImageTiffReader(tiff_path).shape()[0]
