@@ -12,7 +12,7 @@ EXPERIMENTER_MAP = {
     'MM': 'Meriam_Malekzadeh',
     'MS': 'Lana_Smith',
     'GF': 'Anthony_Renard',
-    'MI': 'Anthony_Renard',
+    'MI': 'Anthony_Renard', 
     }
 
 
@@ -30,7 +30,7 @@ def get_experimenter_analysis_folder(initials):
     return analysis_folder
 
 
-def run_suite2p(ops, mice_ids, experimenter, longitudinal=True):
+def run(ops, mice_ids, experimenter, longitudinal=True):
     dbs = []
     if longitudinal:
         # Concatenate all sessions and run suite2p once per mouse.
@@ -86,7 +86,7 @@ def run_suite2p(ops, mice_ids, experimenter, longitudinal=True):
                 dbs.append(db)
         
     for dbi in dbs:
-        opsEnd = run_s2p(ops=ops, db=dbi)
+        run_s2p(ops=ops, db=dbi)
 
 
 if __name__ == '__main__':
@@ -98,11 +98,43 @@ if __name__ == '__main__':
     # set your options for running
     ops = default_ops() # populates ops with the default options
     ops['batch_size'] = 1000
-    ops['threshold_scaling'] = 1.0 # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
+    ops['threshold_scaling'] = 1.0
     ops['fs'] = 30
     ops['tau'] = 1.25 # timescale of gcamp to use for deconvolution
     ops['delete_bin'] = True
     # Save reg tif for Fissa.
     ops['reg_tif'] = True
 
-    run_suite2p(ops, mice_ids, experimenter, longitudinal)
+    run(ops, mice_ids, experimenter, longitudinal)
+
+
+# from ScanImageTiffReader import ScanImageTiffReader
+
+# files = []
+# for data_path in dbs[0]['data_path']:
+#     for root, _, filenames in os.walk(data_path):
+#         for filename in filenames:
+#             if filename.endswith('.tif') or filename.endswith('.tiff'):
+#                 files.append(os.path.join(root, filename))
+
+# for file in files:
+#     print(file)
+#     test = ScanImageTiffReader(file)
+#     print(f'opened {file}')
+
+
+
+# import tifffile as tf
+
+# with tf.TiffFile(files[1]) as tif:
+#     tif_tags = {}
+#     for tag in tif.pages[10000].tags.values():
+#         name, value = tag.name, tag.value
+#         tif_tags[name] = value
+# tif_tags
+
+# images.values().name
+
+# file_cor = r"D:\AR\AR163_20241128_00001_stripcorrection.tif"
+# print(file_cor)
+# test = ScanImageTiffReader(file_cor)
