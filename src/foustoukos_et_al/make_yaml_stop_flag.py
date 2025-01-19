@@ -7,7 +7,7 @@ import sys
 import yaml
 import matplotlib.pyplot as plt
 
-sys.path.append(r'H:\anthony\repos\NWB_analysis')
+# sys.path.append(r'H:\anthony\repos\NWB_analysis')
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.utils import utils_io as io
 
@@ -32,7 +32,7 @@ session_list, nwb_list, mice, db_filtered = io.select_sessions_from_db(
                                                 nwb_dir,
                                                 two_p_imaging='yes',
                                                 sensory_mapping='yes',
-                                                exclude_cols=[])
+                                                exclude_cols=['exclude'])
 
 stop_flags = {}
 trial_indices = {}
@@ -50,17 +50,54 @@ for nwb_file in nwb_list:
     
     start = table.whisker_stim != table.whisker_stim.shift()
     start = int(start.cumsum().idxmax())
-    # Select the index that leaves 50 whisker misses.
-    start = table.loc[(table.lick_flag == 0) & (table.index >= start)].iloc[-50:].index[0]
     
     # Exceptions.
     if session_id == 'AR132_20240427_122605':
-        start = 578
+        start = 571
     if session_id == 'AR139_20240428_180459':
-        start = 414
+        start = 406
     if session_id == 'GF350_28052021_145113':
         start = 224
+    if session_id == 'GF340_29012021_091839':
+        start = 364
+    if session_id == 'GF340_30012021_125418':
+        start = 389
+    if session_id == 'GF340_31012021_124052':
+        start = 519
+    if session_id == 'GF340_01022021_131205':
+        start = 677
+    if session_id == 'GF340_02022021_100218':
+        start = 717
+    if session_id == 'GF307_19112020_083908':
+        start = 220
+    if session_id == 'GF333_25012021_141608':
+        start = 254
+    if session_id == 'GF350_28052021_145113':
+        start = 214
+    if session_id == 'MI075_21122021_151949':
+        start = 189
+    if session_id == 'MI075_23122021_150004':
+        start = 414
+    if session_id == 'AR133_20240428_134911':
+        start = 333
+    if session_id == 'AR144_20240522_190834':
+        start = 341
+        
+    # Select the index that leaves 50 whisker misses.
+    try:
+        start = table.loc[(table.whisker_stim == 1) & (table.lick_flag == 0) & (table.index >= start)].iloc[-50:].index[0]
+    # Cases with no whisker stim at the end (few excluded mice).
+    except IndexError:
+        start = table.index.max()
+    
     stop_flags[session_id] = (start, int(table.index.max()))
+
+    # Further exceptions where I included a trial with a lick to avoid
+    # having less than 50 whisker trials.
+    if session_id == 'AR133_20240425_115233':
+        stop_flags[session_id] = (338, int(table.index.max()))
+    if session_id == 'AR137_20240425_170755':
+        stop_flags[session_id] = (207, int(table.index.max()))
 
     # Get the indices of those trials.
     trial_ids = table.loc[start:, 'trial_id'].to_list()
@@ -83,16 +120,16 @@ yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_in
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(trial_indices, stream)
 
-# # Sanity check.
-# trial_count = pd.DataFrame(trial_count, columns = ['mouse_id', 'session_id', 'start', 'n_wh_miss', 'n_wh_hit'])
+# Sanity check.
+trial_count = pd.DataFrame(trial_count, columns = ['mouse_id', 'session_id', 'start', 'n_wh_miss', 'n_wh_hit'])
 
-# nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\AR135_20240424_160805.nwb'
-# table = nwb_read.get_trial_table(nwb_file)
-# table = table.reset_index()
-# plt.figure()
-# plt.scatter(table.loc[table.auditory_stim==1, 'trial_id'], table.loc[table.auditory_stim==1, 'lick_flag'])
-# plt.scatter(table.loc[table.whisker_stim==1, 'trial_id'], table.loc[table.whisker_stim==1, 'lick_flag'])
-# plt.scatter(table.loc[table.no_stim==1, 'trial_id'], table.loc[table.no_stim==1, 'lick_flag'])
+nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF278_07082020_131407.nwb'
+table = nwb_read.get_trial_table(nwb_file)
+table = table.reset_index()
+plt.figure()
+plt.scatter(table.loc[table.auditory_stim==1, 'trial_id'], table.loc[table.auditory_stim==1, 'lick_flag'])
+plt.scatter(table.loc[table.whisker_stim==1, 'trial_id'], table.loc[table.whisker_stim==1, 'lick_flag'])
+plt.scatter(table.loc[table.no_stim==1, 'trial_id'], table.loc[table.no_stim==1, 'lick_flag'])
 
 
 # =============================================================================
@@ -103,7 +140,7 @@ with open(yaml_save, 'w') as stream:
 # hits in the rest.
 
 # List nwb files.
-nwb_list = read_excel_db(db_path)
+nwb_list = io.read_excel_db(db_path)
 nwb_list = nwb_list.loc[(nwb_list['exclude']!='exclude')]
 nwb_list = list(nwb_list.session_id)
 nwb_list = [os.path.join(nwb_dir, f + '.nwb') for f in nwb_list]
