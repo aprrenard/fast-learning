@@ -4,7 +4,11 @@ import sys
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
+import yaml
 
+# sys.path.append(r'H:/anthony/repos/NWB_analysis')
+sys.path.append(r'C:\Users\aprenard\repos\fast-learning\src')
+import utils.utils_io as io
 
 def set_merged_roi_to_non_cell(stat, iscell):
     # Set merged cells to 0 in iscell.
@@ -17,7 +21,7 @@ def set_merged_roi_to_non_cell(stat, iscell):
     return iscell
 
 
-def compute_baseline(F, fs, window):
+def compute_baseline(F, fs, window, sigma_win=5):
 
     # Parameters --------------------------------------------------------------
     nfilt = 30  # Number of taps to use in FIR filter
@@ -60,27 +64,35 @@ def compute_baseline(F, fs, window):
                                            padlen=padlen)
 
     # Take a percentile of the filtered signal and windowed signal
-    baseline = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,int(np.round(fs*2*window + 1))), mode='constant', cval=+np.inf)
+    # baseline = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,int(np.round(fs*2*window + 1))), mode='constant', cval=+np.inf)
+    baseline = scipy.ndimage.minimum_filter(filtered_f, size=(1,int(np.round(fs*2*window + 1))), mode='reflect')
+    baseline = scipy.ndimage.maximum_filter(baseline, size=(1,int(np.round(fs*2*window + 1))), mode='reflect')
+
+    # Smooth baseline with gaussian filter.
+    baseline = scipy.ndimage.gaussian_filter(baseline, sigma=(0, int(np.round(fs*sigma_win)) ), mode='reflect')
 
     # Ensure filtering doesn't take us below the minimum value which actually
     # occurs in the data. This can occur when the amount of data is very low.
     baseline = np.maximum(baseline, np.nanmin(F, axis=1, keepdims=True))
 
-    return baseline
+    return baseline, filtered_f
 
 
-def compute_dff(F_cor, F_raw, fs, window=60):
+def compute_dff(F_raw, F_neu, fs, window=30, sigma_win=5):
     '''
     F_cor: decontaminated traces, output of Fissa
     F_raw: raw traces extracted by Fissa (not suite2p)
     fs: sampling frequency
     window: running window size on each side of sample for percentile computation
     '''
-    f0 = compute_baseline(F_raw, fs, window)
-    f0_cor = compute_baseline(F_cor, fs, window)
-    dff = (F_cor - f0_cor) / f0
+    F_cor = F_raw - 0.7 * F_neu
+    F_cor[F_cor<0] = 0  # Unsure non negative values.
+    F0_raw, _ = compute_baseline(F_raw, fs, window, sigma_win=5)
+    F0_raw[F0_raw<1] = 1  # Avoid division by < 1.
+    F0_cor, _ = compute_baseline(F_cor, fs, window, sigma_win=5)
+    dff = (F_cor - F0_cor) / F0_raw
 
-    return f0, dff
+    return F0_raw, F0_cor, dff  
 
 
 EXPERIMENTER_MAP = {
@@ -110,8 +122,17 @@ def get_experimenter_analysis_folder(initials):
     return analysis_folder
 
 
-mice_ids = ['AR163', 'AR177', 'AR178', 'AR179', 'AR180']
+# Compute dff for full data (sessions not split).
+# ------------------------------------------------
+
 experimenter = 'AR'
+# mice_ids = ['AR127']
+
+db_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx"
+nwb_dir = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB"
+_, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=experimenter,
+                            exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
+# mice_ids = mice_ids[5:]
 
 suite2p_folders = []
 for mouse_id in mice_ids:
@@ -125,22 +146,84 @@ for suite2p_folder in suite2p_folders:
     stat = np.load(os.path.join(suite2p_folder,'stat.npy'), allow_pickle = True)
     ops = np.load(os.path.join(suite2p_folder,'ops.npy'), allow_pickle = True).item()
     iscell = np.load(os.path.join(suite2p_folder,'iscell.npy'), allow_pickle = True)
-    F = np.load(os.path.join(suite2p_folder,'F.npy'), allow_pickle = True)
-    Fneu = np.load(os.path.join(suite2p_folder,'Fneu.npy'), allow_pickle = True)
+    F_raw = np.load(os.path.join(suite2p_folder,'F.npy'), allow_pickle = True)
+    F_neu = np.load(os.path.join(suite2p_folder,'Fneu.npy'), allow_pickle = True)
     
     # Set merged roi's to non-cells.
     iscell = set_merged_roi_to_non_cell(stat, iscell)
 
-    F_raw = F[iscell[:,0]==1.]
-    F_cor = F[iscell[:,0]==1.] - 0.7 * Fneu[iscell[:,0]==1.]
-    F_cor[F_cor<0] = 0
+    F_raw = F_raw[iscell[:,0]==1.]
+    F_neu = F_neu[iscell[:,0]==1.]
 
-    print('Computing baselines.')
-    F0, dff = compute_dff(F_cor, F_raw, fs=ops['fs'], window=60)
+    print('Computing baselines and dff.')
+    F0_raw, F0_cor, dff = compute_dff(F_raw, F_neu, fs=ops['fs'], window=30, sigma_win=5)
 
     # Saving data.
-    np.save(os.path.join(suite2p_folder, 'F_cor'), F_cor)
     np.save(os.path.join(suite2p_folder, 'F_raw'), F_raw)
-    np.save(os.path.join(suite2p_folder, 'F0'), F0)
+    np.save(os.path.join(suite2p_folder, 'F_neu'), F_neu)
+    np.save(os.path.join(suite2p_folder, 'F0_cor'), F0_cor)
+    np.save(os.path.join(suite2p_folder, 'F0_raw'), F0_raw)
     np.save(os.path.join(suite2p_folder, 'dff'), dff)
     print(f'Data saved.')
+
+
+
+# F_cor = F_raw - 0.7 * F_neu
+# F_cor[F_cor<0] = 0
+
+
+# plt.plot(F_cor[0])
+# plt.plot(F0_cor[0])
+
+
+# plt.plot(F_raw[0])
+# plt.plot(F0_raw[0])
+# plt.plot(F_neu[0])
+
+# plt.figure()
+# plt.plot(dff[0])
+
+
+
+# Specific to GF data. Compute dff for each session.
+# -------------------------------------------------
+
+experimenter = 'AR'
+# mice_ids = ['AR127']
+db_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx"
+nwb_dir = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB"
+session_list, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=['GF','MI'],
+                            exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
+
+for session in session_list:
+    print(f'Processing {session}.')
+    mouse_name = session[:5]
+
+    mouse_folder = rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PRois\\{mouse_name}'
+    suite2p_folder = (rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PSessionData\\{mouse_name}\\{session[:-7]}')
+    save_folder = os.path.join(get_experimenter_analysis_folder(experimenter), mouse_name, session, 'suite2p', 'plane0')
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    stat = np.load(os.path.join(mouse_folder, 'stat.npy'), allow_pickle=True)
+    is_cell = np.load(os.path.join(mouse_folder, "iscell.npy"), allow_pickle=True)
+    ops = np.load(os.path.join(mouse_folder, "ops.npy"), allow_pickle=True).item()
+    F_raw = np.load(os.path.join(suite2p_folder, "F.npy"), allow_pickle=True)
+    F_neu = np.load(os.path.join(suite2p_folder, "Fneu.npy"), allow_pickle=True)
+
+    print('Computing baselines and dff.')
+    F0_raw, F0_cor, dff = compute_dff(F_raw, F_neu, fs=ops['fs'], window=30, sigma_win=5)
+
+    # Saving data.
+    np.save(os.path.join(save_folder, 'F_raw'), F_raw)
+    np.save(os.path.join(save_folder, 'F_neu'), F_neu)
+    np.save(os.path.join(save_folder, 'F0_cor'), F0_cor)
+    np.save(os.path.join(save_folder, 'F0_raw'), F0_raw)
+    np.save(os.path.join(save_folder, 'dff'), dff)
+    
+    np.save(os.path.join(save_folder, 'iscell'), is_cell)
+    np.save(os.path.join(save_folder, 'ops'), ops)
+    np.save(os.path.join(save_folder, 'stat'), stat)
+
+    print(f'Data saved.')
+

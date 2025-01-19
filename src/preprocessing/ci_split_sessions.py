@@ -3,9 +3,26 @@ import os
 import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
 import tifffile as tiff
+import matplotlib.pyplot as plt
+import yaml
 
 
-mice_id = ['AR127',]
+mice_id = [
+    # 'AR132',
+    #         'AR133',
+    #         'AR135',
+    #         'AR137',
+    #         'AR139',
+    #         'AR127',
+    #         'AR131',
+    #         'AR143',
+    #         'AR144',
+    #         'AR163',
+            'AR176',
+            'AR177',
+            'AR178',
+            'AR179',
+            'AR180']
 
 for mouse_id in mice_id:
 
@@ -18,32 +35,47 @@ for mouse_id in mice_id:
         print(session)
 
     # Read traces of concatenated sessions.
-
     suite2p_folder = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_id}\\suite2p\\plane0'
-    F_cor = np.load(os.path.join(suite2p_folder, 'F_cor.npy'), allow_pickle=True)
     F_raw = np.load(os.path.join(suite2p_folder, 'F_raw.npy'), allow_pickle=True)
-    F0 = np.load(os.path.join(suite2p_folder, 'F0.npy'), allow_pickle=True)
+    F_neu = np.load(os.path.join(suite2p_folder, 'F_neu.npy'), allow_pickle=True)
+    F0_raw = np.load(os.path.join(suite2p_folder, 'F0_raw.npy'), allow_pickle=True)
+    F0_cor = np.load(os.path.join(suite2p_folder, 'F0_cor.npy'), allow_pickle=True)
     dff = np.load(os.path.join(suite2p_folder, 'dff.npy'), allow_pickle=True)
     stat = np.load(os.path.join(suite2p_folder, 'stat.npy'), allow_pickle=True)
     iscell = np.load(os.path.join(suite2p_folder, 'iscell.npy'), allow_pickle=True)
     ops = np.load(os.path.join(suite2p_folder, 'ops.npy'), allow_pickle=True)
 
-    # Count frames per session.
- 
+    counting_done = False
     frames_per_session = []
+    
+    # Check if already counted at conversion.
     for session in session_list:
-        path = os.path.join(imaging_folder, session)
-        tif_paths = [os.path.join(path, itif) for itif in os.listdir(path) if os.path.splitext(itif)[1] in ['.tif', '.tiff']]
-        tif_paths = sorted(tif_paths)
-        nframes = 0
-        for itif in tif_paths:
-            print(itif, end='\r')
-            shape = ScanImageTiffReader(itif).shape()
-            nframes += shape[0]
-        frames_per_session.append(nframes)
+        folder = rf'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/{session}/suite2p/plane0/reg_tif'
+        if os.path.exists(os.path.join(folder, 'movie_specs.yaml')):
+            counting_done = True
+            with open(os.path.join(folder, 'movie_specs.yaml'), 'r') as file:
+                movie_specs = yaml.safe_load(file)
+                frames_per_session.append(movie_specs['movie shape']['n_frames'])
+
+    if not counting_done:
+        if os.path.exists(os.path.join(suite2p_folder, 'frames_per_session.npy')):        
+            frames_per_session = np.load(os.path.join(suite2p_folder, 'frames_per_session.npy'), allow_pickle=True)
+        else:
+            # Count frames per session.
+            for session in session_list:
+                path = os.path.join(imaging_folder, session)
+                tif_paths = [os.path.join(path, itif) for itif in os.listdir(path) if os.path.splitext(itif)[1] in ['.tif', '.tiff']]
+                tif_paths = sorted(tif_paths)
+                nframes = 0
+                for itif in tif_paths:
+                    print(itif, end='\r')
+                    shape = ScanImageTiffReader(itif).shape()
+                    nframes += shape[0]
+                frames_per_session.append(nframes)
+            np.save(os.path.join(suite2p_folder, 'frames_per_session.npy'), frames_per_session, allow_pickle=True)
+        frames_per_session = list(frames_per_session)
 
     # Split traces.
-
     starts = [0] + frames_per_session[:-1]
     starts = np.cumsum(starts)
     stops = np.cumsum(frames_per_session)
@@ -51,13 +83,14 @@ for mouse_id in mice_id:
     print(start_stop, end='\n')
 
     for isession, session in enumerate(session_list):
-        save_path = f'\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\data\\{mouse_id}\\{session}\\suite2p\\plane0'
+        save_path = rf'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/{session}/suite2p/plane0'
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         a, b = start_stop[isession]
-        np.save(os.path.join(save_path, 'F_cor.npy'), F_cor[:, a:b])
         np.save(os.path.join(save_path, 'F_raw.npy'), F_raw[:, a:b])
-        np.save(os.path.join(save_path, 'F0.npy'), F0[:, a:b])
+        np.save(os.path.join(save_path, 'F_neu.npy'), F_neu[:, a:b])
+        np.save(os.path.join(save_path, 'F0_raw.npy'), F0_raw[:, a:b])
+        np.save(os.path.join(save_path, 'F0_cor.npy'), F0_cor[:, a:b])
         np.save(os.path.join(save_path, 'dff.npy'), dff[:, a:b])
         np.save(os.path.join(save_path, 'stat.npy'), stat)
         np.save(os.path.join(save_path, 'iscell.npy'), iscell)
