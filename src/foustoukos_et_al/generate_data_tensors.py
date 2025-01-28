@@ -2,6 +2,7 @@
 """
 
 import os
+import sys
 import pickle
 
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 import yaml
 
-# sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+sys.path.append('H:\\anthony\\repos\\NWB_analysis')
 import src.utils.utils_io as io
 import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
@@ -55,12 +56,14 @@ from nwb_wrappers import nwb_reader_functions as nwb_read
 # Make activity 6d array of sensory mapping trials (non-motivated trials).
 # =============================================================================
 
-group_yaml = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/groups/imaging_non_rewarded.yaml"
-trial_indices_yaml = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/trial_indices_sensory_map.yaml"
+# Change those for R+/R-.
+group_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
+dataset_name = 'psth_sensory_map_trials_rewarded.npy'
+metadata_name = 'psth_sensory_map_trials_rewarded_metadata.pickle'
+
+trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
 processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
                       r'Anthony_Renard/data_processed/')
-dataset_name = 'psth_sensory_map_trials_non_rewarded.npy'
-metadata_name = 'psth_sensory_map_trials_non_rewarded.pickle'
 
 with open(group_yaml, 'r') as stream:
     nwb_list = yaml.safe_load(stream)
@@ -196,6 +199,8 @@ with open(trial_indices_sensory_map_yaml, 'r') as stream:
     trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
 trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
 
+nwb_list = [nwb for nwb in nwb_list if 'AR163' in nwb]
+
 for nwb_file in nwb_list:
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
@@ -205,8 +210,8 @@ for nwb_file in nwb_list:
     os.makedirs(save_dir, exist_ok=True)
     save_path_data = os.path.join(save_dir, 'tensor_4d.npy')
     save_path_metadata = os.path.join(save_dir, 'tensor_4d_metadata.pickle')
-    if os.path.exists(save_path_data):
-        continue
+    # if os.path.exists(save_path_data):
+    #     continue
 
     # Parameters for tensor array.
     cell_types = ['na', 'wM1', 'wS2']
@@ -216,17 +221,20 @@ for nwb_file in nwb_list:
 
     trial_selections = [{'whisker_stim': [1], 'lick_flag':[1]},
                         {'whisker_stim': [1], 'lick_flag':[0]},
-                        {'auditory_stim': [1], 'lick_flag':[1]},
                         {'auditory_stim': [1], 'lick_flag':[0]},
+                        {'auditory_stim': [1], 'lick_flag':[1]},
                         {'no_stim': [1], 'lick_flag':[1]},
                         {'no_stim': [1], 'lick_flag':[0]},
+                        {'whisker_stim': [1]},
+                        {'auditory_stim': [1]},
+                        {'no_stim': [1]},
                         {'whisker_stim': [1], 'lick_flag':[0]},
                         ]
-    trial_type_labels = ['WH', 'WM', 'AH', 'AM', 'FA', 'CR', 'UM']
+    trial_type_labels = ['WH', 'WM', 'AH', 'AM', 'FA', 'CR', 'W', 'A', 'NS', 'UM']
 
     idx = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
     idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
-    trial_idx_selections = [idx for _ in range(6)] + [idx_sensory_map]
+    trial_idx_selections = [idx for _ in range(9)] + [idx_sensory_map]
 
     # Generate a 3d array for each trial type.
     stack = []
@@ -273,6 +281,27 @@ for nwb_file in nwb_list:
     with open(save_path_metadata, 'wb') as f:
         pickle.dump(metadata_stacked, f)
 
+
+
+
+
+# dff = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\dff.npy")
+# F_cor = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_cor.npy")
+# F_raw = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_raw.npy")
+# F = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\suite2p\plane0\F.npy")
+# iscell = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\suite2p\plane0\iscell.npy")
+
+# F = F[iscell[:,0]==1.]
+# dff.shape
+# dff[79]
+# F_cor[79]
+# plt.plot(F[78])
+
+# np.where(iscell[:,0]==1)[0][79]
+
+# np.isnan(dff[79]).sum()
+
+# np.where(np.isnan(dff[:,0]))[0]
 
 # # Make pandas dataset to check that I have the same than with numpy.
 # # ##################################################################
