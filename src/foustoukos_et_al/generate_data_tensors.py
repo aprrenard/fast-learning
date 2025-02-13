@@ -10,13 +10,18 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import yaml
+import xarray as xr
 
-sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+# sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+sys.path.append(r'/home/aprenard/repos/NWB_analysis')
+sys.path.append(r'/home/aprenard/repos/fast-learning')
+
 import src.utils.utils_io as io
 import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
+from src.behavior import make_behavior_table
 
 
 # =============================================================================
@@ -176,20 +181,22 @@ data = np.load(data_path)
 
 # Rewarded and non-rewarded NWB files.
 group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
+group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
 group_yaml_non_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_non_rewarded.yaml"
 
 # Trial indices for each session.
 trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_end_session.yaml"
 trial_indices_sensory_map_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
 
-processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
-                      r'Anthony_Renard/data_processed/mice')
+processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/mice')
 
 with open(group_yaml_rew, 'r') as stream:
     nwb_list_rew = yaml.safe_load(stream)
 with open(group_yaml_non_rew, 'r') as stream:
     nwb_list_non_rew = yaml.safe_load(stream)
 nwb_list = nwb_list_rew + nwb_list_non_rew
+
+
 
 with open(trial_indices_yaml, 'r') as stream:
     trial_indices = yaml.load(stream, yaml.Loader)
@@ -202,6 +209,8 @@ trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), colu
 nwb_list = [nwb for nwb in nwb_list if 'AR163' in nwb]
 
 for nwb_file in nwb_list:
+    
+    
     mouse_id = nwb_file[-25:-20]
     session_id = nwb_file[-25:-4]
     
@@ -282,9 +291,198 @@ for nwb_file in nwb_list:
         pickle.dump(metadata_stacked, f)
 
 
+# =============================================================================
+# Create mice tensors with xarrays for session data (not mapping trials).
+# =============================================================================
+
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+trial_indices_yaml = io.solve_common_paths('trial_indices')
+stop_flag_yaml = io.solve_common_paths('stop_flags')
+trial_indices_sensory_map_yaml = io.solve_common_paths('trial_indices_sensory_map')
+stop_flag_sensory_map_yaml = io.solve_common_paths('stop_flags_sensory_map')
+processed_data_dir = io.solve_common_paths('processed_data')
+
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+_, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes')
+
+with open(trial_indices_yaml, 'r') as stream:
+    trial_indices = yaml.load(stream, yaml.Loader)
+trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
+# # For "non motivated" sensory mapping trials at the end of the session.
+# with open(trial_indices_sensory_map_yaml, 'r') as stream:
+#     trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
+# trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
+
+nwb_list = [nwb for nwb in nwb_list if 'AR163' not in nwb]
+
+for mouse in mice_list:
+    save_dir = os.path.join(processed_data_dir, mouse)
+    # Check if dataset is already created.
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, 'tensor_xarray_session_data.npy')
+    # if os.path.exists(save_path_data):
+    #     continue
+    session_nwb = [nwb for nwb in nwb_list if mouse in nwb]
+    
+    # Get data and metadata for each session.
+    sessions = []
+    data = []
+    metadatas = []
+
+    for nwb_file in session_nwb:
+        
+        session_id = nwb_file[-25:-4]
+        sessions.append(session_id)
+        
+        # Parameters for tensor array.
+        cell_types = ['na', 'wM1', 'wS2']
+        rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+        time_range = (1,5)
+        epoch_name = None
+        trial_selection = None
+
+        idx_selection = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
+        # idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
+
+        # Generate a 3d array containing all trial types.
+        print(f'Processing {session_id} {trial_selection}')
+        traces, metadata = make_events_aligned_array_3d(nwb_file,
+                                                        rrs_keys,
+                                                        time_range,
+                                                        trial_selection,
+                                                        epoch_name,
+                                                        cell_types,
+                                                        idx_selection)
+
+        data.append(traces)
+        metadatas.append(metadata)
+    
+    # Sessions are concatenated on the trial dim.
+    tensor = np.concatenate(data, axis=1)
+
+    # Load trial table and compute performance for those sessions.
+    print('Make behavior table')
+    behav_table = make_behavior_table(session_nwb, sessions, db_path,
+                                      cut_session=True,
+                                      stop_flag_yaml=stop_flag_yaml,
+                                      trial_indices_yaml=trial_indices_yaml)
+        
+    time = np.linspace(-time_range[0], time_range[1], traces.shape[2])
+    # Create xarray.
+    ds = xr.DataArray(tensor, dims=['cell', 'trial', 'time'],
+                        coords={'roi': ('cell', metadata['rois']),
+                                'cell_type': ('cell', metadata['cell_types']),
+                                'time': time,
+                                })
+    for col in behav_table.columns:
+        ds[col] = ('trial', behav_table[col].values)
+    ds.attrs['session_ids'] = sessions
+    ds.attrs['mouse_id'] = mouse_id
+
+    # Save dataset.
+    print(f'Saving {mouse}')
+    ds.to_netcdf(save_path)
 
 
 
+# =============================================================================
+# Create mice tensors with xarrays for mapping trials.
+# =============================================================================
+
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+trial_indices_sensory_map_yaml = io.solve_common_paths('trial_indices_sensory_map')
+stop_flag_sensory_map_yaml = io.solve_common_paths('stop_flags_sensory_map')
+processed_data_dir = io.solve_common_paths('processed_data')
+
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+_, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes')
+
+# For "non motivated" sensory mapping trials at the end of the session.
+with open(trial_indices_sensory_map_yaml, 'r') as stream:
+    trial_indices = yaml.load(stream, yaml.Loader)
+trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
+
+nwb_list = [nwb for nwb in nwb_list if 'AR163' not in nwb]
+
+for mouse in mice_list:
+    save_dir = os.path.join(processed_data_dir, mouse)
+    # Check if dataset is already created.
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, 'tensor_xarray_mapping.npy')
+    # if os.path.exists(save_path_data):
+    #     continue
+    session_nwb = [nwb for nwb in nwb_list if mouse in nwb]
+    
+    # Get data and metadata for each session.
+    sessions = []
+    data = []
+    metadatas = []
+    behavior_days = []
+    
+    for nwb_file in session_nwb:
+        
+        session_id = nwb_file[-25:-4]
+        sessions.append(session_id)
+        
+        # Parameters for tensor array.
+        cell_types = ['na', 'wM1', 'wS2']
+        rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+        time_range = (1,5)
+        epoch_name = None
+        trial_selection = None
+
+        idx_selection = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
+        # idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
+
+        # Generate a 3d array containing all trial types.
+        print(f'Processing {session_id} {trial_selection}')
+        traces, metadata = make_events_aligned_array_3d(nwb_file,
+                                                        rrs_keys,
+                                                        time_range,
+                                                        trial_selection,
+                                                        epoch_name,
+                                                        cell_types,
+                                                        idx_selection)
+
+        data.append(traces)
+        metadatas.append(metadata)
+        # Get session day.
+        # I don't load the trial table with the mapping trials, so get it for
+        # nwb file.
+        d = nwb_read.get_session_metadata(nwb_file)['day']
+        behavior_days.extend([d for _ in range(traces.shape[1])])
+    
+    # Sessions are concatenated on the trial dim.
+    tensor = np.concatenate(data, axis=1)
+    
+    time = np.linspace(-time_range[0], time_range[1], traces.shape[2])
+    # Create xarray.
+    ds = xr.DataArray(tensor, dims=['cell', 'trial', 'time'],
+                        coords={'roi': ('cell', metadata['rois']),
+                                'cell_type': ('cell', metadata['cell_types']),
+                                'time': time,
+                                'day': ('trial', behavior_days),
+                                })
+    ds.attrs['session_ids'] = sessions
+    ds.attrs['mouse_id'] = mouse_id
+
+    # Save dataset.
+    print(f'Saving {mouse}')
+    ds.to_netcdf(save_path)
+    
+    
 # dff = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\dff.npy")
 # F_cor = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_cor.npy")
 # F_raw = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_raw.npy")

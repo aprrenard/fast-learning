@@ -26,17 +26,16 @@ plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['svg.fonttype'] = 'none'
 
 
-def make_behavior_table(nwb_list, session_list, cut_session, stop_flag_yaml, trial_indices_yaml):
+def make_behavior_table(nwb_list, session_list, db_path, cut_session, stop_flag_yaml, trial_indices_yaml):
     if cut_session:
         start_stop, trial_indices = io.read_stop_flags_and_indices_yaml(stop_flag_yaml, trial_indices_yaml)
     table = []
     for nwb, session in zip(nwb_list, session_list):
-        print(session)
         df = nwb_read.get_trial_table(nwb)
         df = df.reset_index()
         if 'trial_id' not in df.columns:
             df.rename(columns={'id': 'trial_id'}, inplace=True)
-        reward_group = io.get_reward_group_from_db(SESSIONS_DB_PATH, session)
+        reward_group = io.get_reward_group_from_db(db_path, session)
         metadata = nwb_read.get_session_metadata(nwb)
         day = metadata['day']
         df['day'] = day

@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 import yaml
 import warnings
+from pathlib import Path
+
+
 
 
 def read_excel_db(db_path):
@@ -80,3 +83,54 @@ def read_stop_flags_and_indices_yaml(stop_flag_yaml_path, trial_indices_path):
     
     return stop_flags, trial_indices
 
+
+def adjust_path_to_host(path):
+    host = os.popen('hostname').read().strip()
+    if 'haas' in host:
+        if '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis' in path:
+            path = path.replace('//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis', '/mnt/lsens-analysis')
+        elif '//sv-nas1.rcp.epfl.ch/Petersen-Lab/data' in path:
+            path = path.replace('//sv-nas1.rcp.epfl.ch/Petersen-Lab/data', '/mnt/lsens-data')
+    else:
+        if '/mnt/lsens-analysis' in path:
+            path = path.replace('/mnt/lsens-analysis', '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis')
+        elif '/mnt/lsens-data' in path:
+            path = path.replace('/mnt/lsens-data', '//sv-nas1.rcp.epfl.ch/Petersen-Lab/data')
+    return path
+
+
+def solve_common_paths(target):
+    
+    # Directories.
+    data_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/data'
+    analysis_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard'
+    nwb_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
+    processed_data_dir = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/mice'
+    
+    # Files.    
+    db_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
+    trial_indices_yaml = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_end_session.yaml'
+    trial_indices_sensory_map_yaml = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml'
+    stop_flags_yaml = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/stop_flags_end_session.yaml'
+    stop_flags_sensory_map_yaml = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/stop_flags_sensory_map.yaml'
+    
+    if target == 'data':
+        path = data_path
+    elif target == 'analysis':
+        path = analysis_path
+    elif target == 'nwb':
+        path = nwb_path
+    elif target == 'processed_data':
+        path = processed_data_dir
+    elif target == 'db':
+        path = db_path
+    elif target == 'trial_indices':
+        path = trial_indices_yaml
+    elif target == 'trial_indices_sensory_map':
+        path = trial_indices_sensory_map_yaml
+    elif target == 'stop_flags':
+        path = stop_flags_yaml
+    elif target == 'stop_flags_sensory_map':
+        path = stop_flags_sensory_map_yaml
+        
+    return adjust_path_to_host(path)
