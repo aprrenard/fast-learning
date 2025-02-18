@@ -17,7 +17,8 @@ EXPERIMENTER_MAP = {
 
 
 def get_data_folder():
-    data_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+    # data_folder = os.path.join('//sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+    data_folder = os.path.join('/mnt', 'lsens-data')
 
     return data_folder  
 
@@ -25,7 +26,9 @@ def get_data_folder():
 def get_experimenter_analysis_folder(initials):
     # Map initials to experimenter to get analysis folder path.
     experimenter = EXPERIMENTER_MAP[initials]
-    analysis_folder = os.path.join('\\\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
+    # analysis_folder = os.path.join('//sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
+    #                                experimenter, 'data')
+    analysis_folder = os.path.join('/mnt', 'lsens-analysis',
                                    experimenter, 'data')
     return analysis_folder
 
@@ -38,8 +41,15 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
             tiff_folders = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
             tiff_folders = [os.path.join(tiff_folders, folder) for folder in os.listdir(tiff_folders)
                             if os.path.isdir(os.path.join(tiff_folders, folder))]
+            
+            if mouse_id == 'AR144':
+                tiff_folders[0] = '/mnt/lsens-analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging/AR144_20240518_193553_corrected'
+            
+            print(tiff_folders)
+            
             # tiff_folders = ['D://AR//test_data']
-            fast_disk = os.path.join('D:', 'suite2p', mouse_id)
+            # fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
+            fast_disk = os.path.join('/raid0', 'anthony', 'suite2p', mouse_id)
             save_path = os.path.join(get_experimenter_analysis_folder(experimenter),
                                     mouse_id)
             if not os.path.exists(fast_disk):
@@ -67,7 +77,8 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
             
             for folder in tiff_folders:
                 session_id = os.path.split(folder)[1]
-                fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
+                # fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
+                fast_disk = os.path.join('raid0', 'anthony', 'suite2p', mouse_id)
                 save_path = os.path.join(get_experimenter_analysis_folder(experimenter),
                                         mouse_id, session_id)
                 if not os.path.exists(fast_disk):
@@ -91,14 +102,14 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
 
 if __name__ == '__main__':
     
-    mice_ids = ['AR163']
+    mice_ids = ['AR144']
     experimenter = 'AR'
     longitudinal = True
 
     # set your options for running
     ops = default_ops() # populates ops with the default options
     ops['batch_size'] = 1000
-    ops['threshold_scaling'] = 1.0
+    ops['threshold_scaling'] = 1.2
     ops['fs'] = 30
     ops['tau'] = 1.25 # timescale of gcamp to use for deconvolution
     ops['delete_bin'] = True

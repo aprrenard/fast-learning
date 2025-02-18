@@ -67,6 +67,13 @@ def get_reward_group_from_db(db_path, session_id):
     return reward_group
 
 
+def get_mouse_reward_group_from_db(db_path, mouse_id):
+    db = read_excel_db(db_path)
+    reward_group = db.loc[db['subject_id']==mouse_id, 'reward_group'].values[0]
+
+    return reward_group
+
+
 def read_group_yaml(group_yaml_path):
     with open(group_yaml_path, 'r') as file:
         group_yaml = yaml.safe_load(file)

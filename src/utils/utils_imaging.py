@@ -6,6 +6,8 @@ import warnings
 from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
 from scipy.stats import percentileofscore
+import xarray as xr
+
 
 def load_session_2p_imaging(mouse_id, session_id, dir_path):
     array_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d.npy")
@@ -14,6 +16,12 @@ def load_session_2p_imaging(mouse_id, session_id, dir_path):
     with open(tensor_metadata_path, 'rb') as f:
         metadata = pickle.load(f)
     return np.float32(data), metadata
+
+
+def load_mouse_xarray(mouse_id, dir_path, file_name):
+    array_path = os.path.join(dir_path, mouse_id, file_name)
+    data = xr.open_dataarray(array_path)
+    return data
 
 
 def substract_baseline(arr, time_axis, baseline_win):

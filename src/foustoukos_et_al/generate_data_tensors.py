@@ -11,6 +11,7 @@ import pandas as pd
 import seaborn as sns
 import yaml
 import xarray as xr
+import scipy.stats as stats
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
@@ -22,7 +23,35 @@ from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.behavior import make_behavior_table
+from src.utils.utils_imaging import compute_lmi
 
+
+def test_response(data, trial_selection, response_win, baseline_win):
+    """Test if cells are responsive to a given trial type
+    with a Wilcoxon test comparing response versus baseline.
+    """
+    # Select trials.
+    for key, val in trial_selection.items():
+        data = data.sel(trial=data.coords[key] == val)
+    # If no trials of that type, return nan for all cells.
+    if data.shape[1] == 0:
+        return np.full(data.shape[0], np.nan)
+    
+    # Select time window.
+    response = data.sel(time=slice(*response_win)).mean(dim='time')    
+    baseline = data.sel(time=slice(*baseline_win)).mean(dim='time')
+
+    # Test if response is significant for each cell.
+    pval = np.zeros(response.shape[0])
+    for cell in range(response.shape[0]):
+        # Special case of a artefactual cell with 0 at all time points.
+        if (response[cell]==0).all() or (baseline[cell]==0).all():
+            pval[cell] = 1
+            continue
+        t, p = stats.wilcoxon(response[cell], baseline[cell])
+        pval[cell] = p
+        
+    return pval
 
 # =============================================================================
 # Test responsive cells.
@@ -57,238 +86,238 @@ from src.behavior import make_behavior_table
 
 
 
-# =============================================================================
-# Make activity 6d array of sensory mapping trials (non-motivated trials).
-# =============================================================================
+# # =============================================================================
+# # Make activity 6d array of sensory mapping trials (non-motivated trials).
+# # =============================================================================
 
-# Change those for R+/R-.
-group_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
-dataset_name = 'psth_sensory_map_trials_rewarded.npy'
-metadata_name = 'psth_sensory_map_trials_rewarded_metadata.pickle'
+# # Change those for R+/R-.
+# group_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
+# dataset_name = 'psth_sensory_map_trials_rewarded.npy'
+# metadata_name = 'psth_sensory_map_trials_rewarded_metadata.pickle'
 
-trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
-processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
-                      r'Anthony_Renard/data_processed/')
+# trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
+# processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
+#                       r'Anthony_Renard/data_processed/')
 
-with open(group_yaml, 'r') as stream:
-    nwb_list = yaml.safe_load(stream)
-with open(trial_indices_yaml, 'r') as stream:
-    trial_indices = yaml.load(stream, yaml.Loader)
-trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
-# trial_indices = None
-trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
-cell_types = ['na', 'wM1', 'wS2']
-rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-time_range = (1,3)
-epoch_name = None
-
-
-traces, metadata = make_events_aligned_array_6d(nwb_list, rrs_keys,
-                                             time_range, trial_selection,
-                                             epoch_name, cell_types,
-                                             trial_indices)
-
-# Save dataset.
-save_path = os.path.join(processed_data_dir, dataset_name)
-np.save(save_path, traces)
-save_path = os.path.join(processed_data_dir, metadata_name)
-# metadata['cell_types'] = list(metadata['cell_types'])
-with open(save_path, 'wb') as fid:
-    pickle.dump(metadata, fid)
+# with open(group_yaml, 'r') as stream:
+#     nwb_list = yaml.safe_load(stream)
+# with open(trial_indices_yaml, 'r') as stream:
+#     trial_indices = yaml.load(stream, yaml.Loader)
+# trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
+# # trial_indices = None
+# trial_selection = {'whisker_stim': [1], 'lick_flag':[0]}
+# cell_types = ['na', 'wM1', 'wS2']
+# rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+# time_range = (1,3)
+# epoch_name = None
 
 
-# =============================================================================
-# Make activity 6d array of each trial type (motivated).
-# =============================================================================
+# traces, metadata = make_events_aligned_array_6d(nwb_list, rrs_keys,
+#                                              time_range, trial_selection,
+#                                              epoch_name, cell_types,
+#                                              trial_indices)
 
-# Rewarded and non-rewarded NWB files.
-group_yaml_rew = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/groups/imaging_rewarded.yaml"
-group_yaml_non_rew = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/groups/imaging_non_rewarded.yaml"
-
-# Stop flags for each session.
-trial_indices_yaml = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/trial_indices_end_session.yaml"
-
-processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
-                      r'Anthony_Renard/data_processed/')
-
-dataset_names = ['psth_WH.npy',
-                 'psth_WM.npy',
-                 'psth_AH.npy',
-                 'psth_AM.npy',
-                 'psth_FA.npy',
-                 'psth_CR.npy',
-                 ]
-metadata_names = ['psth_WH_metadata.pickle',
-                 'psth_WM_metadata.pickle',
-                 'psth_AH_metadata.pickle',
-                 'psth_AM_metadata.pickle',
-                 'psth_FA_metadata.pickle',
-                 'psth_CR_metadata.pickle',
-                 ]
-trial_selections = [{'whisker_stim': [1], 'lick_flag':[1]},
-                    {'whisker_stim': [1], 'lick_flag':[0]},
-                    {'auditory_stim': [1], 'lick_flag':[1]},
-                    {'auditory_stim': [1], 'lick_flag':[0]},
-                    {'no_stim': [1], 'lick_flag':[1]},
-                    {'no_stim': [1], 'lick_flag':[0]},
-                    ]
-
-with open(group_yaml_rew, 'r') as stream:
-    nwb_list_rew = yaml.safe_load(stream)
-with open(group_yaml_non_rew, 'r') as stream:
-    nwb_list_non_rew = yaml.safe_load(stream)
-nwb_list = nwb_list_rew + nwb_list_non_rew
-
-with open(trial_indices_yaml, 'r') as stream:
-    trial_indices = yaml.load(stream, yaml.Loader)
-trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
-
-# Parameters for PSTH.
-cell_types = ['na', 'wM1', 'wS2']
-rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-time_range = (1,5)
-epoch_name = None
-
-# Loop on each trial type and save the dataset.
-for dataset_name, metadata_name, trial_selection in zip(dataset_names,
-                                                        metadata_names,
-                                                        trial_selections):
-    print(f'Processing {dataset_name}')
-    traces, metadata = make_events_aligned_array_6d(nwb_list, rrs_keys,
-                                                 time_range, trial_selection,
-                                                 epoch_name, cell_types,
-                                                 trial_indices)
-    # Save dataset.
-    save_path = os.path.join(processed_data_dir, dataset_name)
-    np.save(save_path, traces)
-    save_path = os.path.join(processed_data_dir, metadata_name)
-    # metadata['cell_types'] = list(metadata['cell_types'])
-    with open(save_path, 'wb') as fid:
-        pickle.dump(metadata, fid)
+# # Save dataset.
+# save_path = os.path.join(processed_data_dir, dataset_name)
+# np.save(save_path, traces)
+# save_path = os.path.join(processed_data_dir, metadata_name)
+# # metadata['cell_types'] = list(metadata['cell_types'])
+# with open(save_path, 'wb') as fid:
+#     pickle.dump(metadata, fid)
 
 
-data_path =r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\psth_WH.npy"
-metadata_path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\psth_WH_metadata.pickle"
-with open(metadata_path, 'rb') as fid:
-    metadata = pickle.load(fid)
-data = np.load(data_path)
+# # =============================================================================
+# # Make activity 6d array of each trial type (motivated).
+# # =============================================================================
+
+# # Rewarded and non-rewarded NWB files.
+# group_yaml_rew = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/groups/imaging_rewarded.yaml"
+# group_yaml_non_rew = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/groups/imaging_non_rewarded.yaml"
+
+# # Stop flags for each session.
+# trial_indices_yaml = r"C:/Users/aprenard/recherches/repos/fast-learning/docs/stop_flags/trial_indices_end_session.yaml"
+
+# processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/'
+#                       r'Anthony_Renard/data_processed/')
+
+# dataset_names = ['psth_WH.npy',
+#                  'psth_WM.npy',
+#                  'psth_AH.npy',
+#                  'psth_AM.npy',
+#                  'psth_FA.npy',
+#                  'psth_CR.npy',
+#                  ]
+# metadata_names = ['psth_WH_metadata.pickle',
+#                  'psth_WM_metadata.pickle',
+#                  'psth_AH_metadata.pickle',
+#                  'psth_AM_metadata.pickle',
+#                  'psth_FA_metadata.pickle',
+#                  'psth_CR_metadata.pickle',
+#                  ]
+# trial_selections = [{'whisker_stim': [1], 'lick_flag':[1]},
+#                     {'whisker_stim': [1], 'lick_flag':[0]},
+#                     {'auditory_stim': [1], 'lick_flag':[1]},
+#                     {'auditory_stim': [1], 'lick_flag':[0]},
+#                     {'no_stim': [1], 'lick_flag':[1]},
+#                     {'no_stim': [1], 'lick_flag':[0]},
+#                     ]
+
+# with open(group_yaml_rew, 'r') as stream:
+#     nwb_list_rew = yaml.safe_load(stream)
+# with open(group_yaml_non_rew, 'r') as stream:
+#     nwb_list_non_rew = yaml.safe_load(stream)
+# nwb_list = nwb_list_rew + nwb_list_non_rew
+
+# with open(trial_indices_yaml, 'r') as stream:
+#     trial_indices = yaml.load(stream, yaml.Loader)
+# trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
+
+# # Parameters for PSTH.
+# cell_types = ['na', 'wM1', 'wS2']
+# rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+# time_range = (1,5)
+# epoch_name = None
+
+# # Loop on each trial type and save the dataset.
+# for dataset_name, metadata_name, trial_selection in zip(dataset_names,
+#                                                         metadata_names,
+#                                                         trial_selections):
+#     print(f'Processing {dataset_name}')
+#     traces, metadata = make_events_aligned_array_6d(nwb_list, rrs_keys,
+#                                                  time_range, trial_selection,
+#                                                  epoch_name, cell_types,
+#                                                  trial_indices)
+#     # Save dataset.
+#     save_path = os.path.join(processed_data_dir, dataset_name)
+#     np.save(save_path, traces)
+#     save_path = os.path.join(processed_data_dir, metadata_name)
+#     # metadata['cell_types'] = list(metadata['cell_types'])
+#     with open(save_path, 'wb') as fid:
+#         pickle.dump(metadata, fid)
 
 
-
-# =============================================================================
-# Create a 4d array for each sessions.
-# =============================================================================
-
-# Rewarded and non-rewarded NWB files.
-group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
-group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
-group_yaml_non_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_non_rewarded.yaml"
-
-# Trial indices for each session.
-trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_end_session.yaml"
-trial_indices_sensory_map_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
-
-processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/mice')
-
-with open(group_yaml_rew, 'r') as stream:
-    nwb_list_rew = yaml.safe_load(stream)
-with open(group_yaml_non_rew, 'r') as stream:
-    nwb_list_non_rew = yaml.safe_load(stream)
-nwb_list = nwb_list_rew + nwb_list_non_rew
+# data_path =r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\psth_WH.npy"
+# metadata_path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\psth_WH_metadata.pickle"
+# with open(metadata_path, 'rb') as fid:
+#     metadata = pickle.load(fid)
+# data = np.load(data_path)
 
 
 
-with open(trial_indices_yaml, 'r') as stream:
-    trial_indices = yaml.load(stream, yaml.Loader)
-trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
-# For "non motivated" sensory mapping trials at the end of the session.
-with open(trial_indices_sensory_map_yaml, 'r') as stream:
-    trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
-trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
+# # =============================================================================
+# # Create a 4d array for each sessions.
+# # =============================================================================
 
-nwb_list = [nwb for nwb in nwb_list if 'AR163' in nwb]
+# # Rewarded and non-rewarded NWB files.
+# group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
+# group_yaml_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_rewarded.yaml"
+# group_yaml_non_rew = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/groups/imaging_non_rewarded.yaml"
 
-for nwb_file in nwb_list:
+# # Trial indices for each session.
+# trial_indices_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_end_session.yaml"
+# trial_indices_sensory_map_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml"
+
+# processed_data_dir = (r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/mice')
+
+# with open(group_yaml_rew, 'r') as stream:
+#     nwb_list_rew = yaml.safe_load(stream)
+# with open(group_yaml_non_rew, 'r') as stream:
+#     nwb_list_non_rew = yaml.safe_load(stream)
+# nwb_list = nwb_list_rew + nwb_list_non_rew
+
+
+
+# with open(trial_indices_yaml, 'r') as stream:
+#     trial_indices = yaml.load(stream, yaml.Loader)
+# trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
+# # For "non motivated" sensory mapping trials at the end of the session.
+# with open(trial_indices_sensory_map_yaml, 'r') as stream:
+#     trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
+# trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
+
+# nwb_list = [nwb for nwb in nwb_list if 'AR163' in nwb]
+
+# for nwb_file in nwb_list:
     
     
-    mouse_id = nwb_file[-25:-20]
-    session_id = nwb_file[-25:-4]
+#     mouse_id = nwb_file[-25:-20]
+#     session_id = nwb_file[-25:-4]
     
-    # Check if dataset is already created.
-    save_dir = os.path.join(processed_data_dir, mouse_id, session_id)
-    os.makedirs(save_dir, exist_ok=True)
-    save_path_data = os.path.join(save_dir, 'tensor_4d.npy')
-    save_path_metadata = os.path.join(save_dir, 'tensor_4d_metadata.pickle')
-    # if os.path.exists(save_path_data):
-    #     continue
+#     # Check if dataset is already created.
+#     save_dir = os.path.join(processed_data_dir, mouse_id, session_id)
+#     os.makedirs(save_dir, exist_ok=True)
+#     save_path_data = os.path.join(save_dir, 'tensor_4d.npy')
+#     save_path_metadata = os.path.join(save_dir, 'tensor_4d_metadata.pickle')
+#     # if os.path.exists(save_path_data):
+#     #     continue
 
-    # Parameters for tensor array.
-    cell_types = ['na', 'wM1', 'wS2']
-    rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
-    time_range = (1,5)
-    epoch_name = None
+#     # Parameters for tensor array.
+#     cell_types = ['na', 'wM1', 'wS2']
+#     rrs_keys = ['ophys', 'fluorescence_all_cells', 'dff']
+#     time_range = (1,5)
+#     epoch_name = None
 
-    trial_selections = [{'whisker_stim': [1], 'lick_flag':[1]},
-                        {'whisker_stim': [1], 'lick_flag':[0]},
-                        {'auditory_stim': [1], 'lick_flag':[0]},
-                        {'auditory_stim': [1], 'lick_flag':[1]},
-                        {'no_stim': [1], 'lick_flag':[1]},
-                        {'no_stim': [1], 'lick_flag':[0]},
-                        {'whisker_stim': [1]},
-                        {'auditory_stim': [1]},
-                        {'no_stim': [1]},
-                        {'whisker_stim': [1], 'lick_flag':[0]},
-                        ]
-    trial_type_labels = ['WH', 'WM', 'AH', 'AM', 'FA', 'CR', 'W', 'A', 'NS', 'UM']
+#     trial_selections = [{'whisker_stim': [1], 'lick_flag':[1]},
+#                         {'whisker_stim': [1], 'lick_flag':[0]},
+#                         {'auditory_stim': [1], 'lick_flag':[0]},
+#                         {'auditory_stim': [1], 'lick_flag':[1]},
+#                         {'no_stim': [1], 'lick_flag':[1]},
+#                         {'no_stim': [1], 'lick_flag':[0]},
+#                         {'whisker_stim': [1]},
+#                         {'auditory_stim': [1]},
+#                         {'no_stim': [1]},
+#                         {'whisker_stim': [1], 'lick_flag':[0]},
+#                         ]
+#     trial_type_labels = ['WH', 'WM', 'AH', 'AM', 'FA', 'CR', 'W', 'A', 'NS', 'UM']
 
-    idx = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
-    idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
-    trial_idx_selections = [idx for _ in range(9)] + [idx_sensory_map]
+#     idx = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
+#     idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
+#     trial_idx_selections = [idx for _ in range(9)] + [idx_sensory_map]
 
-    # Generate a 3d array for each trial type.
-    stack = []
-    metadatas = []
-    for trial_selection, trial_idx_selection in zip(trial_selections, trial_idx_selections):
-        print(f'Processing {session_id} {trial_selection}')
-        traces, metadata = make_events_aligned_array_3d(nwb_file,
-                                                        rrs_keys,
-                                                        time_range,
-                                                        trial_selection,
-                                                        epoch_name,
-                                                        cell_types,
-                                                        trial_idx_selection)
-        stack.append(traces)
-        metadatas.append(metadata)
+#     # Generate a 3d array for each trial type.
+#     stack = []
+#     metadatas = []
+#     for trial_selection, trial_idx_selection in zip(trial_selections, trial_idx_selections):
+#         print(f'Processing {session_id} {trial_selection}')
+#         traces, metadata = make_events_aligned_array_3d(nwb_file,
+#                                                         rrs_keys,
+#                                                         time_range,
+#                                                         trial_selection,
+#                                                         epoch_name,
+#                                                         cell_types,
+#                                                         trial_idx_selection)
+#         stack.append(traces)
+#         metadatas.append(metadata)
 
-    # Remove None given by empty trial types.
-    trial_type_labels = [trial_type_labels[i]
-                         for i in range(len(trial_type_labels))
-                         if stack[i] is not None]
-    metadatas = [metadata for metadata in metadatas if metadata is not None]
-    stack = [traces for traces in stack if traces is not None]
-    # Concatenate trial indices for each trial type.
-    # metadata_trials = [metadatas[i]['trials'] for i in range(len(metadatas))]
-    # metadata_trials = np.concatenate(metadata_trials, axis=0)
-    # Note that metadata is the same for all trial types
-    # (same cells) except for trial ids.
-    metadata_stacked = metadatas[0]
-    metadata_stacked['trials'] = {i: metadatas[i]
-                                  for i in range(len(trial_type_labels))}
-    metadata_stacked['trial_types'] = trial_type_labels
+#     # Remove None given by empty trial types.
+#     trial_type_labels = [trial_type_labels[i]
+#                          for i in range(len(trial_type_labels))
+#                          if stack[i] is not None]
+#     metadatas = [metadata for metadata in metadatas if metadata is not None]
+#     stack = [traces for traces in stack if traces is not None]
+#     # Concatenate trial indices for each trial type.
+#     # metadata_trials = [metadatas[i]['trials'] for i in range(len(metadatas))]
+#     # metadata_trials = np.concatenate(metadata_trials, axis=0)
+#     # Note that metadata is the same for all trial types
+#     # (same cells) except for trial ids.
+#     metadata_stacked = metadatas[0]
+#     metadata_stacked['trials'] = {i: metadatas[i]
+#                                   for i in range(len(trial_type_labels))}
+#     metadata_stacked['trial_types'] = trial_type_labels
 
-    # Stack trial type to shape (n_cells, n_trial_type, n_trials, n_t).
-    max_trials = max([a.shape[1] for a in stack])
-    new_shape = (stack[0].shape[0],  len(stack), max_trials, stack[0].shape[2])
-    tensor = np.full(new_shape, np.nan)
-    for i, arr in enumerate(stack):
-        tensor[:, i, :arr.shape[1], :] = arr
-    # Reduce precision to save space.
-    tensor = tensor.astype(np.float16)
+#     # Stack trial type to shape (n_cells, n_trial_type, n_trials, n_t).
+#     max_trials = max([a.shape[1] for a in stack])
+#     new_shape = (stack[0].shape[0],  len(stack), max_trials, stack[0].shape[2])
+#     tensor = np.full(new_shape, np.nan)
+#     for i, arr in enumerate(stack):
+#         tensor[:, i, :arr.shape[1], :] = arr
+#     # Reduce precision to save space.
+#     tensor = tensor.astype(np.float16)
 
-    # Save dataset.
-    np.save(save_path_data, tensor)
-    with open(save_path_metadata, 'wb') as f:
-        pickle.dump(metadata_stacked, f)
+#     # Save dataset.
+#     np.save(save_path_data, tensor)
+#     with open(save_path_metadata, 'wb') as f:
+#         pickle.dump(metadata_stacked, f)
 
 
 # =============================================================================
@@ -319,13 +348,14 @@ trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'tria
 #     trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
 # trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
 
-nwb_list = [nwb for nwb in nwb_list if 'AR163' not in nwb]
+mice_list = [mouse for mouse in mice_list if 'AR176'==mouse]
+nwb_list = [nwb for nwb in nwb_list if 'AR176' in nwb]
 
 for mouse in mice_list:
     save_dir = os.path.join(processed_data_dir, mouse)
     # Check if dataset is already created.
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, 'tensor_xarray_session_data.npy')
+    save_path = os.path.join(save_dir, 'tensor_xarray_learning_session_data.nc')
     # if os.path.exists(save_path_data):
     #     continue
     session_nwb = [nwb for nwb in nwb_list if mouse in nwb]
@@ -383,7 +413,7 @@ for mouse in mice_list:
     for col in behav_table.columns:
         ds[col] = ('trial', behav_table[col].values)
     ds.attrs['session_ids'] = sessions
-    ds.attrs['mouse_id'] = mouse_id
+    ds.attrs['mouse_id'] = mouse
 
     # Save dataset.
     print(f'Saving {mouse}')
@@ -407,20 +437,21 @@ _, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
                                                 exclude_cols=['exclude', 'two_p_exclude'],
                                                 experimenters=['AR', 'GF', 'MI'],
                                                 day=days,
-                                                two_p_imaging='yes')
+                                                two_p_imaging='yes',)
 
 # For "non motivated" sensory mapping trials at the end of the session.
 with open(trial_indices_sensory_map_yaml, 'r') as stream:
     trial_indices = yaml.load(stream, yaml.Loader)
 trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
 
-nwb_list = [nwb for nwb in nwb_list if 'AR163' not in nwb]
+mice_list = [mouse for mouse in mice_list if 'AR176'==mouse]
+nwb_list = [nwb for nwb in nwb_list if 'AR176' in nwb]
 
 for mouse in mice_list:
     save_dir = os.path.join(processed_data_dir, mouse)
     # Check if dataset is already created.
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, 'tensor_xarray_mapping.npy')
+    save_path = os.path.join(save_dir, 'tensor_xarray_mapping_data.nc')
     # if os.path.exists(save_path_data):
     #     continue
     session_nwb = [nwb for nwb in nwb_list if mouse in nwb]
@@ -430,7 +461,7 @@ for mouse in mice_list:
     data = []
     metadatas = []
     behavior_days = []
-    
+
     for nwb_file in session_nwb:
         
         session_id = nwb_file[-25:-4]
@@ -444,7 +475,6 @@ for mouse in mice_list:
         trial_selection = None
 
         idx_selection = trial_indices.loc[trial_indices.session_id==session_id, 'trial_idx'].values[0]
-        # idx_sensory_map = trial_indices_sensory_map.loc[trial_indices_sensory_map.session_id==session_id, 'trial_idx'].values[0]
 
         # Generate a 3d array containing all trial types.
         print(f'Processing {session_id} {trial_selection}')
@@ -463,7 +493,7 @@ for mouse in mice_list:
         # nwb file.
         d = nwb_read.get_session_metadata(nwb_file)['day']
         behavior_days.extend([d for _ in range(traces.shape[1])])
-    
+        
     # Sessions are concatenated on the trial dim.
     tensor = np.concatenate(data, axis=1)
     
@@ -476,13 +506,72 @@ for mouse in mice_list:
                                 'day': ('trial', behavior_days),
                                 })
     ds.attrs['session_ids'] = sessions
-    ds.attrs['mouse_id'] = mouse_id
+    ds.attrs['mouse_id'] = mouse
 
     # Save dataset.
     print(f'Saving {mouse}')
     ds.to_netcdf(save_path)
-    
-    
+
+
+# =============================================================================
+# Test cell responsiveness and selectivity.
+# =============================================================================
+
+
+mouse_id = 'AR180'
+
+folder = io.solve_common_paths('processed_data')
+data_learning = xr.open_dataarray(os.path.join(folder, mouse_id, 'tensor_xarray_learning_data.nc'))
+data_mapping = xr.open_dataarray(os.path.join(folder, mouse_id, 'tensor_xarray_mapping_data.nc'))
+
+days = np.sort(np.unique(data_learning.day))
+response_win = (0, 0.180)
+baseline_win = (-1, 0)
+
+# Test auditory responses for each day.
+response_test_aud = []
+for day in days:
+    trial_selection = {'auditory_stim': 1, 'day': day}
+    p = test_response(data_learning, trial_selection, response_win, baseline_win)
+    response_test_aud.append(p)
+response_test_aud = np.vstack(response_test_aud)
+
+# Test whisker responses for each day.
+response_test_wh = []
+for day in days:
+    trial_selection = {'whisker_stim': 1, 'day': day}
+    p = test_response(data_learning, trial_selection, response_win, baseline_win)
+    response_test_wh.append(p)
+response_test_wh = np.vstack(response_test_wh)
+
+# Test whisker responses for each day.
+response_test_mapping = []
+for day in days:
+    trial_selection = {'day': day}
+    p = test_response(data_mapping, trial_selection, response_win, baseline_win)
+    response_test_mapping.append(p)
+response_test_mapping = np.vstack(response_test_mapping)
+
+
+# Compute LMI.
+# ------------
+# This perfornms ROC analysis on each cell with mapping trials.
+# Mapping trial of Day 0 are not included in the analysis.
+
+response_win = (0, 0.180)
+
+data_pre = data_mapping.sel(trial=data_mapping.coords['day'].isin([-2, -1]))
+data_pre = data_pre.sel(time=slice(*response_win)).mean(dim='time')
+data_post = data_mapping.sel(trial=data_mapping.coords['day'].isin([1, 2]))
+data_post = data_post.sel(time=slice(*response_win)).mean(dim='time')
+lmi, lmi_p = compute_lmi(data_pre, data_post, nshuffles=10)
+
+
+
+
+
+
+
 # dff = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\dff.npy")
 # F_cor = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_cor.npy")
 # F_raw = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_raw.npy")
@@ -686,3 +775,21 @@ for mouse in mice_list:
 # #             stop_flags.append([session_id, d])
 # # with open(save_yaml, 'w') as stream:
 # #     yaml.dump(stop_flags, stream)
+
+import glob
+
+path = '/mnt/lsens-analysis/Anthony_Renard/data_processed/mice'
+
+for subdir in os.listdir(path):
+    subdir_path = os.path.join(path, subdir)
+    if os.path.isdir(subdir_path):
+        for file in os.listdir(subdir_path):
+            print(file)
+            if file.endswith('.npy'):
+                old_file = os.path.join(subdir_path, file)
+                new_file = old_file.replace('.npy', '.nc')
+                os.rename(old_file, new_file)
+            if 'tensor_xarray_session_data.' in file:
+                old_file = os.path.join(subdir_path, file)
+                new_file = old_file.replace('tensor_xarray_session_data.', 'tensor_xarray_learning_data.')
+                os.rename(old_file, new_file)
