@@ -195,5 +195,5 @@ def compute_lmi(data_pre, data_post, nshuffles=10000):
             lmi_p[icell] = percentileofscore(roc_auc_shuffle, roc_auc) / 100
         else:
             lmi_p[icell] = np.nan
-
+    print('')
     return lmi, lmi_p

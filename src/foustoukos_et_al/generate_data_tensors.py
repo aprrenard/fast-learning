@@ -16,7 +16,6 @@ import scipy.stats as stats
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
-
 import src.utils.utils_io as io
 import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
@@ -50,8 +49,10 @@ def test_response(data, trial_selection, response_win, baseline_win):
             continue
         t, p = stats.wilcoxon(response[cell], baseline[cell])
         pval[cell] = p
-        
+        if np.isnan(p):
+            print(f'Cell {cell} has NaN values.')       
     return pval
+
 
 # =============================================================================
 # Test responsive cells.
@@ -348,14 +349,14 @@ trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'tria
 #     trial_indices_sensory_map = yaml.load(stream, yaml.Loader)
 # trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
 
-mice_list = [mouse for mouse in mice_list if 'AR176'==mouse]
-nwb_list = [nwb for nwb in nwb_list if 'AR176' in nwb]
+# mice_list = [mouse for mouse in mice_list if 'AR143'==mouse]
+# nwb_list = [nwb for nwb in nwb_list if 'AR143' in nwb]
 
 for mouse in mice_list:
-    save_dir = os.path.join(processed_data_dir, mouse)
+    save_dir = os.path.join(processed_data_dir, 'mice', mouse)
     # Check if dataset is already created.
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, 'tensor_xarray_learning_session_data.nc')
+    save_path = os.path.join(save_dir, 'tensor_xarray_learning_data.nc')
     # if os.path.exists(save_path_data):
     #     continue
     session_nwb = [nwb for nwb in nwb_list if mouse in nwb]
@@ -444,11 +445,11 @@ with open(trial_indices_sensory_map_yaml, 'r') as stream:
     trial_indices = yaml.load(stream, yaml.Loader)
 trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
 
-mice_list = [mouse for mouse in mice_list if 'AR176'==mouse]
-nwb_list = [nwb for nwb in nwb_list if 'AR176' in nwb]
+# mice_list = [mouse for mouse in mice_list if 'AR163'==mouse]
+# nwb_list = [nwb for nwb in nwb_list if 'AR163' in nwb]
 
 for mouse in mice_list:
-    save_dir = os.path.join(processed_data_dir, mouse)
+    save_dir = os.path.join(processed_data_dir, 'mice', mouse)
     # Check if dataset is already created.
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, 'tensor_xarray_mapping_data.nc')
@@ -486,6 +487,8 @@ for mouse in mice_list:
                                                         cell_types,
                                                         idx_selection)
 
+        print(f'{np.isnan(traces).sum()} nan values in tensor.')
+        
         data.append(traces)
         metadatas.append(metadata)
         # Get session day.
@@ -517,54 +520,144 @@ for mouse in mice_list:
 # Test cell responsiveness and selectivity.
 # =============================================================================
 
-
-mouse_id = 'AR180'
-
-folder = io.solve_common_paths('processed_data')
-data_learning = xr.open_dataarray(os.path.join(folder, mouse_id, 'tensor_xarray_learning_data.nc'))
-data_mapping = xr.open_dataarray(os.path.join(folder, mouse_id, 'tensor_xarray_mapping_data.nc'))
-
-days = np.sort(np.unique(data_learning.day))
-response_win = (0, 0.180)
+# Parameters.
+response_win = (0, 0.300)
 baseline_win = (-1, 0)
 
-# Test auditory responses for each day.
-response_test_aud = []
-for day in days:
-    trial_selection = {'auditory_stim': 1, 'day': day}
-    p = test_response(data_learning, trial_selection, response_win, baseline_win)
-    response_test_aud.append(p)
-response_test_aud = np.vstack(response_test_aud)
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+processed_data_folder = io.solve_common_paths('processed_data')
 
-# Test whisker responses for each day.
-response_test_wh = []
-for day in days:
-    trial_selection = {'whisker_stim': 1, 'day': day}
-    p = test_response(data_learning, trial_selection, response_win, baseline_win)
-    response_test_wh.append(p)
-response_test_wh = np.vstack(response_test_wh)
+# Get mice list.
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+_, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes',)
 
-# Test whisker responses for each day.
-response_test_mapping = []
-for day in days:
-    trial_selection = {'day': day}
-    p = test_response(data_mapping, trial_selection, response_win, baseline_win)
-    response_test_mapping.append(p)
-response_test_mapping = np.vstack(response_test_mapping)
+df = []
+for mouse_id in mice_list:
+
+    print(f'Testing responses of {mouse_id}')
+    data_learning = xr.open_dataarray(os.path.join(processed_data_folder, 'mice', mouse_id, 'tensor_xarray_learning_data.nc'))
+    data_mapping = xr.open_dataarray(os.path.join(processed_data_folder, 'mice', mouse_id, 'tensor_xarray_mapping_data.nc'))
+    sessions = data_learning.attrs['session_ids']
+    # # Substract baseline.
+    # data_learning = data_learning - np.nanmean(data_learning.sel(time=slice(*baseline_win)), axis=2, keepdims=True)
+    # data_mapping = data_mapping - np.nanmean(data_mapping.sel(time=slice(*baseline_win)), axis=2, keepdims=True)
+    
+    days = list(np.sort(np.unique(data_learning.day)))
+
+    # Test auditory responses for each day.
+    response_test_aud = []
+    for day in days:
+        session_id = sessions[days.index(day)]
+        trial_selection = {'auditory_stim': 1, 'day': day}
+        rois = data_learning.roi.values
+        cell_types = data_learning.cell_type.values
+        p = test_response(data_learning, trial_selection, response_win, baseline_win)
+        response_test_aud.append(p)
+        df.append(pd.DataFrame({'mouse_id': mouse_id, 'session_id':session_id,
+                                'day': day, 'roi':rois, 'cell_type': cell_types,
+                                'pval_aud': p}))
+    # response_test_aud = np.vstack(response_test_aud)
+
+    # Test whisker responses for each day.
+    response_test_wh = []
+    for day in days:
+        session_id = sessions[days.index(day)]
+        trial_selection = {'whisker_stim': 1, 'day': day}
+        p = test_response(data_learning, trial_selection, response_win, baseline_win)
+        response_test_wh.append(p)
+        df.append(pd.DataFrame({'mouse_id': mouse_id, 'session_id':session_id,
+                            'day': day, 'roi':rois, 'cell_type': cell_types,
+                            'pval_wh': p}))
+    # response_test_wh = np.vstack(response_test_wh)
+
+    # Test whisker responses for each day.
+    response_test_mapping = []
+    for day in days:
+        session_id = sessions[days.index(day)]
+        trial_selection = {'day': day}
+        p = test_response(data_mapping, trial_selection, response_win, baseline_win)
+        response_test_mapping.append(p)
+        df.append(pd.DataFrame({'mouse_id': mouse_id, 'session_id':session_id,
+                            'day': day, 'roi':rois, 'cell_type': cell_types,
+                            'pval_mapping': p}))
+    # response_test_mapping = np.vstack(response_test_mapping)
+
+# Save test results in dataframe.
+df = pd.concat(df)
+df = df.reset_index(drop=True)
+df.to_csv(os.path.join(processed_data_folder, f'response_test_results_win_300ms.csv'))
 
 
+# =============================================================================
 # Compute LMI.
-# ------------
+# =============================================================================
+
 # This perfornms ROC analysis on each cell with mapping trials.
 # Mapping trial of Day 0 are not included in the analysis.
 
-response_win = (0, 0.180)
+# Parameters.
+append_results = False
+response_win = (0, 0.300)
+baseline_win = (-1, 0)
+nshuffles = 1000
 
-data_pre = data_mapping.sel(trial=data_mapping.coords['day'].isin([-2, -1]))
-data_pre = data_pre.sel(time=slice(*response_win)).mean(dim='time')
-data_post = data_mapping.sel(trial=data_mapping.coords['day'].isin([1, 2]))
-data_post = data_post.sel(time=slice(*response_win)).mean(dim='time')
-lmi, lmi_p = compute_lmi(data_pre, data_post, nshuffles=10)
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+processed_data_folder = io.solve_common_paths('processed_data')
+result_file = os.path.join(processed_data_folder, 'lmi_results.csv')
+
+# Get mice list.
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+_, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes',)
+
+# Load results if already computed.
+if not os.path.exists(result_file):
+    df_results = pd.DataFrame(columns=['mouse_id', 'roi', 'cell_type', 'lmi', 'lmi_p'])
+else:
+    df_results = pd.read_csv(result_file)
+if not append_results:
+    df_results = pd.DataFrame(columns=['mouse_id', 'roi', 'cell_type', 'lmi', 'lmi_p'])
+
+df = []
+for mouse_id in mice_list:
+    if df_results.loc[df_results.mouse_id==mouse_id].shape[0] > 0:
+        print(f'Mouse {mouse_id} already done. Skipping.')
+        continue
+    print(f'Processing {mouse_id}')
+    data_mapping = xr.open_dataarray(os.path.join(processed_data_folder, 'mice', mouse_id, 'tensor_xarray_mapping_data.nc'))
+    data_mapping = data_mapping - np.nanmean(data_mapping.sel(time=slice(*baseline_win)), axis=2, keepdims=True)
+    
+    data_pre = data_mapping.sel(trial=data_mapping.coords['day'].isin([-2, -1]))
+    data_pre = data_pre.sel(time=slice(*response_win)).mean(dim='time')
+    data_post = data_mapping.sel(trial=data_mapping.coords['day'].isin([1, 2]))
+    data_post = data_post.sel(time=slice(*response_win)).mean(dim='time')
+    lmi, lmi_p = compute_lmi(data_pre, data_post, nshuffles=nshuffles)
+    df.append(pd.DataFrame({'mouse_id': mouse_id,
+                            'roi': data_mapping.roi.values,
+                            'cell_type': data_mapping.cell_type.values,
+                            'lmi': lmi, 'lmi_p': lmi_p}))
+if len(df)>0:
+    df = pd.concat(df)
+    df = df.reset_index(drop=True)
+    df_results = pd.concat([df_results, df])
+    df_results.to_csv(result_file)
+else:
+    print('No new data to process.')
+
+# data_mapping.shape
+# np.isnan(data_mapping).sum()
+# data_mapping[0].mean('time')
 
 
 
@@ -776,20 +869,20 @@ lmi, lmi_p = compute_lmi(data_pre, data_post, nshuffles=10)
 # # with open(save_yaml, 'w') as stream:
 # #     yaml.dump(stop_flags, stream)
 
-import glob
+# import glob
 
-path = '/mnt/lsens-analysis/Anthony_Renard/data_processed/mice'
+# path = '/mnt/lsens-analysis/Anthony_Renard/data_processed/mice'
 
-for subdir in os.listdir(path):
-    subdir_path = os.path.join(path, subdir)
-    if os.path.isdir(subdir_path):
-        for file in os.listdir(subdir_path):
-            print(file)
-            if file.endswith('.npy'):
-                old_file = os.path.join(subdir_path, file)
-                new_file = old_file.replace('.npy', '.nc')
-                os.rename(old_file, new_file)
-            if 'tensor_xarray_session_data.' in file:
-                old_file = os.path.join(subdir_path, file)
-                new_file = old_file.replace('tensor_xarray_session_data.', 'tensor_xarray_learning_data.')
-                os.rename(old_file, new_file)
+# for subdir in os.listdir(path):
+#     subdir_path = os.path.join(path, subdir)
+#     if os.path.isdir(subdir_path):
+#         for file in os.listdir(subdir_path):
+#             print(file)
+#             if file.endswith('.npy'):
+#                 old_file = os.path.join(subdir_path, file)
+#                 new_file = old_file.replace('.npy', '.nc')
+#                 os.rename(old_file, new_file)
+#             if 'tensor_xarray_session_data.' in file:
+#                 old_file = os.path.join(subdir_path, file)
+#                 new_file = old_file.replace('tensor_xarray_session_data.', 'tensor_xarray_learning_data.')
+#                 os.rename(old_file, new_file)

@@ -1,5 +1,7 @@
 import os
 
+from natsort import natsorted
+
 from suite2p import run_s2p, default_ops
 
 
@@ -41,11 +43,9 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
             tiff_folders = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
             tiff_folders = [os.path.join(tiff_folders, folder) for folder in os.listdir(tiff_folders)
                             if os.path.isdir(os.path.join(tiff_folders, folder))]
-            
+            tiff_folders = natsorted(tiff_folders)            
             if mouse_id == 'AR144':
-                tiff_folders[0] = '/mnt/lsens-analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging/AR144_20240518_193553_corrected'
-            
-            print(tiff_folders)
+                tiff_folders[0] = "/mnt/lsens-analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging/ome-tiff"
             
             # tiff_folders = ['D://AR//test_data']
             # fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
@@ -102,6 +102,7 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
 
 if __name__ == '__main__':
     
+    # mice_ids = ['AR132', 'AR133', 'AR137', 'AR139', 'AR127', 'AR143', 'AR163', 'AR176', 'AR177', 'AR178', 'AR179', 'AR180']
     mice_ids = ['AR144']
     experimenter = 'AR'
     longitudinal = True
@@ -118,7 +119,14 @@ if __name__ == '__main__':
 
     run(ops, mice_ids, experimenter, longitudinal)
 
+# import numpy as np
 
+# mice_ids = ['AR132', 'AR133', 'AR135', 'AR137', 'AR139', 'AR127', 'AR129', 'AR131', 'AR143', 'AR144', 'AR163', 'AR176', 'AR177', 'AR178', 'AR179', 'AR180']
+# for mouse in mice_ids:
+#     print(mouse)
+#     ops = np.load(f"/mnt/lsens-analysis/Anthony_Renard/data/{mouse}/suite2p/plane0/ops.npy", allow_pickle=True).item()
+#     for f in ops['filelist']:
+#         print(f)
 # from ScanImageTiffReader import ScanImageTiffReader
 
 # files = []
@@ -146,6 +154,6 @@ if __name__ == '__main__':
 
 # images.values().name
 
-# file_cor = r"D:\AR\AR163_20241128_00001_stripcorrection.tif"
+# file_cor = r"D:/AR\AR163_20241128_00001_stripcorrection.tif"
 # print(file_cor)
 # test = ScanImageTiffReader(file_cor)

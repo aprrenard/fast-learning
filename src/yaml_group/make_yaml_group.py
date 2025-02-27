@@ -3,12 +3,20 @@ import os
 
 import yaml
 from datetime import datetime
+import pathlib
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
+sys.path.append('/home/aprenard/repos/NWB_analysis')
+
 import nwb_utils.utils_io as utils_io
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.utils.utils_io import read_excel_db
 
+p = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB/AR163_20241123_180709.nwb'
+
+
+os.path.exists(p)
+pathlib.Path(p)
 
 def filter_nwb_based_on_excel_db(excel_path, nwb_path, experimenters, exclude_cols, **filters):
     
@@ -55,9 +63,11 @@ def filter_nwb_based_on_excel_db(excel_path, nwb_path, experimenters, exclude_co
     # nwb_list = temp
 
 if __name__ == '__main__':
-    excel_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
+    # excel_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
+    excel_path = io.excel_path
+
     nwb_path = utils_io.get_experimenter_nwb_folder('AR')
-    yaml_folder = r'C:\Users\aprenard\recherches\repos\fast-learning\docs\groups'
+    yaml_folder = r'C:/Users/aprenard/recherches/repos/fast-learning/docs/groups'
     yaml_name = 'imaging_non_rewarded.yaml'
     session_paths = filter_nwb_based_on_excel_db(excel_path, nwb_path,
                                                  exclude_cols=['exclude', 'two_p_exclude'],

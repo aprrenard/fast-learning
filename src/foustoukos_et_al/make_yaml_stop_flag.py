@@ -6,8 +6,11 @@ import sys
 
 import yaml
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # sys.path.append(r'H:\anthony\repos\NWB_analysis')
+sys.path.append(r'/home/aprenard/repos/NWB_analysis')
+sys.path.append(r'/home/aprenard/repos/fast-learning')
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.utils import utils_io as io
 
@@ -16,8 +19,8 @@ from src.utils import utils_io as io
 # Path configuation.
 # =============================================================================
 
-nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
-db_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
+nwb_dir = io.solve_common_paths('nwb')
+db_path = io.solve_common_paths('db')
 
 
 # =============================================================================
@@ -86,46 +89,61 @@ for nwb_file in nwb_list:
     # Select the index that leaves 50 whisker misses.
     try:
         start = table.loc[(table.whisker_stim == 1) & (table.lick_flag == 0) & (table.index >= start)].iloc[-50:].index[0]
+        stop = start + 49   # Because the last trial is included with .loc.
+
     # Cases with no whisker stim at the end (few excluded mice).
     except IndexError:
         start = table.index.max()
+        stop = table.index.max()
     
-    stop_flags[session_id] = (start, int(table.index.max()))
+    stop_flags[session_id] = (int(start), int(stop))
 
     # Further exceptions where I included a trial with a lick to avoid
     # having less than 50 whisker trials.
     if session_id == 'AR133_20240425_115233':
-        stop_flags[session_id] = (338, int(table.index.max()))
+        stop_flags[session_id] = (int(338), int(table.index.max()))
     if session_id == 'AR137_20240425_170755':
-        stop_flags[session_id] = (207, int(table.index.max()))
+        stop_flags[session_id] = (int(207), int(table.index.max()))
+    if 'AR127' in session_id:
+        # For 4 out of 5 sessions, I manual stopped the sessions too early
+        # from last trial onset.
+        start = start - 1
+        stop = stop - 1
+        stop_flags[session_id] = (int(start), int(stop))
 
     # Get the indices of those trials.
-    trial_ids = table.loc[start:, 'trial_id'].to_list()
+    trial_ids = table.loc[start:stop, 'trial_id'].to_list()
     trial_indices[session_id] = trial_ids
 
     # Count trial for sanity check.
     n_wh_miss = table.loc[(table.trial_id >= start)
+                          & (table.trial_id <= stop)
                           & (table.whisker_stim == 1)
                           & (table.lick_flag == 0)].shape[0]
     n_wh_hit = table.loc[(table.trial_id >= start)
+                         & (table.trial_id <= stop)
                          & (table.whisker_stim == 1)
                          & (table.lick_flag == 1)].shape[0]
-    trial_count.append([mouse_id, session_id, start, n_wh_miss, n_wh_hit])
+    trial_count.append([mouse_id, session_id, start, stop, n_wh_miss, n_wh_hit])
 
 # Save yaml files.
-yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\stop_flags_sensory_map.yaml'
+yaml_save = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/stop_flags_sensory_map.yaml'
+yaml_save = io.adjust_path_to_host(yaml_save)
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(stop_flags, stream)
-yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_sensory_map.yaml'
+yaml_save = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/trial_indices_sensory_map.yaml'
+yaml_save = io.adjust_path_to_host(yaml_save)
 with open(yaml_save, 'w') as stream:
     yaml.safe_dump(trial_indices, stream)
 
 # Sanity check.
-trial_count = pd.DataFrame(trial_count, columns = ['mouse_id', 'session_id', 'start', 'n_wh_miss', 'n_wh_hit'])
+trial_count = pd.DataFrame(trial_count, columns = ['mouse_id', 'session_id', 'start', 'stop', 'n_wh_miss', 'n_wh_hit'])
 
-nwb_file = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\NWB\\GF278_07082020_131407.nwb'
+nwb_file = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB/AR127_20240221_133407.nwb'
+nwb_file = io.adjust_path_to_host(nwb_file)
 table = nwb_read.get_trial_table(nwb_file)
 table = table.reset_index()
+table = table.loc[(table.trial_id >= 250)]
 plt.figure()
 plt.scatter(table.loc[table.auditory_stim==1, 'trial_id'], table.loc[table.auditory_stim==1, 'lick_flag'])
 plt.scatter(table.loc[table.whisker_stim==1, 'trial_id'], table.loc[table.whisker_stim==1, 'lick_flag'])
