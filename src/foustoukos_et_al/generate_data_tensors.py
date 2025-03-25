@@ -337,7 +337,7 @@ processed_data_dir = io.solve_common_paths('processed_data')
 days = ['-3', '-2', '-1', '0', '+1', '+2']
 _, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
                                                 exclude_cols=['exclude', 'two_p_exclude'],
-                                                experimenters=['AR', 'GF', 'MI'],
+                                                experimenters=['AR'],
                                                 day=days,
                                                 two_p_imaging='yes')
 
@@ -436,7 +436,7 @@ processed_data_dir = io.solve_common_paths('processed_data')
 days = ['-3', '-2', '-1', '0', '+1', '+2']
 _, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
                                                 exclude_cols=['exclude', 'two_p_exclude'],
-                                                experimenters=['AR', 'GF', 'MI'],
+                                                experimenters=['AR'],
                                                 day=days,
                                                 two_p_imaging='yes',)
 
@@ -521,7 +521,7 @@ for mouse in mice_list:
 # =============================================================================
 
 # Parameters.
-response_win = (0, 0.300)
+response_win = (0, 0.180)
 baseline_win = (-1, 0)
 
 # Get directories and files.
@@ -591,7 +591,7 @@ for mouse_id in mice_list:
 # Save test results in dataframe.
 df = pd.concat(df)
 df = df.reset_index(drop=True)
-df.to_csv(os.path.join(processed_data_folder, f'response_test_results_win_300ms.csv'))
+df.to_csv(os.path.join(processed_data_folder, f'response_test_results_win_180ms.csv'))
 
 
 # =============================================================================
@@ -665,7 +665,87 @@ else:
 
 
 
-# dff = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\dff.npy")
+# #############################################################################
+# Lick-aligned xarrays.
+# #############################################################################
+
+db_path = io.solve_common_paths('db')
+db = io.read_excel_db(db_path)
+nwb_path = io.solve_common_paths('nwb')
+processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+_, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes',)
+
+# mouse = 'GF305'
+mice_list = mice_list[12:14]
+
+for mouse in mice_list:
+    print(f'Processing lick aligned array for {mouse}')
+    file_name = 'tensor_xarray_learning_data.nc'
+    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+    xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+    rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)
+
+    lick_times = xarray.coords['lick_time'].values
+    stim_onset = xarray.coords['stim_onset'].values
+    reaction_time = lick_times - stim_onset
+    # GF333 and GF334 have a few strange reaction times.
+    reaction_time[reaction_time>=1.25] = np.nan
+    plt.plot(reaction_time)
+    plt.show()
+        
+    # Create a new xarray for lick-aligned traces
+    time = xarray.coords['time'].values
+    aligned_time = np.linspace(-1, 3, 120)
+    aligned_traces = []
+
+    for itrial in range(xarray.shape[1]):
+        lick_onset = reaction_time[itrial]
+        # Trials with no lick are set to nan.
+        if np.isnan(lick_onset):
+            aligned_traces.append(np.full((xarray.shape[0], 120), np.nan))
+            continue 
+        lick_onset_idx =  (np.abs(time - lick_onset)).argmin()
+        data = xarray[:, itrial, :].values
+        aligned_data = data[:, lick_onset_idx-30:lick_onset_idx+90]
+        aligned_traces.append(aligned_data)
+
+    aligned_traces = np.stack(aligned_traces, axis=1)
+    aligned_traces.shape
+    aligned_xarray = xr.DataArray(aligned_traces,
+                                dims=['cell', 'trial', 'time'],
+                                coords={'time': ('time', aligned_time),
+                                        'reaction_time': ('trial', reaction_time),}
+                                )
+
+    # Add all other coordinates from the original xarray
+    for coord in xarray.coords:
+        if coord not in aligned_xarray.coords:
+            aligned_xarray.coords[coord] = xarray.coords[coord]
+
+    # Save the aligned xarray
+    save_path = os.path.join(processed_dir, mouse, 'lick_aligned_xarray.nc')
+    aligned_xarray.to_netcdf(save_path)
+    print(f'Saved {save_path}')
+
+
+# for d in aligned_traces:
+#     print(d.shape)
+
+
+# data = aligned_xarray.sel(trial=aligned_xarray.coords['outcome_c']==1)
+# data = data.mean(dim='trial')
+# data.name = 'lick_aligned_psth'
+# data = data.to_dataframe().reset_index()
+# sns.lineplot(data=data, x='time', y='lick_aligned_psth')
+
+
+# dff = np.load(r"/\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\dff.npy")
 # F_cor = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_cor.npy")
 # F_raw = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\AR180_20241212_155749\suite2p\plane0\F_raw.npy")
 # F = np.load(r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR180\suite2p\plane0\F.npy")
