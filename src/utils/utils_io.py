@@ -57,7 +57,43 @@ def select_sessions_from_db(db_path, nwb_path, experimenters=None,
                      if mouse[:2] in experimenters]
     nwb_paths = [os.path.join(nwb_path, f + '.nwb') for f in session_list]
     
-    return session_list, nwb_paths, mice_list, db
+    return session_list, nwb_paths, mice_list, db   
+
+
+
+
+def select_mice_from_db(db_path, nwb_path, experimenters=None,
+                            exclude_cols=['exclude', 'two_p_exclude'],
+                            **filters):
+    """Select mice from excel database on filters.
+    Return a list of mouse ids.
+
+    Args:
+        db_path (_type_): _description_
+        experimenters (_type_): _description_
+        exclude_cols (_type_): _description_
+        nwb_path (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
+    
+    db = read_excel_db(db_path)
+    for key, val in filters.items():
+        if isinstance(val, list):
+            db = db.loc[(db[key].isin(val))]
+        else:
+            db = db.loc[(db[key]==val)]
+    # Remove excluded sessions.
+    for col in exclude_cols:
+        db = db.loc[(db[col]!='exclude')]
+        
+    mice_list = list(db.subject_id.unique())
+    if experimenters:
+        mice_list = [mouse for mouse in mice_list
+                     if mouse[:2] in experimenters]
+    
+    return mice_list
 
 
 def get_reward_group_from_db(db_path, session_id):
