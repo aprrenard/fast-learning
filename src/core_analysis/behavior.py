@@ -15,7 +15,9 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
-sys.path.append(r'H:/anthony/repos/NWB_analysis')
+sys.path.append(r'/home/aprenard/repos/fast-learning')
+sys.path.append(r'/home/aprenard/repos/NWB_analysis')
+
 from src.utils import utils_io as io
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from scipy.stats import mannwhitneyu, wilcoxon
@@ -243,7 +245,7 @@ def plot_single_session(table, session_id, ax=None):
     ax.set_ylabel('Lick probability')
     ax.set_title(f'{session_id}')
     sns.despine()
-    plt.show()
+    
 
 def plot_average_across_days(df, reward_group, palette, days=[-2,-1,0,1,2], nmax_trials=240, ax=None):
 
@@ -367,19 +369,14 @@ if __name__ == '__main__':
 
 
     # Read behavior results.
-    SESSIONS_DB_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
-    # SESSIONS_DB_PATH = 'C:\\Users\\aprenard\\recherches\\fast-learning\\docs\\sessions_muscimol_GF.xlsx'
-    NWB_FOLDER_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB'
-    stop_flag_yaml = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\stop_flags_end_session.yaml"
-    trial_indices_yaml = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_end_session.yaml"
-
-
-
+    SESSIONS_DB_PATH = io.solve_common_paths('db')
+    NWB_FOLDER_PATH = io.solve_common_paths('nwb')
+    stop_flag_yaml = io.solve_common_paths('stop_flags')
+    trial_indices_yaml = io.solve_common_paths('trial_indices')
 
 
     # Plot parameters.
-    sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-                rc={'font.sans-serif':'Arial'})
+    sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
     PALETTE = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#333333', '#cccccc',]
     PALETTE = sns.color_palette(PALETTE)
     
@@ -419,7 +416,7 @@ if __name__ == '__main__':
         exclude_cols=['exclude'],
         # day = ["-2", "-1", '0', '+1', '+2'],
         day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
-        subject_id = particle_test_mice,
+        subject_id = mice_imaging,
         )
     
 
@@ -428,17 +425,45 @@ if __name__ == '__main__':
     save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_particle_test.csv'
     table_particle_test.to_csv(save_path, index=False)
 
-    table = make_behavior_table(nwb_list, session_list, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
+    table = make_behavior_table(nwb_list, session_list, db_path= SESSIONS_DB_PATH, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
     # Save the table to a CSV file
     save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv'
     table.to_csv(save_path, index=False)
 
     # Load the table from the CSV file.
-    table = pd.read_csv(r'//sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed\behavior\behavior_imagingmice_table_5days_cut.csv')
-    table.shape
+    table_file = io.adjust_path_to_host(r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
+    table = pd.read_csv(table_file)
 
 
 
+    # ############################################# 
+    # Day 0 for each mouse.
+    # #############################################
+
+    # table = pd.read_csv(r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_table_muscimol.csv')
+    # table = table.loc[table.pharma_inactivation_type=='learning']
+
+    # session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
+    #     SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=['AR'],
+    #     exclude_cols=['exclude'],
+    #     pharma_day = ['pre_-1', 'pre_-2', 'muscimol_1', 'muscimol_2', 'muscimol_3', 'recovery_1', 'recovery_2', 'recovery_3'],
+    #     subject_id = ['AR181', 'AR182', 'AR183', 'AR184',],
+    #     )
+    
+    # Load the table from the CSV file.
+    table_file = io.adjust_path_to_host(r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_table_all_mice_5days.csv')
+    table = pd.read_csv(table_file)
+
+    session_list = table.loc[table.day==0].session_id.drop_duplicates().to_list()
+    pdf_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/behaviorsingle_sessions_allmice.pdf'
+    pdf_path = io.adjust_path_to_host(pdf_path)
+
+    with PdfPages(pdf_path) as pdf:
+        for session_id in session_list:
+            print(session_id)
+            plot_single_session(table, session_id, ax=None)
+            pdf.savefig()
+            plt.close()
 
     # Average performance across days.
     # ################################
@@ -580,11 +605,22 @@ if __name__ == '__main__':
 
     # Performance over trials 
 
+    # #########################################################################
+    # Fitting learning curves.
+    # #########################################################################
+    
+   
 
 
-
-
-
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
     # Compute performance.

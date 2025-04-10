@@ -103,7 +103,7 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
 if __name__ == '__main__':
     
     # mice_ids = ['AR132', 'AR133', 'AR137', 'AR139', 'AR127', 'AR143', 'AR163', 'AR176', 'AR177', 'AR178', 'AR179', 'AR180']
-    mice_ids = ['AR144']
+    mice_ids = ['AR185', 'AR187']
     experimenter = 'AR'
     longitudinal = True
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     ops['batch_size'] = 1000
     ops['threshold_scaling'] = 1.2
     ops['fs'] = 30
-    ops['tau'] = 1.25 # timescale of gcamp to use for deconvolution
+    ops['tau'] = 0.7 # timescale of gcamp to use for deconvolution
     ops['delete_bin'] = True
     # Save reg tif for Fissa.
     ops['reg_tif'] = True

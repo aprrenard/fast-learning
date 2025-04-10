@@ -120,9 +120,9 @@ def read_group_yaml(group_yaml_path):
 
 def read_stop_flags_and_indices_yaml(stop_flag_yaml_path, trial_indices_path):
     with open(stop_flag_yaml_path, 'r') as file:
-        stop_flags = yaml.safe_load(file)
+        stop_flags = yaml.load(file, Loader=yaml.FullLoader)
     with open(trial_indices_path, 'r') as file:
-        trial_indices = yaml.safe_load(file)
+        trial_indices = yaml.load(file, Loader=yaml.FullLoader)
     trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'trial_idx'])
     
     return stop_flags, trial_indices
