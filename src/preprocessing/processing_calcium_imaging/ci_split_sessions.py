@@ -37,6 +37,7 @@ for mouse_id in mice_id:
         continue
     session_list = [session for session in os.listdir(imaging_folder)]
     session_list = [session for session in session_list if os.path.isdir(os.path.join(imaging_folder, session))]
+    session_list.sort()
     for session in session_list:
         print(session)
 
@@ -72,13 +73,16 @@ for mouse_id in mice_id:
             # Count frames per session.
             for session in session_list:
                 path = os.path.join(imaging_folder, session)
+                if session == 'AR144_20240518_193553':
+                    path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging/AR144_20240518_193553_corrected'
                 tif_paths = [os.path.join(path, itif) for itif in os.listdir(path) if os.path.splitext(itif)[1] in ['.tif', '.tiff']]
                 tif_paths = sorted(tif_paths)
                 nframes = 0
                 for itif in tif_paths:
-                    print(itif, end='\r')
+                    print(itif)
                     shape = ScanImageTiffReader(itif).shape()
                     nframes += shape[0]
+                    print(nframes)
                 frames_per_session.append(nframes)
             np.save(os.path.join(suite2p_folder, 'frames_per_session.npy'), frames_per_session, allow_pickle=True)
         frames_per_session = list(frames_per_session)
@@ -104,8 +108,8 @@ for mouse_id in mice_id:
         np.save(os.path.join(save_path, 'stat.npy'), stat)
         np.save(os.path.join(save_path, 'iscell.npy'), iscell)
         np.save(os.path.join(save_path, 'ops.npy'), ops)
+        # np.save(os.path.join(save_path, 'fissa_convergence.npy'), converged)        
         
-
 
     # Move reg tifs to the sessions they belong to.
     # ---------------------------------------------
@@ -121,6 +125,7 @@ for mouse_id in mice_id:
     reg_tif_list = sorted(reg_tif_list, key=f)
     reg_tif_list = [os.path.join(reg_tif_folder, tif) for tif in reg_tif_list]
     batch_size = ops.item()['batch_size']  # n frames per tif.
+    print('batch size:', batch_size)
     isession = 0
     frames = stops
 
@@ -132,6 +137,8 @@ for mouse_id in mice_id:
         
         current_max_frame = frames[isession]
         frame_count = (itif + 1) * batch_size
+        print('session:', session)
+        print('frame count:', frame_count)
 
         # Case were you don't need to split a tif.
         if (frame_count < current_max_frame) or (itif == len(reg_tif_list)-1):
@@ -167,9 +174,16 @@ for mouse_id in mice_id:
             tiff.imwrite(tif_left_path, tif_left)
             tiff.imwrite(tif_right_path, tif_right)
 
-            # Count frames to check.
-            frames_per_session[isession] += cut_left
-            frames_per_session[isession+1] += 500 - cut_left
+            # # Count frames to check.
+            # frames_per_session[isession] += cut_left
+            # frames_per_session[isession+1] += 500 - cut_left
             isession += 1
 
+
+# import numpy as np
+# path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR144\suite2p\plane0\frames_per_session.npy"
+frames_per_session = [114119, 108401, 33025+39253+100085, 148959, 64820, 119632]
+sum(frames_per_session)
+728294-591196
+# np.save(path, frames_per_session, allow_pickle=True)
 

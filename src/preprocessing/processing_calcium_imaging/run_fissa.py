@@ -61,7 +61,7 @@ def compute_baseline(F, fs, window):
                                            padlen=padlen)
 
     # Take a percentile of the filtered signal and windowed signal
-    baseline = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,(fs*2*window + 1)), mode='constant', cval=+np.inf)
+    baseline = scipy.ndimage.percentile_filter(filtered_f, percentile=base_pctle, size=(1,int(round(fs*2*window + 1))), mode='constant', cval=+np.inf)
 
     # Ensure filtering doesn't take us below the minimum value which actually
     # occurs in the data. This can occur when the amount of data is very low.
@@ -143,7 +143,9 @@ def run_fissa(mice_ids, experimenter, longitudinal=True):
         # The registered tifs in the reg-tif folder created by suite2p
         # are not lexicographically ordered. Reorder them and give list of
         # tifs as argument to Fissa.
-        tif_path = os.path.join(suite2p_folder, 'reg_tif')
+        # tif_path = os.path.join(suite2p_folder, 'reg_tif')
+        tif_path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\testing"
+
         reg_tif_list = os.listdir(tif_path)
         reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext(tif)[1] in ['.tif', '.tiff']]
         f = lambda x: int(x[6:-10])
@@ -184,7 +186,7 @@ def run_fissa(mice_ids, experimenter, longitudinal=True):
         print(f'Running Fissa separation for {suite2p_folder}.')
         exp = fissa.Experiment(reg_tif_list, [rois], suite2p_folder)
         exp.separate()
-                
+
         # Extract and reshape corrected traces to (ncells, nt).
         # Cells that did not converge will be set to non-cells in iscell at NWB conversion.
         ncells, ntifs = exp.result.shape
@@ -220,6 +222,24 @@ def run_fissa(mice_ids, experimenter, longitudinal=True):
 
 if __name__ == '__main__':
 
-    mice_ids = ['AR156']
+    mice_ids = ['AR176']
     experimenter = 'AR'
-    longitudinal = False
+    longitudinal = True
+
+    run_fissa(mice_ids, experimenter, longitudinal=longitudinal)
+
+
+
+
+#####
+stat_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\stat.npy"
+stat = np.load(stat_file, allow_pickle = True)
+ops_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\ops.npy"
+ops = np.load(ops_file, allow_pickle = True).item()
+
+plt.plot(ops['yoff'])
+plt.plot(ops['xoff'])
+
+ops.keys()
+
+ops['badframes']

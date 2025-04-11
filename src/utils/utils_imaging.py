@@ -9,6 +9,7 @@ from scipy.stats import percentileofscore
 import xarray as xr
 
 
+
 def load_session_2p_imaging(mouse_id, session_id, dir_path):
     array_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d.npy")
     tensor_metadata_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d_metadata.pickle")
@@ -47,8 +48,6 @@ def substract_baseline(arr, time_axis, baseline_win):
     arr = arr - baseline
     return arr
 
-# TODO pad beginning or end
-# give list of axis to pad 
 
 def pad_arrays(arrays, side='end', dims=None, pad_value=np.nan):
     ndims = arrays[0].ndim
@@ -161,7 +160,7 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
     return X
 
 
-def compute_lmi(data_pre, data_post, nshuffles=10000):
+def compute_lmi(data_pre, data_post, nshuffles=1000):
     '''
     Compute ROC analysis and Learning modulation index for each cell in data.
     data_pre: np array of shape (cell, trial).

@@ -8,9 +8,9 @@ import yaml
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# sys.path.append(r'H:\anthony\repos\NWB_analysis')
-sys.path.append(r'/home/aprenard/repos/NWB_analysis')
-sys.path.append(r'/home/aprenard/repos/fast-learning')
+sys.path.append(r'H:\anthony\repos\NWB_analysis')
+# sys.path.append(r'/home/aprenard/repos/NWB_analysis')
+# sys.path.append(r'/home/aprenard/repos/fast-learning')
 from nwb_wrappers import nwb_reader_functions as nwb_read
 from src.utils import utils_io as io
 
@@ -40,10 +40,13 @@ session_list, nwb_list, mice, db_filtered = io.select_sessions_from_db(
 stop_flags = {}
 trial_indices = {}
 trial_count = []
+# mouse_ids = ['AR176', 'AR177', 'AR178', 'AR179', 'AR180', ]
 
 for nwb_file in nwb_list:
 
     mouse_id = nwb_file[-25:-20]
+    # if mouse_id not in mouse_ids:
+    #     continue
     session_id = nwb_file[-25:-4]
     table = nwb_read.get_trial_table(nwb_file)
     print(f"Processing {session_id} ({nwb_list.index(nwb_file) + 1}/{len(nwb_list)})")
@@ -165,10 +168,13 @@ nwb_list = [os.path.join(nwb_dir, f + '.nwb') for f in nwb_list]
 
 stop_flags = {}
 trial_indices = {}
+# mouse_ids = ['AR176', 'AR177', 'AR178', 'AR179', 'AR180', ]
 
 for nwb_file in nwb_list:
 
     mouse_id = nwb_file[-25:-20]
+    # if mouse_id not in mouse_ids:
+    #     continue
     session_id = nwb_file[-25:-4]
     table = nwb_read.get_trial_table(nwb_file)
     print(f"\rProcessing {session_id} ({nwb_list.index(nwb_file) + 1}/{len(nwb_list)})", end="")
@@ -213,4 +219,4 @@ with open(yaml_save, 'w') as stream:
     yaml.dump(stop_flags, stream)
 yaml_save = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_end_session.yaml'
 with open(yaml_save, 'w') as stream:
-    yaml.safe_dump(trial_indices, stream)
+    yaml.dump(trial_indices, stream)

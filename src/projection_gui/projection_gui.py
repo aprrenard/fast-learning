@@ -2,19 +2,19 @@ import os
 import pathlib
 import sys
 
-import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import pyqtgraph as pg
 import SimpleITK as sitk
+from skimage.metrics import structural_similarity as ssim
+import cv2
+import matplotlib.pyplot as plt
 from matplotlib.colors import hsv_to_rgb
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow
-from skimage.metrics import structural_similarity as ssim
 
 
-mouse_list = ['AR099', 'AR103', 'AR106', 'AR107']
+mouse_list = ['AR163']
 
 class ProjectionsGUI(QMainWindow):  
 

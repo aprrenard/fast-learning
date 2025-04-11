@@ -23,6 +23,41 @@ save_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\sp
 with open(save_path, mode='wb') as fid:
     log.tofile(fid)
 
+path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\log_continuous.bin'
+log_bad = np.fromfile(path)
+log_bad = log_bad[::6]
+log_bad = np.abs(log_bad)
+
+path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\data\AR180\Training\AR180_20241214_194639\log_continuous.bin"
+log = np.fromfile(path)
+log = log[::6]
+log = np.abs(log)
+
+
+path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\data\AR176\Training\AR176_20241215_160714\log_continuous.bin"
+log = np.fromfile(path)
+
+
+log2 = log[1::6]
+
+plt.plot(log2[-5000*60*20:-5000*60*10])
+log2_cor = np.copy(log2)
+log2_cor[-5000*60*20+860000:-5000*60*20+910000] = 0.65
+plt.plot(log2_cor[-5000*60*20:-5000*60*10])
+
+log[1::6] = log2_cor
+log_check = log[1::6]
+plt.plot(log_check[-5000*60*20:-5000*60*10:6])
+
+save_path = '\\\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Anthony_Renard\\need_fix\\AR176\\Training\\AR176_20241215_160714_cor\\log_continuous.bin'
+with open(save_path, mode='wb') as fid:
+    log.tofile(fid)
+
+
+91440
+157900
+
+
 
 # Merging movies.
 # ###############

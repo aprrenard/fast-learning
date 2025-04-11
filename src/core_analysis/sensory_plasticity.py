@@ -23,7 +23,7 @@ import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.core_analysis.behavior import compute_performance, plot_single_session
 import warnings
-from statannotations.Annotator import Annotator
+# from statannotations.Annotator import Annotator
 
 # Set plot parameters.
 plt.rcParams['pdf.fonttype'] = 42
@@ -378,7 +378,7 @@ variance_across = 'mice'
 _, _, mice, db = io.select_sessions_from_db(db_path,
                                             nwb_dir,
                                             two_p_imaging='yes',
-                                            experimenters=['GF', 'MI', 'AR'])
+                                            experimenters=['GF', 'MI'])
 # mice = [m for m in mice if m not in ['AR163']]
 mice_count = db[['subject_id', 'reward_group']].drop_duplicates()
 print(mice_count)

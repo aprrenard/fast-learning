@@ -17,8 +17,8 @@ plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['svg.fonttype'] = 'none'
 
-# PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
-PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
+PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
+# PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
 
 
 def remove_nan_segments_from_axis(array, axis):
@@ -43,6 +43,7 @@ def convert_psth_np_to_pd(data, metadata, reward_group, lmi_rew=None, axis='cell
     for imouse in range(nmice):
         for isession in range(ndays):
             for itype in range(ntypes):
+                print(imouse, isession, itype, end='\r')
                 
                 
                 if axis == 'cell':
@@ -56,7 +57,8 @@ def convert_psth_np_to_pd(data, metadata, reward_group, lmi_rew=None, axis='cell
                         df['time'] = np.arange(data.shape[5]) / 30
                         df['activity'] = response
                         df['roi'] = counter
-                        df['cell_type'] = metadata['cell_types'][itype]
+
+                        df['cell_type'] = metadata['cell_types'][metadata_rew["sessions"][imouse][isession]][itype]
                         df['mouse_id'] = metadata['mice'][imouse]
                         df['session_id'] = days[isession]
                         if lmi_rew is not None:
@@ -149,17 +151,20 @@ def compute_lmi(data, nshuffles=10000):
 # #######################################
 
 # Load numpy datasets.
-read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'psth_sensory_map_trials_rewarded.npy')
 traces_rew = np.load(read_path, allow_pickle=True)
-read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_rew_common_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'psth_sensory_map_trials_rewarded_metadata.pickle')
 with open(read_path, 'rb') as fid:
     metadata_rew = pickle.load(fid)
 
-read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common.npy')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'psth_sensory_map_trials_non_rewarded.npy')
 traces_non_rew = np.load(read_path, allow_pickle=True)
-read_path = os.path.join(PROCESSED_DATA_PATH, 'traces_non_motivated_trials_non_rew_common_metadata.pickle')
+read_path = os.path.join(PROCESSED_DATA_PATH, 'psth_sensory_map_trials_non_rewarded_metadata.pickle')
 with open(read_path, 'rb') as fid:
-    metadata_non_rew = pickle.load(fid)           
+    metadata_non_rew = pickle.load(fid)
+
+traces_rew = traces_rew.astype(np.float32)
+traces_non_rew = traces_non_rew.astype(np.float32)
 
 # Substract baseline.
 traces_rew = traces_rew - np.nanmean(traces_rew[:,:,:,:,:,:30], axis=5, keepdims=True)
@@ -168,7 +173,14 @@ traces_non_rew = traces_non_rew - np.nanmean(traces_non_rew[:,:,:,:,:,:30], axis
 # Remove my two shitty mice.
 traces_rew = traces_rew[:-2]
 
+metadata_rew["cell_types"][metadata["sessions"][3][5]]
+metadata_rew["mice"]
+metadata["mice"][3]
+
+
+
 # Convert psth to pandas.
+df_psth_rew = convert_psth_np_to_pd(traces_rew, metadata_rew, 'R+')
 df_psth = convert_psth_np_to_pd(traces_rew, traces_non_rew)
 # Remove sessions with baseline aberrations.
 df_psth.loc[(df_psth.mouse_id=='GF308') & (df_psth.session_id=='D-3'), 'activity'] = np.nan
@@ -208,8 +220,6 @@ np.nansum(~np.isnan(traces_non_rew[:,:,0,0,:,0]), axis=(2))
 
 sns.set_theme(context='poster', style='ticks', palette='deep', font='sans-serif', font_scale=1,
               rc={'font.sans-serif':'Arial'})
-
-
 
 # PSTH.
 data = df_psth.loc[df_psth.session_id.isin(['D-2', 'D-1', 'D0', 'D+1','D+2'])]
