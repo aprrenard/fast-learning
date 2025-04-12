@@ -367,11 +367,11 @@ lmi_prop_ct.to_csv(os.path.join(output_dir, 'prop_lmi_ct.csv'), index=False)
 # -----------
 
 sampling_rate = 30
-win_sec = (0.8, 3)  
-win = (int(win_sec[0] * sampling_rate), int(win_sec[1] * sampling_rate))
+win_sec = (-0.5, 1.5)  
 baseline_win = (0, 1)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
-days = ['-2', '-1', '0', '+1', '+2']
+days = [-2, -1, 0, +1, +2]
+days_str = ['-2', '-1', '0', '+1', '+2']
 cell_type = None
 variance_across = 'mice'
 
@@ -400,22 +400,24 @@ for mouse_id in mice:
     folder = os.path.join(processed_dir, 'mice')
     data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
     data = imaging_utils.substract_baseline(data, 2, baseline_win)
-        
-    avg_response = data.groupby('day').mean(dim='trial')
-    avg_response.name = 'psth'
-    avg_response = avg_response.to_dataframe().reset_index()
-    avg_response['mouse_id'] = mouse_id
-    avg_response['reward_group'] = reward_group
     
-    psth.append(avg_response)
+    # Keep days of interest.
+    data = data.sel(trial=data['day'].isin(days))
+    # Select PSTH trace length.
+    data = data.sel(time=slice(win_sec[0], win_sec[1]))
+    # Average trials per days.
+    data = data.groupby('day').mean(dim='trial')
+    
+    data.name = 'psth'
+    data = data.to_dataframe().reset_index()
+    data['mouse_id'] = mouse_id
+    data['reward_group'] = reward_group
+    psth.append(data)
 psth = pd.concat(psth)
 
 
 # Grand average psth's for all cells and projection neurons.
 # ----------------------------------------------------------
-
-data = psth.loc[(psth.time>=-0.5) & (psth.time<1.5)]
-data = data.loc[data['day'].isin([-2, -1, 0, 1, 2])]
 
 if variance_across == 'mice':
     cell_counts = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
@@ -438,10 +440,10 @@ data = data.loc[~data.mouse_id.isin(['AR131'])]
 # # GF305 has baseline artefact on day -1 at auditory trials.
 # data = data.loc[~data.mouse_id.isin(['GF305'])]
 
-mice_AR = [m for m in mice if m.startswith('AR')]
-mice_GF = [m for m in mice if m.startswith('GF') or m.startswith('MI')]
-data = data.loc[data.mouse_id.isin(mice_AR)]
-len(mice_GF)
+# mice_AR = [m for m in mice if m.startswith('AR')]
+# mice_GF = [m for m in mice if m.startswith('GF') or m.startswith('MI')]
+# data = data.loc[data.mouse_id.isin(mice_AR)]
+# len(mice_GF)
 
 # data = data.loc[data['cell_type']=='wM1']
 # data = data.loc[~data.mouse_id.isin(['GF305', 'GF306', 'GF307'])]
@@ -469,7 +471,7 @@ output_dir = io.adjust_path_to_host(output_dir)
 pdf_file = f'psth_individual_mice_mapping.pdf'
 
 with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
-    for mouse_id in mice_AR:
+    for mouse_id in mice:
         # Plot.
         data = psth.loc[psth['day'].isin([-2, -1, 0, 1, 2])
                       & (psth['mouse_id'] == mouse_id)]
@@ -488,6 +490,92 @@ with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
         plt.suptitle(mouse_id)
         pdf.savefig(dpi=300)
         plt.close()
+
+
+# #############################################################################
+# Quantify the average response on baseline trials across days.
+# #############################################################################
+
+sampling_rate = 30
+win_sec = (0, 0.180)  
+days = [-2, -1, 0, +1, +2]
+days_str = ['-2', '-1', '0', '+1', '+2']
+cell_type = None
+variance_across = 'cells'
+
+_, _, mice, db = io.select_sessions_from_db(db_path,
+                                            nwb_dir,
+                                            two_p_imaging='yes',
+                                            experimenters=['GF', 'MI'])
+
+# Load the data.
+# --------------
+
+avg_resp = []
+
+for mouse_id in mice:
+    # Disregard these mice as the number of trials is too low.
+    # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
+    #     continue
+    reward_group = io.get_mouse_reward_group_from_db(db_path, mouse_id)
+
+    file_name = 'tensor_xarray_mapping_data.nc'
+    folder = os.path.join(processed_dir, 'mice')
+    data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    data = imaging_utils.substract_baseline(data, 2, baseline_win)
+    
+    # Keep days of interest.
+    data = data.sel(trial=data['day'].isin(days))
+    # Average of time points.
+    data = data.sel(time=slice(win_sec[0], win_sec[1])).mean(dim='time')
+    # Average trials per days.
+    data = data.groupby('day').mean(dim='trial')
+    # Convert to dataframe.
+    data.name = 'average_response'
+    data = data.to_dataframe().reset_index()
+    data['mouse_id'] = mouse_id
+    data['reward_group'] = reward_group
+    avg_resp.append(data)
+avg_resp = pd.concat(avg_resp)
+
+# Remove roi from mouse if less than n cells of that cell type.
+if variance_across == 'mice':
+    cell_counts = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
+    cell_counts = pd.read_csv(cell_counts)
+    avg_resp = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
+    for ct in ['wM1', 'wS2']:
+        for mouse_id in avg_resp.mouse_id.unique():
+            n_cells = cell_counts.loc[(cell_counts.mouse_id==mouse_id) & (cell_counts.cell_type==ct), 'roi']
+            # If no cells of that type (df count had no entry then - I could add 0).
+            if n_cells.empty:
+                continue
+            n_cells = n_cells.values[0]
+            if n_cells < 5:
+                avg_resp = avg_resp.loc[(avg_resp.mouse_id!=mouse_id) | (avg_resp.cell_type!=ct)]
+else:
+    avg_resp = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
+    
+# Plot average response across days.
+fig = sns.catplot(data=avg_resp, x='day', y='average_response', hue='reward_group',
+                    kind='point', palette=reward_palette, hue_order=['R-', 'R+'],
+                    height=3, aspect=0.8, estimator='mean')
+ax = plt.gca()
+ax.set_title('')
+ax.set_xticklabels(days_str)
+ax.set_xlabel('Days')
+ax.set_ylabel('Average response to whisker stimulus (dF/F0)')
+ax.set_ylim(0, 0.08)
+sns.despine()
+    
+# Save figure.
+output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/sensory_plasticity/'
+output_dir = io.adjust_path_to_host(output_dir)
+pdf_file = f'average_response_across_days.pdf'
+# Save data.
+avg_resp.to_csv(os.path.join(output_dir, 'average_response_across_days.csv'), index=False)
+# Save figure to svg.
+svg_file = f'average_response_across_days.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 # #############################################################################

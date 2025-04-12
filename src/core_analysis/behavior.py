@@ -28,217 +28,217 @@ plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['svg.fonttype'] = 'none'
 
 
-# def make_behavior_table(nwb_list, session_list, db_path, cut_session, stop_flag_yaml, trial_indices_yaml):
-#     if cut_session:
-#         start_stop, trial_indices = io.read_stop_flags_and_indices_yaml(stop_flag_yaml, trial_indices_yaml)
-#     table = []
-#     for nwb, session in zip(nwb_list, session_list):
-#         df = nwb_read.get_trial_table(nwb)
-#         df = df.reset_index()
-#         if 'trial_id' not in df.columns:
-#             df.rename(columns={'id': 'trial_id'}, inplace=True)
-#         reward_group = io.get_reward_group_from_db(db_path, session)
-#         metadata = nwb_read.get_session_metadata(nwb)
-#         df['day'] = metadata['day']
-#         df['behavior_type'] = metadata['behavior_type']
-#         df['session_id'] = session
-#         df['mouse_id'] = session[:5]
+def make_behavior_table(nwb_list, session_list, db_path, cut_session, stop_flag_yaml, trial_indices_yaml):
+    if cut_session:
+        start_stop, trial_indices = io.read_stop_flags_and_indices_yaml(stop_flag_yaml, trial_indices_yaml)
+    table = []
+    for nwb, session in zip(nwb_list, session_list):
+        df = nwb_read.get_trial_table(nwb)
+        df = df.reset_index()
+        if 'trial_id' not in df.columns:
+            df.rename(columns={'id': 'trial_id'}, inplace=True)
+        reward_group = io.get_reward_group_from_db(db_path, session)
+        metadata = nwb_read.get_session_metadata(nwb)
+        df['day'] = metadata['day']
+        df['behavior_type'] = metadata['behavior_type']
+        df['session_id'] = session
+        df['mouse_id'] = session[:5]
 
-#         # Cut session.
-#         if cut_session:
-#             flags = start_stop[session]
-#             df = df.loc[df['trial_id']<=flags[1]]
-#         df = compute_performance(df, session, reward_group)
-#         table.append(df)
-#     table = pd.concat(table)
+        # Cut session.
+        if cut_session:
+            flags = start_stop[session]
+            df = df.loc[df['trial_id']<=flags[1]]
+        df = compute_performance(df, session, reward_group)
+        table.append(df)
+    table = pd.concat(table)
     
-#     return table
+    return table
 
-# def add_db_metadata_to_table(table, db_path, session_list):
-#     db = io.read_excel_db(db_path)
-#     db = db.loc[db['session_id'].isin(session_list)]
-#     db = db[['session_id', 'reward_group', 'pharmacology', 'pharma_day', 'pharma_inactivation_type', 'pharma_area']]
-#     table = pd.merge(table, db, on='session_id', how='left')
-#     return table
+def add_db_metadata_to_table(table, db_path, session_list):
+    db = io.read_excel_db(db_path)
+    db = db.loc[db['session_id'].isin(session_list)]
+    db = db[['session_id', 'reward_group', 'pharmacology', 'pharma_day', 'pharma_inactivation_type', 'pharma_area']]
+    table = pd.merge(table, db, on='session_id', how='left')
+    return table
     
-# def cut_sessions(table, stop_flag_yaml, trial_indices_yaml):
-#     start_stop, trial_indices = io.read_stop_flags_and_indices_yaml(stop_flag_yaml, trial_indices_yaml)
+def cut_sessions(table, stop_flag_yaml, trial_indices_yaml):
+    start_stop, trial_indices = io.read_stop_flags_and_indices_yaml(stop_flag_yaml, trial_indices_yaml)
     
-#     temp = []
-#     for session, flags in start_stop.items():
-#         session_data = table.loc[table['session_id'] == session]
-#         session_data = session_data.loc[session_data['trial_id']<=flags[1]]
-#         temp.append(session_data)
-#     filtered_table = pd.concat(temp)
-#     filtered_table = filtered_table.reset_index(drop=True)
+    temp = []
+    for session, flags in start_stop.items():
+        session_data = table.loc[table['session_id'] == session]
+        session_data = session_data.loc[session_data['trial_id']<=flags[1]]
+        temp.append(session_data)
+    filtered_table = pd.concat(temp)
+    filtered_table = filtered_table.reset_index(drop=True)
     
-#     return filtered_table
+    return filtered_table
 
 
-# def compute_performance(table, session_id, reward_group, block_size=20):
+def compute_performance(table, session_id, reward_group, block_size=20):
     
-#     # Add trial number for each stimulus.
-#     table['trial_w'] = table.loc[(table.early_lick==0) & (table.whisker_stim==1.0)]\
-#                                     .groupby('session_id').cumcount()+1
-#     table['trial_a'] = table.loc[(table.early_lick==0) & (table.auditory_stim==1.0)]\
-#                                     .groupby('session_id').cumcount()+1
-#     table['trial_c'] = table.loc[(table.early_lick==0) & (table.no_stim==0.0)]\
-#                                     .groupby('session_id').cumcount()+1
+    # Add trial number for each stimulus.
+    table['trial_w'] = table.loc[(table.early_lick==0) & (table.whisker_stim==1.0)]\
+                                    .groupby('session_id').cumcount()+1
+    table['trial_a'] = table.loc[(table.early_lick==0) & (table.auditory_stim==1.0)]\
+                                    .groupby('session_id').cumcount()+1
+    table['trial_c'] = table.loc[(table.early_lick==0) & (table.no_stim==0.0)]\
+                                    .groupby('session_id').cumcount()+1
 
-#     # Add performance outcome column for each stimulus.
-#     table['outcome_w'] = table.loc[(table.whisker_stim==1.0)]['lick_flag']
-#     table['outcome_a'] = table.loc[(table.auditory_stim==1.0)]['lick_flag']
-#     table['outcome_c'] = table.loc[(table.no_stim==1.0)]['lick_flag']
+    # Add performance outcome column for each stimulus.
+    table['outcome_w'] = table.loc[(table.whisker_stim==1.0)]['lick_flag']
+    table['outcome_a'] = table.loc[(table.auditory_stim==1.0)]['lick_flag']
+    table['outcome_c'] = table.loc[(table.no_stim==1.0)]['lick_flag']
 
-#     # Cumulative sum performance representation.
-#     table['cumsum_w'] = table.loc[(table.whisker_stim==1.0)]['outcome_w']\
-#                                     .map({0:-1,1:1,np.nan:0})
-#     table['cumsum_w'] = table.groupby('session_id')['cumsum_w'].transform('cumsum')
-#     table['cumsum_a'] = table.loc[(table.auditory_stim==1.0)]['outcome_a']\
-#                                     .map({0:-1,1:1,np.nan:0})
-#     table['cumsum_a'] = table.groupby('session_id')['cumsum_a'].transform('cumsum')
-#     table['cumsum_c'] = table.loc[(table.no_stim==1.0)]['outcome_c']\
-#                                     .map({0:-1,1:1,np.nan:0})
-#     table['cumsum_c'] = table.groupby('session_id')['cumsum_c'].transform('cumsum')
-
-
-#     # Add block index of n=BLOCK_SIZE trials and compute hit rate on them.
-#     table['block_id'] = table.loc[table.early_lick==0, 'trial_id'].transform(lambda x: x // block_size)
-#     # Compute hit rates. Use transform to propagate hit rate to all entries.
-#     table['hr_w'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_w']\
-#                                 .transform('mean')
-#     table['hr_a'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_a']\
-#                                 .transform('mean')
-#     table['hr_c'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_c']\
-#                                 .transform('mean')
-
-#     # # Also store performance in new data frame with block as time steps for convenience.
-#     # cols = ['session_id','mouse_id','session_day','reward_group','block_id']
-#     # df_block_perf = table.loc[table.early_lick==0, cols].drop_duplicates()
-#     # df_block_perf = df_block_perf.reset_index()
-#     # # Compute hit rates.
-#     # df_block_perf['hr_w'] = table.groupby(['session_id', 'block_id'], as_index=False)\
-#     #                                 .agg(np.nanmean)['outcome_w']
-#     # df_block_perf['hr_a'] = table.groupby(['session_id', 'block_id'], as_index=False)\
-#     #                                 .agg(np.nanmean)['outcome_a']
-#     # df_block_perf['hr_c'] = table.groupby(['session_id', 'block_id'], as_index=False)\
-#     #                                 .agg(np.nanmean)['outcome_c']
-
-#     return table
+    # Cumulative sum performance representation.
+    table['cumsum_w'] = table.loc[(table.whisker_stim==1.0)]['outcome_w']\
+                                    .map({0:-1,1:1,np.nan:0})
+    table['cumsum_w'] = table.groupby('session_id')['cumsum_w'].transform('cumsum')
+    table['cumsum_a'] = table.loc[(table.auditory_stim==1.0)]['outcome_a']\
+                                    .map({0:-1,1:1,np.nan:0})
+    table['cumsum_a'] = table.groupby('session_id')['cumsum_a'].transform('cumsum')
+    table['cumsum_c'] = table.loc[(table.no_stim==1.0)]['outcome_c']\
+                                    .map({0:-1,1:1,np.nan:0})
+    table['cumsum_c'] = table.groupby('session_id')['cumsum_c'].transform('cumsum')
 
 
-# def plot_single_mouse_performance_across_days(df, mouse_id, color_palette):
-#     """ Plots performance of a single mouse across all auditory and whisker sessions.
+    # Add block index of n=BLOCK_SIZE trials and compute hit rate on them.
+    table['block_id'] = table.loc[table.early_lick==0, 'trial_id'].transform(lambda x: x // block_size)
+    # Compute hit rates. Use transform to propagate hit rate to all entries.
+    table['hr_w'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_w']\
+                                .transform('mean')
+    table['hr_a'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_a']\
+                                .transform('mean')
+    table['hr_c'] = table.groupby(['session_id', 'block_id'], as_index=False)['outcome_c']\
+                                .transform('mean')
 
-#     Args:
-#         df (_type_): _description_
-#         mouse_id (_type_): _description_
-#         color_palette (_type_): _description_
-#     """
+    # # Also store performance in new data frame with block as time steps for convenience.
+    # cols = ['session_id','mouse_id','session_day','reward_group','block_id']
+    # df_block_perf = table.loc[table.early_lick==0, cols].drop_duplicates()
+    # df_block_perf = df_block_perf.reset_index()
+    # # Compute hit rates.
+    # df_block_perf['hr_w'] = table.groupby(['session_id', 'block_id'], as_index=False)\
+    #                                 .agg(np.nanmean)['outcome_w']
+    # df_block_perf['hr_a'] = table.groupby(['session_id', 'block_id'], as_index=False)\
+    #                                 .agg(np.nanmean)['outcome_a']
+    # df_block_perf['hr_c'] = table.groupby(['session_id', 'block_id'], as_index=False)\
+    #                                 .agg(np.nanmean)['outcome_c']
 
-#     # Set plot parameters.
-#     raster_marker = 2
-#     marker_width = 2
-#     block_size = 20
-#     reward_group = table.loc[table.mouse_id==mouse_id, 'reward_group'].iloc[0]
-#     color_wh = color_palette[2]
-#     if reward_group == 'R-':  # green for whisker R+, red for R-.
-#         color_wh = color_palette[3]
+    return table
 
-#     # Find ID of sessions to plot.
-#     # Start with more days than needed in the right order and filter out.
-#     # days = [f'-{i}' for i in range(30,0,-1)] + ['0'] + [f'+{i}' for i in range(1,30)]
-#     days  = [iday for iday in table.day.drop_duplicates()]
-#     # Order dataframe by days.
-#     f = lambda x: x.map({iday: iorder for iorder, iday in enumerate(days)})
-#     table = table.sort_values(by='day', key=f)
-#     sessions = table.loc[(table.mouse_id==mouse_id) & (table.day.isin(days)),'session_id']
-#     sessions = sessions.drop_duplicates().to_list()
+
+def plot_single_mouse_performance_across_days(df, mouse_id, color_palette):
+    """ Plots performance of a single mouse across all auditory and whisker sessions.
+
+    Args:
+        df (_type_): _description_
+        mouse_id (_type_): _description_
+        color_palette (_type_): _description_
+    """
+
+    # Set plot parameters.
+    raster_marker = 2
+    marker_width = 2
+    block_size = 20
+    reward_group = table.loc[table.mouse_id==mouse_id, 'reward_group'].iloc[0]
+    color_wh = color_palette[2]
+    if reward_group == 'R-':  # green for whisker R+, red for R-.
+        color_wh = color_palette[3]
+
+    # Find ID of sessions to plot.
+    # Start with more days than needed in the right order and filter out.
+    # days = [f'-{i}' for i in range(30,0,-1)] + ['0'] + [f'+{i}' for i in range(1,30)]
+    days  = [iday for iday in table.day.drop_duplicates()]
+    # Order dataframe by days.
+    f = lambda x: x.map({iday: iorder for iorder, iday in enumerate(days)})
+    table = table.sort_values(by='day', key=f)
+    sessions = table.loc[(table.mouse_id==mouse_id) & (table.day.isin(days)),'session_id']
+    sessions = sessions.drop_duplicates().to_list()
     
-#     # Initialize figure.
-#     # f, axes = plt.subplots(1, 2, gridspec_kw={'width_ratios': [1, 5]}, figsize=(20,6))
-#     fig = plt.figure(figsize=(4,6))
-#     ax = plt.gca()
+    # Initialize figure.
+    # f, axes = plt.subplots(1, 2, gridspec_kw={'width_ratios': [1, 5]}, figsize=(20,6))
+    fig = plt.figure(figsize=(4,6))
+    ax = plt.gca()
 
-#     # Plot performance.
-#     d = table.loc[(table.session_id.isin(sessions)), ['session_id','day','hr_c','hr_a','hr_w']]
-#     d = d.groupby(['session_id','day'], as_index=False).agg("mean")
-#     d = d.sort_values(by='day', key=f)
-#     sns.lineplot(data=d, x='day', y='hr_c', color=color_palette[5], ax=ax,
-#                  marker='o')
-#     sns.lineplot(data=d, x='day', y='hr_a', color=color_palette[0], ax=ax,
-#                  marker='o')
-#     if reward_group in ['R+', 'R-']:
-#         sns.lineplot(data=d, x='day', y='hr_w', color=color_wh, ax=ax,
-#                      marker='o')
+    # Plot performance.
+    d = table.loc[(table.session_id.isin(sessions)), ['session_id','day','hr_c','hr_a','hr_w']]
+    d = d.groupby(['session_id','day'], as_index=False).agg("mean")
+    d = d.sort_values(by='day', key=f)
+    sns.lineplot(data=d, x='day', y='hr_c', color=color_palette[5], ax=ax,
+                 marker='o')
+    sns.lineplot(data=d, x='day', y='hr_a', color=color_palette[0], ax=ax,
+                 marker='o')
+    if reward_group in ['R+', 'R-']:
+        sns.lineplot(data=d, x='day', y='hr_w', color=color_wh, ax=ax,
+                     marker='o')
 
-#     ax.set_ylim([-0.2,1.05])
-#     ax.set_xlabel('Performance across training days')
-#     ax.set_ylabel('Lick probability')
-#     ax.set_title('Training days')
-#     fig.suptitle(f'{mouse_id}')
-#     sns.despine()
+    ax.set_ylim([-0.2,1.05])
+    ax.set_xlabel('Performance across training days')
+    ax.set_ylabel('Lick probability')
+    ax.set_title('Training days')
+    fig.suptitle(f'{mouse_id}')
+    sns.despine()
 
-# def plot_single_session(table, session_id, ax=None):
-#     """ Plots performance of a single session with average per block and single tri al raster plot.
+def plot_single_session(table, session_id, ax=None):
+    """ Plots performance of a single session with average per block and single tri al raster plot.
 
-#     Args:
-#         table (_type_): _description_
-#         mouse_id (_type_): _description_
-#         palette (_type_): _description_
-#     """
+    Args:
+        table (_type_): _description_
+        mouse_id (_type_): _description_
+        palette (_type_): _description_
+    """
     
-#     # Set plot parameters.
-#     raster_marker = 2
-#     marker_width = 2
-#     figsize = (15,6)
-#     block_size = 20
-#     reward_group = table.loc[table.session_id==session_id, 'reward_group'].iloc[0]
-#     palette = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
-#     color_wh = palette[2]
-#     if reward_group == 'R-':  # #238443 for whisker R+, #d51a1c for R-.
-#         color_wh = palette[3]    
+    # Set plot parameters.
+    raster_marker = 2
+    marker_width = 2
+    figsize = (15,6)
+    block_size = 20
+    reward_group = table.loc[table.session_id==session_id, 'reward_group'].iloc[0]
+    palette = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
+    color_wh = palette[2]
+    if reward_group == 'R-':  # #238443 for whisker R+, #d51a1c for R-.
+        color_wh = palette[3]    
 
-#     # Initialize figure.
-#     if ax is None:
-#         f = plt.figure(figsize=figsize)
-#         ax = plt.gca()
+    # Initialize figure.
+    if ax is None:
+        f = plt.figure(figsize=figsize)
+        ax = plt.gca()
 
-#     # Plot performance of the session across time.
-#     d = table.loc[table.session_id==session_id]
-#     # Select entries with trial numbers at middle of each block for alignment with
-#     # raster plot.
-#     d = d.sort_values(['trial_id'])
-#     d = d.loc[d.early_lick==0][int(block_size/2)::block_size]
-#     if not d.hr_c.isna().all():
-#         sns.lineplot(data=d,x='trial_id',y='hr_c',color=palette[5],ax=ax,
-#                     marker='o')
-#     if not d.hr_a.isna().all():
-#         sns.lineplot(data=d,x='trial_id',y='hr_a',color=palette[0],ax=ax,
-#                     marker='o')
-#     if not d.hr_w.isna().all():
-#         sns.lineplot(data=d,x='trial_id',y='hr_w',color=color_wh,ax=ax,
-#                      marker='o')
+    # Plot performance of the session across time.
+    d = table.loc[table.session_id==session_id]
+    # Select entries with trial numbers at middle of each block for alignment with
+    # raster plot.
+    d = d.sort_values(['trial_id'])
+    d = d.loc[d.early_lick==0][int(block_size/2)::block_size]
+    if not d.hr_c.isna().all():
+        sns.lineplot(data=d,x='trial_id',y='hr_c',color=palette[5],ax=ax,
+                    marker='o')
+    if not d.hr_a.isna().all():
+        sns.lineplot(data=d,x='trial_id',y='hr_a',color=palette[0],ax=ax,
+                    marker='o')
+    if not d.hr_w.isna().all():
+        sns.lineplot(data=d,x='trial_id',y='hr_w',color=color_wh,ax=ax,
+                     marker='o')
 
-#     # Plot single trial raster plot.
-#     d = table.loc[table.session_id==session_id]
-#     if not d.hr_c.isna().all():
-#         ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_c']-0.1,
-#                         color=palette[4],marker=raster_marker, linewidths=marker_width)
-#         ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_c']-1.1,
-#                         color=palette[5],marker=raster_marker, linewidths=marker_width)
+    # Plot single trial raster plot.
+    d = table.loc[table.session_id==session_id]
+    if not d.hr_c.isna().all():
+        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_c']-0.1,
+                        color=palette[4],marker=raster_marker, linewidths=marker_width)
+        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_c']-1.1,
+                        color=palette[5],marker=raster_marker, linewidths=marker_width)
 
-#     if not d.hr_a.isna().all():
-#         ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_a']-0.15,
-#                         color=palette[1],marker=raster_marker, linewidths=marker_width)
-#         ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_a']-1.15,
-#                         color=palette[0],marker=raster_marker, linewidths=marker_width)
+    if not d.hr_a.isna().all():
+        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_a']-0.15,
+                        color=palette[1],marker=raster_marker, linewidths=marker_width)
+        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_a']-1.15,
+                        color=palette[0],marker=raster_marker, linewidths=marker_width)
 
-#     if not d.hr_w.isna().all():
-#         ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_w']-0.2,
-#                         color=palette[3],marker=raster_marker, linewidths=marker_width)
-#         ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_w']-1.2,
-#                         color=palette[2],marker=raster_marker, linewidths=marker_width)
+    if not d.hr_w.isna().all():
+        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_w']-0.2,
+                        color=palette[3],marker=raster_marker, linewidths=marker_width)
+        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_w']-1.2,
+                        color=palette[2],marker=raster_marker, linewidths=marker_width)
 
     nmax_trials = d.trial_id.max()
     ax.set_ylim([-0.2,1.05])
@@ -249,160 +249,160 @@ plt.rcParams['svg.fonttype'] = 'none'
     sns.despine()
     
 
-# def plot_average_across_days(df, reward_group, palette, days=[-2,-1,0,1,2], nmax_trials=240, ax=None):
+def plot_average_across_days(df, reward_group, palette, days=[-2,-1,0,1,2], nmax_trials=240, ax=None):
 
-#     df = df.loc[(df.trial_id <=nmax_trials) & (df.reward_group==reward_group), ['mouse_id','session_id','day','hr_c','hr_a','hr_w']]
-#     df = df.groupby(['mouse_id','session_id','day'], as_index=False).agg(np.mean)
-#     # Sort dfframe by days.
-#     df = df.loc[df.day.isin(days)]
-#     # days = [iday for iday in df.day.drop_duplicates()]
-#     # f = lambda x: x.map({iday: iorder for iorder, iday in enumerate(days)})
-#     # df = df.sort_values(by='day', key=f)
+    df = df.loc[(df.trial_id <=nmax_trials) & (df.reward_group==reward_group), ['mouse_id','session_id','day','hr_c','hr_a','hr_w']]
+    df = df.groupby(['mouse_id','session_id','day'], as_index=False).agg(np.mean)
+    # Sort dfframe by days.
+    df = df.loc[df.day.isin(days)]
+    # days = [iday for iday in df.day.drop_duplicates()]
+    # f = lambda x: x.map({iday: iorder for iorder, iday in enumerate(days)})
+    # df = df.sort_values(by='day', key=f)
 
-#     color = palette[4]
-#     if reward_group=='R-':
-#         color = palette[5]
-#     sns.lineplot(data=df, x='day', y='hr_c', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
-#     # sns.pointplot(df=df, x='day', y='hr_c', order=days, join=False, color=palette[4], ax=ax)
+    color = palette[4]
+    if reward_group=='R-':
+        color = palette[5]
+    sns.lineplot(data=df, x='day', y='hr_c', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
+    # sns.pointplot(df=df, x='day', y='hr_c', order=days, join=False, color=palette[4], ax=ax)
 
-#     color = palette[0]
-#     if reward_group=='R-':
-#         color = palette[1]
-#     sns.lineplot(data=df, x='day', y='hr_a', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
-#     # sns.pointplot(df=df, x='day', y='hr_a', order=days, join=False, color=palette[0], ax=ax)
+    color = palette[0]
+    if reward_group=='R-':
+        color = palette[1]
+    sns.lineplot(data=df, x='day', y='hr_a', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
+    # sns.pointplot(df=df, x='day', y='hr_a', order=days, join=False, color=palette[0], ax=ax)
 
-#     color = palette[2]
-#     if reward_group=='R-':
-#         color = palette[3]
-#     sns.lineplot(data=df, x='day', y='hr_w', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
-#     # sns.pointplot(data=df, x='day', y='hr_w', order=days, color=color_wh)
+    color = palette[2]
+    if reward_group=='R-':
+        color = palette[3]
+    sns.lineplot(data=df, x='day', y='hr_w', estimator=np.mean, color=color, alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
+    # sns.pointplot(data=df, x='day', y='hr_w', order=days, color=color_wh)
 
-#     if ax:
-#         ax.set_yticks([i*0.2 for i in range(6)])
-#         ax.set_xlabel('Training days')
-#         ax.set_ylabel('Lick probability')
-#     sns.despine()
+    if ax:
+        ax.set_yticks([i*0.2 for i in range(6)])
+        ax.set_xlabel('Training days')
+        ax.set_ylabel('Lick probability')
+    sns.despine()
 
 
-# def plot_perf_across_blocks(df, reward_group, day, palette, nmax_trials=None, ax=None):
+def plot_perf_across_blocks(df, reward_group, day, palette, nmax_trials=None, ax=None):
 
-#     if nmax_trials:
-#         df = df.loc[(df.trial_id<=nmax_trials)]
-#     df = df.loc[(df.reward_group==reward_group) & (df.day==day),
-#                 ['mouse_id','session_id','block_id','hr_c','hr_a','hr_w']]
-#     df = df.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg("mean")
+    if nmax_trials:
+        df = df.loc[(df.trial_id<=nmax_trials)]
+    df = df.loc[(df.reward_group==reward_group) & (df.day==day),
+                ['mouse_id','session_id','block_id','hr_c','hr_a','hr_w']]
+    df = df.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg("mean")
 
-#     color_c = palette[4]
-#     if reward_group=='R-':
-#         color_c = palette[5]
-#     sns.lineplot(data=df, x='block_id', y='hr_c', estimator='mean',
-#                  color=color_c, alpha=1, legend=True, marker='o',
-#                  errorbar='ci', err_style='band', ax=ax)
+    color_c = palette[4]
+    if reward_group=='R-':
+        color_c = palette[5]
+    sns.lineplot(data=df, x='block_id', y='hr_c', estimator='mean',
+                 color=color_c, alpha=1, legend=True, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
     
-#     color_a = palette[0]
-#     if reward_group=='R-':
-#         color_a = palette[1]
-#     sns.lineplot(data=df, x='block_id', y='hr_a', estimator='mean',
-#                  color=color_a, alpha=1, legend=True, marker='o',
-#                  errorbar='ci', err_style='band', ax=ax)
+    color_a = palette[0]
+    if reward_group=='R-':
+        color_a = palette[1]
+    sns.lineplot(data=df, x='block_id', y='hr_a', estimator='mean',
+                 color=color_a, alpha=1, legend=True, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
     
-#     color_wh = palette[2]
-#     if reward_group=='R-':
-#         color_wh = palette[3]
-#     sns.lineplot(data=df, x='block_id', y='hr_w', estimator='mean',
-#                  color=color_wh ,alpha=1, legend=True, marker='o',
-#                  errorbar='ci', err_style='band', ax=ax)
+    color_wh = palette[2]
+    if reward_group=='R-':
+        color_wh = palette[3]
+    sns.lineplot(data=df, x='block_id', y='hr_w', estimator='mean',
+                 color=color_wh ,alpha=1, legend=True, marker='o',
+                 errorbar='ci', err_style='band', ax=ax)
 
-#     nblocks = int(df.block_id.max())
-#     if not ax:
-#         ax = plt.gca()
-#     ax.set_xticks(range(nblocks))
-#     ax.set_ylim([0,1.1])
-#     ax.set_yticks([i*0.2 for i in range(6)])
-#     ax.set_xlabel('Block (20 trials)')
-#     ax.set_ylabel('Lick probability')
+    nblocks = int(df.block_id.max())
+    if not ax:
+        ax = plt.gca()
+    ax.set_xticks(range(nblocks))
+    ax.set_ylim([0,1.1])
+    ax.set_yticks([i*0.2 for i in range(6)])
+    ax.set_xlabel('Block (20 trials)')
+    ax.set_ylabel('Lick probability')
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
     
-#     # nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
-#     # session_list = ['MS039_20240305_085825.nwb',
-#     #                 'MS041_20240305_123141.nwb',
-#     #                 'MS065_20240421_150811.nwb',
-#     #                 'MS067_20240422_152536.nwb',
-#     #                 'MS069_20240422_154117.nwb',
-#     #                 'MS128_20240926_111219.nwb',
-#     #                 'MS129_20240926_112052.nwb',
-#     #                 'MS130_20240925_112915.nwb',
-#     #                 'MS131_20240926_120457.nwb',
-#     #                 'MS135_20240925_133312.nwb']
+    # nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
+    # session_list = ['MS039_20240305_085825.nwb',
+    #                 'MS041_20240305_123141.nwb',
+    #                 'MS065_20240421_150811.nwb',
+    #                 'MS067_20240422_152536.nwb',
+    #                 'MS069_20240422_154117.nwb',
+    #                 'MS128_20240926_111219.nwb',
+    #                 'MS129_20240926_112052.nwb',
+    #                 'MS130_20240925_112915.nwb',
+    #                 'MS131_20240926_120457.nwb',
+    #                 'MS135_20240925_133312.nwb']
     
-#     # # session_list = ['MS061_20240421_144950.nwb',
-#     # #                 'MS066_20240422_143733.nwb',
-#     # #                 'MS066_20240422_143733.nwb',
-#     # #                 'MS127_20240926_105210.nwb',
-#     # #                 'MS132_20240925_115907.nwb',
-#     # #                 'MS133_20240925_121916.nwb',
-#     # #                 'MS134_20240925_114817.nwb']
+    # # session_list = ['MS061_20240421_144950.nwb',
+    # #                 'MS066_20240422_143733.nwb',
+    # #                 'MS066_20240422_143733.nwb',
+    # #                 'MS127_20240926_105210.nwb',
+    # #                 'MS132_20240925_115907.nwb',
+    # #                 'MS133_20240925_121916.nwb',
+    # #                 'MS134_20240925_114817.nwb']
 
-#     # nwb_list = [os.path.join(nwb_dir, nwb) for nwb in session_list]
-#     # reward_group = 'R+'
+    # nwb_list = [os.path.join(nwb_dir, nwb) for nwb in session_list]
+    # reward_group = 'R+'
     
-#     # table = []
-#     # for nwb, session in zip(nwb_list, session_list):
-#     #     df = nwb_read.get_trial_table(nwb)
-#     #     df = df.reset_index()
-#     #     df.rename(columns={'id': 'trial_id'}, inplace=True)
-#     #     df = compute_performance(df, session, reward_group)
-#     #     table.append(df)
-#     # table = pd.concat(table)
-#     # table['day'] = '0'
-#     # table = table.astype({'mouse_id':str,
-#     #                       'session_id':str,
-#     #                       'day':str})
+    # table = []
+    # for nwb, session in zip(nwb_list, session_list):
+    #     df = nwb_read.get_trial_table(nwb)
+    #     df = df.reset_index()
+    #     df.rename(columns={'id': 'trial_id'}, inplace=True)
+    #     df = compute_performance(df, session, reward_group)
+    #     table.append(df)
+    # table = pd.concat(table)
+    # table['day'] = '0'
+    # table = table.astype({'mouse_id':str,
+    #                       'session_id':str,
+    #                       'day':str})
     
-#     # table = table.loc[table.block_id<=17]
-#     # sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
-#     # palette = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
-#     # plt.figure(figsize=(15,6))
-#     # plot_perf_across_blocks(table, reward_group, palette, nmax_trials=300, ax=None)
-#     # sns.despine()
+    # table = table.loc[table.block_id<=17]
+    # sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
+    # palette = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#cccccc', '#333333']
+    # plt.figure(figsize=(15,6))
+    # plot_perf_across_blocks(table, reward_group, palette, nmax_trials=300, ax=None)
+    # sns.despine()
 
-#     # Read behavior results.
-#     SESSIONS_DB_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
-#     # SESSIONS_DB_PATH = 'C:\\Users\\aprenard\\recherches\\fast-learning\\docs\\sessions_muscimol_GF.xlsx'
-#     NWB_FOLDER_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB'
-#     stop_flag_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/stop_flags_end_session.yaml"
-#     trial_indices_yaml = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_end_session.yaml"
+    # Read behavior results.
+    SESSIONS_DB_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\session_metadata.xlsx'
+    # SESSIONS_DB_PATH = 'C:\\Users\\aprenard\\recherches\\fast-learning\\docs\\sessions_muscimol_GF.xlsx'
+    NWB_FOLDER_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\NWB'
+    stop_flag_yaml = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/stop_flags/stop_flags_end_session.yaml"
+    trial_indices_yaml = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\mice_info\stop_flags\trial_indices_end_session.yaml"
 
-#     # Plot parameters.
-#     sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-#                 rc={'font.sans-serif':'Arial'})
-#     PALETTE = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#333333', '#cccccc',]
-#     PALETTE = sns.color_palette(PALETTE)
+    # Plot parameters.
+    sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+                rc={'font.sans-serif':'Arial'})
+    PALETTE = ['#225ea8', '#00FFFF', '#238443', '#d51a1c', '#333333', '#cccccc',]
+    PALETTE = sns.color_palette(PALETTE)
     
-#     mice_behavior = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
-#                                         exclude_cols = ['exclude'],
-#                                         optogenetic = ['no', np.nan],
-#                                         pharmacology = ['no',np.nan],
-#                                         )
+    mice_behavior = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
+                                        exclude_cols = ['exclude'],
+                                        optogenetic = ['no', np.nan],
+                                        pharmacology = ['no',np.nan],
+                                        )
     
-#     mice_imaging = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
-#                                         exclude_cols = ['exclude',  'two_p_exclude'],
-#                                         optogenetic = ['no', np.nan],
-#                                         pharmacology = ['no',np.nan],
-#                                         two_p_imaging = 'yes',
-#                                         )
-#     table = make_behavior_table(nwb_list, session_list, SESSIONS_DB_PATH, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
-#     # Save the table to a CSV file
-#     save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv'
-#     table.to_csv(save_path, index=False)
+    mice_imaging = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
+                                        exclude_cols = ['exclude',  'two_p_exclude'],
+                                        optogenetic = ['no', np.nan],
+                                        pharmacology = ['no',np.nan],
+                                        two_p_imaging = 'yes',
+                                        )
+    table = make_behavior_table(nwb_list, session_list, SESSIONS_DB_PATH, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
+    # Save the table to a CSV file
+    save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv'
+    table.to_csv(save_path, index=False)
     
-#     mice_opto = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
-#                                         exclude_cols = ['exclude'],
-#                                         optogenetic = ['yes'],
-#                                         pharmacology = ['no',np.nan],
-#                                         )
+    mice_opto = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
+                                        exclude_cols = ['exclude'],
+                                        optogenetic = ['yes'],
+                                        pharmacology = ['no',np.nan],
+                                        )
 
     # Read behavior results.
     SESSIONS_DB_PATH = io.solve_common_paths('db')
@@ -410,21 +410,21 @@ plt.rcParams['svg.fonttype'] = 'none'
     stop_flag_yaml = io.solve_common_paths('stop_flags')
     trial_indices_yaml = io.solve_common_paths('trial_indices')
 
-#     particle_test_mice = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
-#                                         exclude_cols = ['exclude'],
-#                                         day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
-#                                         )
-#     session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
-#         SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
-#         exclude_cols=['exclude'],
-#         day = ["-2", "-1", '0', '+1', '+2'],
-#         # day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
-#         subject_id = mice_muscimol,
-#         )   
-#     table_particle_test = make_behavior_table(nwb_list, session_list, cut_session=False, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
-#     # Save the table to a CSV file
-#     save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_particle_test.csv'
-#     table_particle_test.to_csv(save_path, index=False)
+    particle_test_mice = io.select_mice_from_db(SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
+                                        exclude_cols = ['exclude'],
+                                        day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
+                                        )
+    session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
+        SESSIONS_DB_PATH, NWB_FOLDER_PATH, experimenters=None,
+        exclude_cols=['exclude'],
+        day = ["-2", "-1", '0', '+1', '+2'],
+        # day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
+        subject_id = mice_muscimol,
+        )   
+    table_particle_test = make_behavior_table(nwb_list, session_list, cut_session=False, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
+    # Save the table to a CSV file
+    save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_particle_test.csv'
+    table_particle_test.to_csv(save_path, index=False)
 
     # Plot parameters.
     sns.set_theme(context='talk', style='ticks', palette='deep', font='sans-serif', font_scale=1)
@@ -482,11 +482,6 @@ plt.rcParams['svg.fonttype'] = 'none'
     table_file = io.adjust_path_to_host(r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
     table = pd.read_csv(table_file)
 
-
-#     # ############################################# 
-#     # Day 0 for each mouse.
-#     # #############################################
-
     # ############################################# 
     # Day 0 for each mouse.
     # #############################################
@@ -519,215 +514,215 @@ plt.rcParams['svg.fonttype'] = 'none'
     # Average performance across days.
     # ################################
 
-#     pdf_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/behaviorsingle_sessions_muscimol.pdf'
-#     pdf_path = io.adjust_path_to_host(pdf_path)
+    pdf_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/behaviorsingle_sessions_muscimol.pdf'
+    pdf_path = io.adjust_path_to_host(pdf_path)
 
-#     with PdfPages(pdf_path) as pdf:
-#         for session_id in session_list:
-#             plot_single_session(table, session_id, ax=None)
-#             pdf.savefig()
-#             plt.close()
-
-
-#     # ################################
-#     # Average performance across days.
-#     # ################################
-
-#     # Remove spurious whiske trials coming mapping session.
-#     table.loc[table.day.isin([-2, -1]), 'outcome_w'] = np.nan
-#     table.loc[table.day.isin([-2, -1]), 'hr_w'] = np.nan
-
-#     # Perf across days.
-#     plt.figure(figsize=(6,6))
-#     plot_average_across_days(table, 'R-', PALETTE, days=[-2,-1,0,1,2], nmax_trials=240, ax=None)
-#     plot_average_across_days(table, 'R+', PALETTE, days=[-2,-1,0,1,2], nmax_trials=240, ax=None)
+    with PdfPages(pdf_path) as pdf:
+        for session_id in session_list:
+            plot_single_session(table, session_id, ax=None)
+            pdf.savefig()
+            plt.close()
 
 
-#     # Histogram quantifying D0.
-#     # -------------------------
+    # ################################
+    # Average performance across days.
+    # ################################
+
+    # Remove spurious whiske trials coming mapping session.
+    table.loc[table.day.isin([-2, -1]), 'outcome_w'] = np.nan
+    table.loc[table.day.isin([-2, -1]), 'hr_w'] = np.nan
+
+    # Perf across days.
+    plt.figure(figsize=(6,6))
+    plot_average_across_days(table, 'R-', PALETTE, days=[-2,-1,0,1,2], nmax_trials=240, ax=None)
+    plot_average_across_days(table, 'R+', PALETTE, days=[-2,-1,0,1,2], nmax_trials=240, ax=None)
+
+
+    # Histogram quantifying D0.
+    # -------------------------
     
-#     # Select data of day 0
-#     day_0_data = table[table['day'] == 0]
-#     avg_performance = day_0_data.groupby(['mouse_id', 'reward_group'])['outcome_w'].mean().reset_index()
+    # Select data of day 0
+    day_0_data = table[table['day'] == 0]
+    avg_performance = day_0_data.groupby(['mouse_id', 'reward_group'])['outcome_w'].mean().reset_index()
 
-#     # Plot histogram to compare average performance across mice of the two reward groups
-#     plt.figure(figsize=(4, 6))
-#     sns.barplot(data=avg_performance, x='reward_group', y='outcome_w', palette=PALETTE[2:4])
-#     sns.stripplot(data=avg_performance, x='reward_group', y='outcome_w', color=PALETTE[4], jitter=False, dodge=True)
-#     plt.xlabel('Reward grouop')
-#     plt.ylabel('Lick probability')
-#     plt.ylim([0, 1])
-#     sns.despine()
+    # Plot histogram to compare average performance across mice of the two reward groups
+    plt.figure(figsize=(4, 6))
+    sns.barplot(data=avg_performance, x='reward_group', y='outcome_w', palette=PALETTE[2:4])
+    sns.stripplot(data=avg_performance, x='reward_group', y='outcome_w', color=PALETTE[4], jitter=False, dodge=True)
+    plt.xlabel('Reward grouop')
+    plt.ylabel('Lick probability')
+    plt.ylim([0, 1])
+    sns.despine()
 
-#     # Test significance with Mann-Whitney U test
-#     def test_significance(data, group_col, value_col, group1, group2):
-#         group1_data = data[data[group_col] == group1][value_col]
-#         group2_data = data[data[group_col] == group2][value_col]
-#         stat, p_value = mannwhitneyu(group1_data, group2_data, alternative='two-sided')
-#         return stat, p_value
+    # Test significance with Mann-Whitney U test
+    def test_significance(data, group_col, value_col, group1, group2):
+        group1_data = data[data[group_col] == group1][value_col]
+        group2_data = data[data[group_col] == group2][value_col]
+        stat, p_value = mannwhitneyu(group1_data, group2_data, alternative='two-sided')
+        return stat, p_value
 
-#     # Perform the test
-#     stat, p_value = test_significance(avg_performance, 'reward_group', 'outcome_w', 'R+', 'R-')
+    # Perform the test
+    stat, p_value = test_significance(avg_performance, 'reward_group', 'outcome_w', 'R+', 'R-')
 
-#     # Add stars to the plot to indicate significance
-#     ax = plt.gca()
-#     if p_value < 0.001:
-#         plt.text(0.5, 0.9, '***', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-#     elif p_value < 0.01:
-#         plt.text(0.5, 0.9, '**', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-#     elif p_value < 0.05:
-#         plt.text(0.5, 0.9, '*', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
+    # Add stars to the plot to indicate significance
+    ax = plt.gca()
+    if p_value < 0.001:
+        plt.text(0.5, 0.9, '***', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
+    elif p_value < 0.01:
+        plt.text(0.5, 0.9, '**', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
+    elif p_value < 0.05:
+        plt.text(0.5, 0.9, '*', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
 
-#     # Save the dataframe and stats to CSV files
-#     save_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\analysis_output\behavior'
-#     avg_performance.to_csv(os.path.join(save_path, 'performance_D0_barplot_imagingmice.csv'), index=False)
-#     with open(os.path.join(save_path, 'performance_D0_barplot_imagingmice_stats.csv'), 'w') as f:
-#         f.write(f'Statistic: {stat}, P-value: {p_value}')
+    # Save the dataframe and stats to CSV files
+    save_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\analysis_output\behavior'
+    avg_performance.to_csv(os.path.join(save_path, 'performance_D0_barplot_imagingmice.csv'), index=False)
+    with open(os.path.join(save_path, 'performance_D0_barplot_imagingmice_stats.csv'), 'w') as f:
+        f.write(f'Statistic: {stat}, P-value: {p_value}')
 
 
-#     # Plot first whisker hit for both reward group (sanity check).
-#     # -----------------------------------------------------------
+    # Plot first whisker hit for both reward group (sanity check).
+    # -----------------------------------------------------------
 
-#     # Select data of day 0
-#     day_0_data = table[(table['day'] == 0) & (table.whisker_stim == 1)]
-#     f = lambda x: x.reset_index(drop=True).idxmax()+1
-#     fh = day_0_data.groupby(['mouse_id', 'reward_group'], as_index=False)[['outcome_w']].agg(f)
+    # Select data of day 0
+    day_0_data = table[(table['day'] == 0) & (table.whisker_stim == 1)]
+    f = lambda x: x.reset_index(drop=True).idxmax()+1
+    fh = day_0_data.groupby(['mouse_id', 'reward_group'], as_index=False)[['outcome_w']].agg(f)
     
-#     plt.figure(figsize=(4, 6))
-#     sns.barplot(data=fh, x='reward_group', y='outcome_w', palette=PALETTE[2:4])
-#     sns.stripplot(data=fh, x='reward_group', y='outcome_w', color=PALETTE[4], jitter=False, dodge=True, alpha=.4)
-#     sns.despine()
+    plt.figure(figsize=(4, 6))
+    sns.barplot(data=fh, x='reward_group', y='outcome_w', palette=PALETTE[2:4])
+    sns.stripplot(data=fh, x='reward_group', y='outcome_w', color=PALETTE[4], jitter=False, dodge=True, alpha=.4)
+    sns.despine()
 
 
-#     # Particle test plot.
-#     # -------------------
+    # Particle test plot.
+    # -------------------
 
-#     plt.figure(figsize=(4, 6))
-#     df = table_particle_test.loc[table_particle_test.reward_group=='R+']
-#     df = df.groupby(['mouse_id', 'behavior'])['outcome_w'].mean().reset_index()
-#     sns.barplot(data=df, x='behavior', y='outcome_w', order=['whisker_on_1', 'whisker_off', 'whisker_on_2'])
-#     ax = plt.gca()
+    plt.figure(figsize=(4, 6))
+    df = table_particle_test.loc[table_particle_test.reward_group=='R+']
+    df = df.groupby(['mouse_id', 'behavior'])['outcome_w'].mean().reset_index()
+    sns.barplot(data=df, x='behavior', y='outcome_w', order=['whisker_on_1', 'whisker_off', 'whisker_on_2'])
+    ax = plt.gca()
 
-#     # Draw lines to connect each individual mouse across the three behavior types
-#     df = table_particle_test.groupby(['mouse_id', 'behavior'])['outcome_w'].mean().reset_index()
-#     for mouse_id in df.mouse_id.unique():
-#         a = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_on_1'), 'outcome_w'].to_numpy()[0]
-#         b = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_off'), 'outcome_w'].to_numpy()[0]
-#         plt.plot(['whisker_on_1', 'whisker_off'], [a,b], alpha=.4, color='grey', marker='')
-#         a = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_off'), 'outcome_w'].to_numpy()[0]
-#         b = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_on_2'), 'outcome_w'].to_numpy()[0]
-#         plt.plot(['whisker_off', 'whisker_on_2'], [a,b], alpha=.4, color='grey', marker='')
-#         # temp = df.loc[(df.mouse_id==mouse_id) & (df.behavior.isin(['whisker_off', 'whisker_on_2']))]
-#         # plt.plot(temp['behavior'], temp['outcome_w'], alpha=.6, color='grey', marker='o')
-#     sns.despine()
+    # Draw lines to connect each individual mouse across the three behavior types
+    df = table_particle_test.groupby(['mouse_id', 'behavior'])['outcome_w'].mean().reset_index()
+    for mouse_id in df.mouse_id.unique():
+        a = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_on_1'), 'outcome_w'].to_numpy()[0]
+        b = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_off'), 'outcome_w'].to_numpy()[0]
+        plt.plot(['whisker_on_1', 'whisker_off'], [a,b], alpha=.4, color='grey', marker='')
+        a = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_off'), 'outcome_w'].to_numpy()[0]
+        b = df.loc[(df.mouse_id==mouse_id) & (df.behavior == 'whisker_on_2'), 'outcome_w'].to_numpy()[0]
+        plt.plot(['whisker_off', 'whisker_on_2'], [a,b], alpha=.4, color='grey', marker='')
+        # temp = df.loc[(df.mouse_id==mouse_id) & (df.behavior.isin(['whisker_off', 'whisker_on_2']))]
+        # plt.plot(temp['behavior'], temp['outcome_w'], alpha=.6, color='grey', marker='o')
+    sns.despine()
 
-#     def test_significance(data, group_col, value_col, group1, group2):
-#         group1_data = data[data[group_col] == group1][value_col]
-#         group2_data = data[data[group_col] == group2][value_col]
-#         stat, p_value = wilcoxon(group1_data, group2_data, alternative='two-sided')
-#         return stat, p_value
+    def test_significance(data, group_col, value_col, group1, group2):
+        group1_data = data[data[group_col] == group1][value_col]
+        group2_data = data[data[group_col] == group2][value_col]
+        stat, p_value = wilcoxon(group1_data, group2_data, alternative='two-sided')
+        return stat, p_value
 
-#     # Perform the test for whisker_on_1 vs whisker_off
-#     stat1, p_value1 = test_significance(df, 'behavior', 'outcome_w', 'whisker_on_1', 'whisker_off')
-#     # Perform the test for whisker_off vs whisker_on_2
-#     stat2, p_value2 = test_significance(df, 'behavior', 'outcome_w', 'whisker_off', 'whisker_on_2')
+    # Perform the test for whisker_on_1 vs whisker_off
+    stat1, p_value1 = test_significance(df, 'behavior', 'outcome_w', 'whisker_on_1', 'whisker_off')
+    # Perform the test for whisker_off vs whisker_on_2
+    stat2, p_value2 = test_significance(df, 'behavior', 'outcome_w', 'whisker_off', 'whisker_on_2')
 
-#     # Save the dataframe and stats to CSV files
-#     save_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\analysis_output\behavior'
-#     table_particle_test.to_csv(os.path.join(save_path, 'particle_test_data.csv'), index=False)
+    # Save the dataframe and stats to CSV files
+    save_path = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\analysis_output\behavior'
+    table_particle_test.to_csv(os.path.join(save_path, 'particle_test_data.csv'), index=False)
 
-#     with open(os.path.join(save_path, 'particle_test_stats.csv'), 'w') as f:
-#         f.write(f'whisker_on_1 vs whisker_off: Statistic: {stat1}, P-value: {p_value1}\n')
-#         f.write(f'whisker_off vs whisker_on_2: Statistic: {stat2}, P-value: {p_value2}')
-#         # Test significance with Wilcoxon signed-rank test
-
-
-
-#     # #####################################################################
-#     # Performance over blocks during whisker learning sessions across mice.
-#     # #####################################################################
+    with open(os.path.join(save_path, 'particle_test_stats.csv'), 'w') as f:
+        f.write(f'whisker_on_1 vs whisker_off: Statistic: {stat1}, P-value: {p_value1}\n')
+        f.write(f'whisker_off vs whisker_on_2: Statistic: {stat2}, P-value: {p_value2}')
+        # Test significance with Wilcoxon signed-rank test
 
 
-#     # Performance over blocks.
-#     # ------------------------
 
-#     df = table
-#     fig, axes = plt.subplots(1, 3, sharey=True)
-#     plot_perf_across_blocks(df, "R-", 0, PALETTE, nmax_trials=240, ax=axes[0])
-#     plot_perf_across_blocks(df, "R-", 1, PALETTE, nmax_trials=240, ax=axes[1])
-#     plot_perf_across_blocks(df, "R-", 2, PALETTE, nmax_trials=240, ax=axes[2])
+    # #####################################################################
+    # Performance over blocks during whisker learning sessions across mice.
+    # #####################################################################
+
+
+    # Performance over blocks.
+    # ------------------------
+
+    df = table
+    fig, axes = plt.subplots(1, 3, sharey=True)
+    plot_perf_across_blocks(df, "R-", 0, PALETTE, nmax_trials=240, ax=axes[0])
+    plot_perf_across_blocks(df, "R-", 1, PALETTE, nmax_trials=240, ax=axes[1])
+    plot_perf_across_blocks(df, "R-", 2, PALETTE, nmax_trials=240, ax=axes[2])
     
-#     plot_perf_across_blocks(df, "R+", 0, PALETTE, nmax_trials=240, ax=axes[0])
-#     plot_perf_across_blocks(df, "R+", 1, PALETTE, nmax_trials=240, ax=axes[1])
-#     plot_perf_across_blocks(df, "R+", 2, PALETTE, nmax_trials=240, ax=axes[2])
+    plot_perf_across_blocks(df, "R+", 0, PALETTE, nmax_trials=240, ax=axes[0])
+    plot_perf_across_blocks(df, "R+", 1, PALETTE, nmax_trials=240, ax=axes[1])
+    plot_perf_across_blocks(df, "R+", 2, PALETTE, nmax_trials=240, ax=axes[2])
     
-#     sns.despine(trim=True)
+    sns.despine(trim=True)
 
-#     nmice_rew = df.loc[df.reward_group=='R+','mouse_id'].nunique()
-#     nmice_nonrew = df.loc[df.reward_group=='R-','mouse_id'].nunique()
-#     plt.suptitle(f'Imaging mice: {nmice_rew} rewarded, {nmice_nonrew} non-rewarded')
+    nmice_rew = df.loc[df.reward_group=='R+','mouse_id'].nunique()
+    nmice_nonrew = df.loc[df.reward_group=='R-','mouse_id'].nunique()
+    plt.suptitle(f'Imaging mice: {nmice_rew} rewarded, {nmice_nonrew} non-rewarded')
 
 
-#     # Performance over trials aligned to first hit.
-#     # ---------------------------------------------
+    # Performance over trials aligned to first hit.
+    # ---------------------------------------------
 
-#     # Remove initial segment of trials where outcome_w == 0 for each session
-#     # also the first whisker hit
-#     def remove_initial_zero_outcome_w(table):
-#         def remove_initial_zeros(df):
-#             first_hit_index = df[df['outcome_w'] == 1].index.min()
-#             if pd.notna(first_hit_index):
-#                 return df.loc[first_hit_index+1:]
-#             return df
+    # Remove initial segment of trials where outcome_w == 0 for each session
+    # also the first whisker hit
+    def remove_initial_zero_outcome_w(table):
+        def remove_initial_zeros(df):
+            first_hit_index = df[df['outcome_w'] == 1].index.min()
+            if pd.notna(first_hit_index):
+                return df.loc[first_hit_index+1:]
+            return df
 
-#         table = table.groupby('session_id', group_keys=False).apply(remove_initial_zeros)
-#         return table
+        table = table.groupby('session_id', group_keys=False).apply(remove_initial_zeros)
+        return table
     
-#     block_size = 5
-#     df = table.loc[(table.trial_w<=100) & (table.whisker_stim==1) & (table.day==0)]
-#     df_fh = remove_initial_zero_outcome_w(df)
-#     # Reindex trial_w.
-#     df_fh['trial_w'] = df_fh.groupby('session_id').cumcount()
-#     df_fh = df_fh[['mouse_id', 'reward_group', 'session_id','trial_w','outcome_w']]
-#     df_fh['block_id'] = (df_fh['trial_w']) // block_size + 1
-#     block_avg = df_fh.groupby(['session_id', 'reward_group','block_id'])['outcome_w'].mean().reset_index()
+    block_size = 5
+    df = table.loc[(table.trial_w<=100) & (table.whisker_stim==1) & (table.day==0)]
+    df_fh = remove_initial_zero_outcome_w(df)
+    # Reindex trial_w.
+    df_fh['trial_w'] = df_fh.groupby('session_id').cumcount()
+    df_fh = df_fh[['mouse_id', 'reward_group', 'session_id','trial_w','outcome_w']]
+    df_fh['block_id'] = (df_fh['trial_w']) // block_size + 1
+    block_avg = df_fh.groupby(['session_id', 'reward_group','block_id'])['outcome_w'].mean().reset_index()
 
 
-#     plt.figure(figsize=(8,8))
-#     sns.lineplot(data=block_avg, x='block_id', y='outcome_w', 
-#                  palette=PALETTE[2:4], legend=False, hue='reward_group',
-#                  errorbar='ci', err_style='band')
-#     # Perform Mann-Whitney U test for each block_id
-#     p_values = []
-#     for block_id in block_avg['block_id'].unique():
-#         group_R_plus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R+')]['outcome_w']
-#         group_R_minus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R-')]['outcome_w']
-#         stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
-#         p_values.append((block_id, p_value))
+    plt.figure(figsize=(8,8))
+    sns.lineplot(data=block_avg, x='block_id', y='outcome_w', 
+                 palette=PALETTE[2:4], legend=False, hue='reward_group',
+                 errorbar='ci', err_style='band')
+    # Perform Mann-Whitney U test for each block_id
+    p_values = []
+    for block_id in block_avg['block_id'].unique():
+        group_R_plus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R+')]['outcome_w']
+        group_R_minus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R-')]['outcome_w']
+        stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
+        p_values.append((block_id, p_value))
     
-#     # Plot p-value squares on the graph
-#     for block_id, p_value in p_values:
-#         if p_value < 0.001:
-#             color = 'black'
-#         elif p_value < 0.01:
-#             color = 'darkgrey'
-#         elif p_value < 0.05:
-#             color = 'lightgrey'
-#         else:
-#             color = 'white'
-#         plt.gca().add_patch(plt.Rectangle((block_id - 0.4, 1.05), 0.8, 0.03, color=color, edgecolor='none'))
+    # Plot p-value squares on the graph
+    for block_id, p_value in p_values:
+        if p_value < 0.001:
+            color = 'black'
+        elif p_value < 0.01:
+            color = 'darkgrey'
+        elif p_value < 0.05:
+            color = 'lightgrey'
+        else:
+            color = 'white'
+        plt.gca().add_patch(plt.Rectangle((block_id - 0.4, 1.05), 0.8, 0.03, color=color, edgecolor='none'))
 
-#     plt.ylim([-0.1, 1.2])
-#     plt.xlabel('Trials (average over blocks of 3)')
-#     plt.ylabel('Lick probability')
-#     sns.despine()
-#     # Change x tick labels to block_id * block_size
-#     ax = plt.gca()
-#     ax.set_xticklabels([str(int(label) * block_size) for label in ax.get_xticks()])
+    plt.ylim([-0.1, 1.2])
+    plt.xlabel('Trials (average over blocks of 3)')
+    plt.ylabel('Lick probability')
+    sns.despine()
+    # Change x tick labels to block_id * block_size
+    ax = plt.gca()
+    ax.set_xticklabels([str(int(label) * block_size) for label in ax.get_xticks()])
 
 
-#     # Time it takes to reach difference between the two groups.
-#     df.loc[(df.trial_w==30), 'start_time'].mean()/60
+    # Time it takes to reach difference between the two groups.
+    df.loc[(df.trial_w==30), 'start_time'].mean()/60
 
     # #########################################################################
     # Fitting learning curves.
@@ -735,9 +730,9 @@ plt.rcParams['svg.fonttype'] = 'none'
     
    
 
-#     # ############################################################
-#     # Muscimol inactivation.
-#     # ############################################################
+    # ############################################################
+    # Muscimol inactivation.
+    # ############################################################
 
     
     
@@ -749,37 +744,37 @@ plt.rcParams['svg.fonttype'] = 'none'
     
     
 
-#     fpS1_mice = ['AR182', 'AR183',]
-#     wS1_mice = [m for m in mice if m not in fpS1_mice]
-#     # wS1_mice = ['AR181', 'AR184']
-#     table.loc[table.mouse_id.isin(fpS1_mice), 'area'] = 'pfS1'
-#     table.loc[table.mouse_id.isin(wS1_mice), 'area'] = 'wS1'
+    fpS1_mice = ['AR182', 'AR183',]
+    wS1_mice = [m for m in mice if m not in fpS1_mice]
+    # wS1_mice = ['AR181', 'AR184']
+    table.loc[table.mouse_id.isin(fpS1_mice), 'area'] = 'pfS1'
+    table.loc[table.mouse_id.isin(wS1_mice), 'area'] = 'wS1'
 
     # Compute performance.
     # --------------------
 
-#     # sns.lineplot(data=data, x='muscimol', y='hr_c', estimator=np.mean, color=palette[4], alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
-#     sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_c', order=inactivation_labels, join=False, color=palette[0], ax=axes[1])
-#     # sns.lineplot(data=data, x='inactivation', y='hr_a', estimator=np.mean, color=palette[0], alpha=1, legend=False, ax=axes[1], marker='o', err_style='bars')
-#     sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_a', order=inactivation_labels, join=False, color=palette[1], ax=axes[1])
-#     # sns.lineplot(data=data, x='inactivation', y='hr_w', estimator=np.mean, color=color_wh, alpha=1, legend=False, ax=axes[1], marker='o', err_style='bars')
-#     sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_w', order=inactivation_labels, join=False, color=palette[4], ax=axes[1])
+    # sns.lineplot(data=data, x='muscimol', y='hr_c', estimator=np.mean, color=palette[4], alpha=1, legend=False, ax=ax, marker='o', err_style='bars')
+    sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_c', order=inactivation_labels, join=False, color=palette[0], ax=axes[1])
+    # sns.lineplot(data=data, x='inactivation', y='hr_a', estimator=np.mean, color=palette[0], alpha=1, legend=False, ax=axes[1], marker='o', err_style='bars')
+    sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_a', order=inactivation_labels, join=False, color=palette[1], ax=axes[1])
+    # sns.lineplot(data=data, x='inactivation', y='hr_w', estimator=np.mean, color=color_wh, alpha=1, legend=False, ax=axes[1], marker='o', err_style='bars')
+    sns.pointplot(data=table.loc[table.mouse_id.isin(fpS1_mice)], x='pharma_day', y='outcome_w', order=inactivation_labels, join=False, color=palette[4], ax=axes[1])
 
 
 
-#     for ax in axes:
-#         ax.set_yticks([0,0.2,0.4,0.6,0.8,1])
-#         ax.set_xticklabels(['-2', '-1', 'M 1', 'M 2', 'M 3', 'R 1', 'R 2', 'R 3'])
-#         ax.set_xlabel('Muscimol inactivation during learning')
-#         ax.set_ylabel('Lick probability')
-#     sns.despine(trim=True)
-#     # ax.set_ylabel('Lick probability')
-#     # ax.set_xticklabels(['D0', 'M 1', 'Recovery'])
-#     # ax.set_xticklabels(['Pre -3', 'Pre -2', 'Pre -1', 'M'])
-#     # ax.set_xlabel('Muscimol inactivation during execution')
-#     # plt.title(f'Session length = {nmax_trials} trials')
-#     plt.title(f'{experimenter}')
-#     sns.despine()
+    for ax in axes:
+        ax.set_yticks([0,0.2,0.4,0.6,0.8,1])
+        ax.set_xticklabels(['-2', '-1', 'M 1', 'M 2', 'M 3', 'R 1', 'R 2', 'R 3'])
+        ax.set_xlabel('Muscimol inactivation during learning')
+        ax.set_ylabel('Lick probability')
+    sns.despine(trim=True)
+    # ax.set_ylabel('Lick probability')
+    # ax.set_xticklabels(['D0', 'M 1', 'Recovery'])
+    # ax.set_xticklabels(['Pre -3', 'Pre -2', 'Pre -1', 'M'])
+    # ax.set_xlabel('Muscimol inactivation during execution')
+    # plt.title(f'Session length = {nmax_trials} trials')
+    plt.title(f'{experimenter}')
+    sns.despine()
 
 
 
