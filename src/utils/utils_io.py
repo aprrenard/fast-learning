@@ -178,3 +178,9 @@ def solve_common_paths(target):
         path = stop_flags_sensory_map_yaml
         
     return adjust_path_to_host(path)
+
+
+# Path to the directory containing the processed data.
+processed_dir = solve_common_paths('processed_data')
+nwb_dir = solve_common_paths('nwb')
+db_path = solve_common_paths('db')

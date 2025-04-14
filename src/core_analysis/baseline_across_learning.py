@@ -22,34 +22,15 @@ sys.path.append(r'/home/aprenard/repos/fast-learning')
 import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.core_analysis.behavior import compute_performance, plot_single_session
-import warnings
-# from statannotations.Annotator import Annotator
-
-# Set plot parameters.
-plt.rcParams['pdf.fonttype'] = 42
-plt.rcParams['ps.fonttype'] = 42
-plt.rcParams['svg.fonttype'] = 'none'
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
-%matplotlib inline
-
-# Path to the directory containing the processed data.
-processed_dir = io.solve_common_paths('processed_data')
-nwb_dir = io.solve_common_paths('nwb')
-db_path = io.solve_common_paths('db')
-
-# Color palettes.
-reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
-cell_types_palette = sns.color_palette(['#a3a3a3', '#c959affe', '#3351ffff'])
-s2_m1_palette = sns.color_palette(['#c959affe', '#3351ffff'])
-stim_palette = sns.color_palette(['#3333ffff', '#008000ff', '#be3133ff', '#FF9600'])
+from src.utils.utils_plot import *
 
 
 # #############################################################################
 # Count the number of cells and proportion of cell types.
 # #############################################################################
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',
                                             experimenters=['GF', 'MI', 'AR'])
 
@@ -59,9 +40,9 @@ for mouse_id in mice:
     # Disregard these mice as the number of trials is too low.
     # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
     #     continue
-    reward_group = io.get_mouse_reward_group_from_db(db_path, mouse_id)
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
     file_name = 'tensor_xarray_mapping_data.nc'
-    folder = os.path.join(processed_dir, 'mice')
+    folder = os.path.join(io.processed_dir, 'mice')
     data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
     
     rois = data.coords['roi'].values
@@ -132,13 +113,13 @@ cell_count.loc[cell_count.mouse_id.isin(mice_GF)].groupby(['reward_group', 'cell
 processed_folder = io.solve_common_paths('processed_data')
 tests = pd.read_csv(os.path.join(processed_folder, 'response_test_results_win_300ms.csv'))
 
-_, _, mice, _ = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, _ = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',
                                             experimenters=['AR', 'GF', 'MI'])
 
 for mouse in tests.mouse_id.unique():
-    tests.loc[tests.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(db_path, mouse)
+    tests.loc[tests.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(io.db_path, mouse)
 
 # Select days.
 tests = tests.loc[tests.day.isin([-2, -1, 0, 1, 2])]
@@ -271,12 +252,12 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 processed_folder = io.solve_common_paths('processed_data')
 lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 
-_, _, mice, _ = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, _ = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',)
 
 for mouse in lmi_df.mouse_id.unique():
-    lmi_df.loc[lmi_df.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(db_path, mouse)
+    lmi_df.loc[lmi_df.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(io.db_path, mouse)
 
 lmi_df = lmi_df.loc[lmi_df.mouse_id.isin(mice)]
 
@@ -340,13 +321,13 @@ lmi_prop_ct.to_csv(os.path.join(output_dir, 'prop_lmi_ct.csv'), index=False)
 # # Comparing xarray datasets with previous tensors.
 # # #############################################################################
 
-# processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+# io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
 # mouse_id = 'AR180'
 # session_id = 'AR180_20241217_160355'
 
 # arr, mdata = imaging_utils.load_session_2p_imaging(mouse_id,
 #                                                     session_id,
-#                                                     processed_dir
+#                                                     io.processed_dir
 #                                                     )
 # # arr = imaging_utils.substract_baseline(arr, 3, ())
 # arr = imaging_utils.extract_trials(arr, mdata, 'UM', n_trials=None)
@@ -354,7 +335,7 @@ lmi_prop_ct.to_csv(os.path.join(output_dir, 'prop_lmi_ct.csv'), index=False)
 
 # # Load the xarray dataset.
 # file_name = 'tensor_xarray_mapping_data.nc'
-# xarray = imaging_utils.load_mouse_xarray(mouse_id, processed_dir, file_name)
+# xarray = imaging_utils.load_mouse_xarray(mouse_id, io.processed_dir, file_name)
 
 # d = xarray.sel(trial=xarray['day'] == 2)
 
@@ -373,10 +354,10 @@ baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * samp
 days = [-2, -1, 0, +1, +2]
 days_str = ['-2', '-1', '0', '+1', '+2']
 cell_type = None
-variance_across = 'mice'
+variance_across = 'cells'
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',
                                             experimenters=['GF', 'MI'])
 # mice = [m for m in mice if m not in ['AR163']]
@@ -394,10 +375,10 @@ for mouse_id in mice:
     # Disregard these mice as the number of trials is too low.
     # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
     #     continue
-    reward_group = io.get_mouse_reward_group_from_db(db_path, mouse_id)
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
 
     file_name = 'tensor_xarray_mapping_data.nc'
-    folder = os.path.join(processed_dir, 'mice')
+    folder = os.path.join(io.processed_dir, 'mice')
     data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
     data = imaging_utils.substract_baseline(data, 2, baseline_win)
     
@@ -422,21 +403,21 @@ psth = pd.concat(psth)
 if variance_across == 'mice':
     cell_counts = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
     cell_counts = pd.read_csv(cell_counts)
-    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
+    psth = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
     # Remove roi from mouse if less than n cells of that cell type.      
     for ct in ['wM1', 'wS2']:
-        for mouse_id in data.mouse_id.unique():
+        for mouse_id in psth.mouse_id.unique():
             n_cells = cell_counts.loc[(cell_counts.mouse_id==mouse_id) & (cell_counts.cell_type==ct), 'roi']
             # If no cells of that type (df count had no entry then - I could add 0).
             if n_cells.empty:
                 continue
             n_cells = n_cells.values[0]
             if n_cells < 5:
-                data = data.loc[(data.mouse_id!=mouse_id) | (data.cell_type!=ct)]
+                psth = psth.loc[(psth.mouse_id!=mouse_id) | (psth.cell_type!=ct)]
 else:
-    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
+    psth = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
 
-data = data.loc[~data.mouse_id.isin(['AR131'])]
+psth = psth.loc[~psth.mouse_id.isin(['AR131'])]
 # # GF305 has baseline artefact on day -1 at auditory trials.
 # data = data.loc[~data.mouse_id.isin(['GF305'])]
 
@@ -447,7 +428,8 @@ data = data.loc[~data.mouse_id.isin(['AR131'])]
 
 # data = data.loc[data['cell_type']=='wM1']
 # data = data.loc[~data.mouse_id.isin(['GF305', 'GF306', 'GF307'])]
-fig = sns.relplot(data=data, x='time', y='psth', errorbar='ci', col='day',
+
+fig = sns.relplot(data=psth, x='time', y='psth', errorbar='ci', col='day',
             kind='line', hue='reward_group',
             hue_order=['R-','R+'], palette=reward_palette,
             height=3, aspect=0.8, estimator='mean')
@@ -455,7 +437,7 @@ for ax in fig.axes.flatten():
     ax.axvline(0, color='#FF9600', linestyle='--')
     ax.set_title('')
 
-fig = sns.relplot(data=data, x='time', y='psth', errorbar='ci', col='day', row='cell_type',
+fig = sns.relplot(data=psth, x='time', y='psth', errorbar='ci', col='day', row='cell_type',
             kind='line', hue='reward_group',
             hue_order=['R-','R+'], palette=reward_palette, row_order=['wS2', 'wM1',],
             height=3, aspect=0.8, estimator='mean')
@@ -503,8 +485,8 @@ days_str = ['-2', '-1', '0', '+1', '+2']
 cell_type = None
 variance_across = 'cells'
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',
                                             experimenters=['GF', 'MI'])
 
@@ -517,10 +499,10 @@ for mouse_id in mice:
     # Disregard these mice as the number of trials is too low.
     # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
     #     continue
-    reward_group = io.get_mouse_reward_group_from_db(db_path, mouse_id)
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
 
     file_name = 'tensor_xarray_mapping_data.nc'
-    folder = os.path.join(processed_dir, 'mice')
+    folder = os.path.join(io.processed_dir, 'mice')
     data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
     data = imaging_utils.substract_baseline(data, 2, baseline_win)
     
@@ -597,8 +579,8 @@ substract_baseline = True
 average_inside_days = True
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',)
 print(mice)
 # excluded_mice = ['GF307', 'GF310', 'GF333', 'MI075', 'AR144', 'AR135', 'AR163']
@@ -613,11 +595,11 @@ vectors_rew = []
 vectors_nonrew = []
 for mouse in mice:
     print(mouse)
-    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
     xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-    rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
     
     # Select days.
     xarray = xarray.sel(trial=xarray['day'].isin(days))
@@ -670,9 +652,9 @@ plt.imshow(cm, cmap='viridis', vmin=-.19, vmax=0.7)
 
 # Vectors during learning.
 file_name = 'tensor_xarray_learning_data.nc'
-xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
 xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)
+rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
 # Select days.
 xarray = xarray.sel(trial=xarray['day'].isin([2]))
@@ -724,8 +706,8 @@ sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif',
 
 processed_folder = io.solve_common_paths('processed_data')  
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',)
 
 
@@ -746,12 +728,12 @@ lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 dfs = []
 for mouse in mice:
     print(mouse)
-    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
     if substract_baseline:
         xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-    rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
     
     # Select day 0. 
     xarray = xarray.sel(trial=xarray['day'] == 0)
@@ -820,8 +802,8 @@ sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif',
 
 processed_folder = io.solve_common_paths('processed_data')  
 
-_, _, mice, db = io.select_sessions_from_db(db_path,
-                                            nwb_dir,
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
                                             two_p_imaging='yes',)
 
 
@@ -844,12 +826,12 @@ learning_trials = {'GF305':138, 'GF306': 200, 'GF317': 96, 'GF323': 211, 'GF318'
 dfs = []
 for mouse in mice:
     print(mouse)
-    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
     if substract_baseline:
         xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-    rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
     
     # Select day 0. 
     xarray = xarray.sel(trial=xarray['day'] == 0)
