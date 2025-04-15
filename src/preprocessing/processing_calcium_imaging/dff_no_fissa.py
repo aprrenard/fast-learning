@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 import yaml
 
 # sys.path.append(r'H:/anthony/repos/NWB_analysis')
-sys.path.append(r'C:\Users\aprenard\repos\fast-learning\src')
+# sys.path.append(r'C:/Users/aprenard/repos/fast-learning/src')
+sys.path.append(r'/home/aprenard/repos/fast-learning/src')
 import utils.utils_io as io
+
 
 def set_merged_roi_to_non_cell(stat, iscell):
     # Set merged cells to 0 in iscell.
@@ -109,16 +111,17 @@ EXPERIMENTER_MAP = {
 
 
 def get_data_folder():
-    data_folder = os.path.join(r'\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
-
+    data_folder = os.path.join(r'//sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'data')
+    data_folder = io.adjust_path_to_host(data_folder)
     return data_folder  
 
 
 def get_experimenter_analysis_folder(initials):
     # Map initials to experimenter to get analysis folder path.
     experimenter = EXPERIMENTER_MAP[initials]
-    analysis_folder = os.path.join(r'\\sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
+    analysis_folder = os.path.join(r'//sv-nas1.rcp.epfl.ch', 'Petersen-Lab', 'analysis',
                                    experimenter, 'data')
+    analysis_folder = io.adjust_path_to_host(analysis_folder)
     return analysis_folder
 
 
@@ -126,13 +129,12 @@ def get_experimenter_analysis_folder(initials):
 # ------------------------------------------------
 
 experimenter = 'AR'
-# mice_ids = ['AR127']
 
-db_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx"
-nwb_dir = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB"
-_, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=experimenter,
-                            exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
-# mice_ids = mice_ids[5:]
+# db_path = io.dir_path
+# nwb_dir = io.nwb_dir
+# _, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=experimenter,
+#                             exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
+mice_ids = ['AR185', 'AR187']
 
 suite2p_folders = []
 for mouse_id in mice_ids:
@@ -168,62 +170,47 @@ for suite2p_folder in suite2p_folders:
 
 
 
-# F_cor = F_raw - 0.7 * F_neu
-# F_cor[F_cor<0] = 0
 
 
-# plt.plot(F_cor[0])
-# plt.plot(F0_cor[0])
+# # Specific to GF data. Compute dff for each session.
+# # -------------------------------------------------
 
+# experimenter = 'AR'
+# # mice_ids = ['AR127']
+# db_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx"
+# nwb_dir = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB"
+# session_list, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=['GF','MI'],
+#                             exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
 
-# plt.plot(F_raw[0])
-# plt.plot(F0_raw[0])
-# plt.plot(F_neu[0])
+# for session in session_list:
+#     print(f'Processing {session}.')
+#     mouse_name = session[:5]
 
-# plt.figure()
-# plt.plot(dff[0])
+#     mouse_folder = rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PRois\\{mouse_name}'
+#     suite2p_folder = (rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PSessionData\\{mouse_name}\\{session[:-7]}')
+#     save_folder = os.path.join(get_experimenter_analysis_folder(experimenter), mouse_name, session, 'suite2p', 'plane0')
+#     if not os.path.exists(save_folder):
+#         os.makedirs(save_folder)
 
+#     stat = np.load(os.path.join(mouse_folder, 'stat.npy'), allow_pickle=True)
+#     is_cell = np.load(os.path.join(mouse_folder, "iscell.npy"), allow_pickle=True)
+#     ops = np.load(os.path.join(mouse_folder, "ops.npy"), allow_pickle=True).item()
+#     F_raw = np.load(os.path.join(suite2p_folder, "F.npy"), allow_pickle=True)
+#     F_neu = np.load(os.path.join(suite2p_folder, "Fneu.npy"), allow_pickle=True)
 
+#     print('Computing baselines and dff.')
+#     F0_raw, F0_cor, dff = compute_dff(F_raw, F_neu, fs=ops['fs'], window=30, sigma_win=5)
 
-# Specific to GF data. Compute dff for each session.
-# -------------------------------------------------
-
-experimenter = 'AR'
-# mice_ids = ['AR127']
-db_path = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx"
-nwb_dir = r"//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB"
-session_list, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=['GF','MI'],
-                            exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
-
-for session in session_list:
-    print(f'Processing {session}.')
-    mouse_name = session[:5]
-
-    mouse_folder = rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PRois\\{mouse_name}'
-    suite2p_folder = (rf'\\sv-nas1.rcp.epfl.ch\\Petersen-Lab\\analysis\\Georgios_Foustoukos\\Suite2PSessionData\\{mouse_name}\\{session[:-7]}')
-    save_folder = os.path.join(get_experimenter_analysis_folder(experimenter), mouse_name, session, 'suite2p', 'plane0')
-    if not os.path.exists(save_folder):
-        os.makedirs(save_folder)
-
-    stat = np.load(os.path.join(mouse_folder, 'stat.npy'), allow_pickle=True)
-    is_cell = np.load(os.path.join(mouse_folder, "iscell.npy"), allow_pickle=True)
-    ops = np.load(os.path.join(mouse_folder, "ops.npy"), allow_pickle=True).item()
-    F_raw = np.load(os.path.join(suite2p_folder, "F.npy"), allow_pickle=True)
-    F_neu = np.load(os.path.join(suite2p_folder, "Fneu.npy"), allow_pickle=True)
-
-    print('Computing baselines and dff.')
-    F0_raw, F0_cor, dff = compute_dff(F_raw, F_neu, fs=ops['fs'], window=30, sigma_win=5)
-
-    # Saving data.
-    np.save(os.path.join(save_folder, 'F_raw'), F_raw)
-    np.save(os.path.join(save_folder, 'F_neu'), F_neu)
-    np.save(os.path.join(save_folder, 'F0_cor'), F0_cor)
-    np.save(os.path.join(save_folder, 'F0_raw'), F0_raw)
-    np.save(os.path.join(save_folder, 'dff'), dff)
+#     # Saving data.
+#     np.save(os.path.join(save_folder, 'F_raw'), F_raw)
+#     np.save(os.path.join(save_folder, 'F_neu'), F_neu)
+#     np.save(os.path.join(save_folder, 'F0_cor'), F0_cor)
+#     np.save(os.path.join(save_folder, 'F0_raw'), F0_raw)
+#     np.save(os.path.join(save_folder, 'dff'), dff)
     
-    np.save(os.path.join(save_folder, 'iscell'), is_cell)
-    np.save(os.path.join(save_folder, 'ops'), ops)
-    np.save(os.path.join(save_folder, 'stat'), stat)
+#     np.save(os.path.join(save_folder, 'iscell'), is_cell)
+#     np.save(os.path.join(save_folder, 'ops'), ops)
+#     np.save(os.path.join(save_folder, 'stat'), stat)
 
-    print(f'Data saved.')
+#     print(f'Data saved.')
 

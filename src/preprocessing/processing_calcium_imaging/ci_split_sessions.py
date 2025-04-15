@@ -11,28 +11,14 @@ sys.path.append('/home/aprenard/repos/fast-learning')
 import src.utils.utils_io as io
 
 
-mice_id = [
-    # 'AR132',
-    #         'AR133',
-    #         'AR135',
-    #         'AR137',
-    #         'AR139',
-    #         'AR127',
-    #         'AR131',
-    #         'AR143',
-            'AR144',
-    #         'AR163',
-            # 'AR176',
-            # 'AR177',
-            # 'AR178',
-            # 'AR179',
-            # 'AR180'
-            ]
+mice_id = ["AR185", "AR187"]
 
 for mouse_id in mice_id:
 
     imaging_folder = f'//sv-nas1.rcp.epfl.ch/Petersen-Lab/data/{mouse_id}/Recording/Imaging'
     imaging_folder = io.adjust_path_to_host(imaging_folder)
+    # if mouse_id == "AR144":
+    #     imaging_folder = ""
     if not os.path.exists(imaging_folder):
         continue
     session_list = [session for session in os.listdir(imaging_folder)]
@@ -73,8 +59,6 @@ for mouse_id in mice_id:
             # Count frames per session.
             for session in session_list:
                 path = os.path.join(imaging_folder, session)
-                if session == 'AR144_20240518_193553':
-                    path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging/AR144_20240518_193553_corrected'
                 tif_paths = [os.path.join(path, itif) for itif in os.listdir(path) if os.path.splitext(itif)[1] in ['.tif', '.tiff']]
                 tif_paths = sorted(tif_paths)
                 nframes = 0
@@ -118,6 +102,7 @@ for mouse_id in mice_id:
         continue
 
     reg_tif_folder = f'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/suite2p/plane0/reg_tif'
+    reg_tif_folder = io.adjust_path_to_host(reg_tif_folder)
     reg_tif_list = os.listdir(reg_tif_folder)
     reg_tif_list = [tif for tif in reg_tif_list if os.path.splitext(tif)[1] in ['.tif', '.tiff']]
     # Lexicographic ordering of tifs (bad padding from suite2p).
@@ -132,13 +117,12 @@ for mouse_id in mice_id:
     for itif, tif in enumerate(reg_tif_list):
         session = session_list[isession]
         save_path = f'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/{session}/suite2p/plane0/reg_tif'
+        save_path = io.adjust_path_to_host(save_path)
         if not os.path.exists(save_path):
             os.mkdir(save_path)
         
         current_max_frame = frames[isession]
         frame_count = (itif + 1) * batch_size
-        print('session:', session)
-        print('frame count:', frame_count)
 
         # Case were you don't need to split a tif.
         if (frame_count < current_max_frame) or (itif == len(reg_tif_list)-1):
@@ -161,10 +145,12 @@ for mouse_id in mice_id:
             
             # Set new location and names.
             left_path = f'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/{session}/suite2p/plane0/reg_tif'
+            left_path = io.adjust_path_to_host(left_path)
             left_tif_name = os.path.splitext(os.path.basename(tif))[0] + f'_{session}.tif'
             tif_left_path = os.path.join(left_path, left_tif_name)
             next_session = session_list[isession+1]
             right_path = f'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data/{mouse_id}/{next_session}/suite2p/plane0/reg_tif'
+            right_path = io.adjust_path_to_host(right_path)
             if not os.path.exists(right_path):
                 os.mkdir(right_path)
             right_tif_name = os.path.splitext(os.path.basename(tif))[0] + f'_{next_session}.tif'
@@ -182,8 +168,8 @@ for mouse_id in mice_id:
 
 # import numpy as np
 # path = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR144\suite2p\plane0\frames_per_session.npy"
-frames_per_session = [114119, 108401, 33025+39253+100085, 148959, 64820, 119632]
-sum(frames_per_session)
-728294-591196
+# frames_per_session = [114119, 108401, 33025+39253+100085, 148959, 64820, 119632]
+# sum(frames_per_session)
+# 728294-591196
 # np.save(path, frames_per_session, allow_pickle=True)
 

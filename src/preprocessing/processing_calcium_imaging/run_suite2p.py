@@ -41,13 +41,14 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
         # Concatenate all sessions and run suite2p once per mouse.
         for mouse_id in mice_ids:
             tiff_folders = os.path.join(get_data_folder(), mouse_id, 'Recording', 'Imaging')
+            if mouse_id == 'AR144':
+                tiff_folders = "/mnt/lsens-analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging"
+            if mouse_id == 'AR163':
+                tiff_folders = "/mnt/lsens-analysis/Anthony_Renard/need_fix/AR163/Recording/Imaging"
+            # tiff_folders = os.path.join(get_experimenter_analysis_folder(experimenter), mouse_id, 'need_fix', mouse_id)
             tiff_folders = [os.path.join(tiff_folders, folder) for folder in os.listdir(tiff_folders)
                             if os.path.isdir(os.path.join(tiff_folders, folder))]
             tiff_folders = natsorted(tiff_folders)            
-            # if mouse_id == 'AR144':
-            #     tiff_folders[0] = "/mnt/lsens-analysis/Anthony_Renard/need_fix/AR144/Recording/Imaging"
-            if mouse_id == 'AR163':
-                tiff_folders[0] = "/mnt/lsens-analysis/Anthony_Renard/need_fix/AR163/Recording/Imaging"
             
             # tiff_folders = ['D://AR//test_data']
             # fast_disk = os.path.join('D:', 'suite2p', mouse_id, session_id)
@@ -105,7 +106,7 @@ def run(ops, mice_ids, experimenter, longitudinal=True):
 if __name__ == '__main__':
     
     # mice_ids = ['AR132', 'AR133', 'AR137', 'AR139', 'AR127', 'AR143', 'AR163', 'AR176', 'AR177', 'AR178', 'AR179', 'AR180']
-    mice_ids = ['AR163']
+    mice_ids = ['AR144', 'AR163']
     experimenter = 'AR'
     longitudinal = True
 

@@ -9,8 +9,6 @@ import warnings
 from pathlib import Path
 
 
-
-
 def read_excel_db(db_path):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=UserWarning)
@@ -58,8 +56,6 @@ def select_sessions_from_db(db_path, nwb_path, experimenters=None,
     nwb_paths = [os.path.join(nwb_path, f + '.nwb') for f in session_list]
     
     return session_list, nwb_paths, mice_list, db   
-
-
 
 
 def select_mice_from_db(db_path, nwb_path, experimenters=None,

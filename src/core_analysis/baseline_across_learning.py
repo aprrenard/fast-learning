@@ -23,6 +23,35 @@ import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.core_analysis.behavior import compute_performance, plot_single_session
 from src.utils.utils_plot import *
+from statannotations.Annotator import Annotator
+
+
+def filter_data_by_cell_count(data, min_cells):
+    """
+    Filters the data to exclude entries where the number of distinct ROIs of a specific type
+    for a mouse is below a given threshold.
+
+    Parameters:
+    - data (pd.DataFrame): The data to filter, containing columns 'mouse_id', 'cell_type', 'roi', etc.
+    - min_cells (int): Minimum number of distinct ROIs required to keep the data.
+
+    Returns:
+    - pd.DataFrame: Filtered data.
+    """
+    # Count distinct ROIs per mouse and cell type
+    roi_counts = data.groupby(['mouse_id', 'cell_type'])['roi'].nunique().reset_index()
+    roi_counts = roi_counts.rename(columns={'roi': 'roi_count'})
+
+    # Merge ROI counts back into the data
+    data = data.merge(roi_counts, on=['mouse_id', 'cell_type'])
+
+    # Filter out entries where the ROI count is below the threshold
+    data = data[data['roi_count'] >= min_cells]
+
+    # Drop the auxiliary 'roi_count' column
+    data = data.drop(columns=['roi_count'])
+
+    return data
 
 
 # #############################################################################
@@ -67,6 +96,7 @@ prop_ct['prop'] = prop_ct['roi'] / prop_ct['roi_total']
 # Save figures to PDF.
 save_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts'
 save_dir = io.adjust_path_to_host(save_dir)
+pdf_file = f'cell_counts.pdf'  # TODO set correct path
 
 with PdfPages(os.path.join(save_dir, pdf_file)) as pdf:
     fig = sns.catplot(data=cell_count,
@@ -241,10 +271,6 @@ svg_file = f'prop_responsive_cells_projections_across_days.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
-
-
-
-
 # #############################################################################
 # Proportion of LMI.
 # #############################################################################
@@ -353,17 +379,16 @@ baseline_win = (0, 1)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days = [-2, -1, 0, +1, +2]
 days_str = ['-2', '-1', '0', '+1', '+2']
-cell_type = None
-variance_across = 'cells'
+
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',
-                                            experimenters=['GF', 'MI'])
+                                            experimenters=['AR', 'GF', 'MI'])
 # mice = [m for m in mice if m not in ['AR163']]
 mice_count = db[['subject_id', 'reward_group']].drop_duplicates()
-print(mice_count)
-print(mice_count.groupby('reward_group').count().reset_index())
+# print(mice_count)
+# print(mice_count.groupby('reward_group').count().reset_index())
 
 
 # Load the data.
@@ -379,46 +404,28 @@ for mouse_id in mice:
 
     file_name = 'tensor_xarray_mapping_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
-    data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
-    data = imaging_utils.substract_baseline(data, 2, baseline_win)
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
     
     # Keep days of interest.
-    data = data.sel(trial=data['day'].isin(days))
+    xarr = xarr.sel(trial=xarr['day'].isin(days))
     # Select PSTH trace length.
-    data = data.sel(time=slice(win_sec[0], win_sec[1]))
+    xarr = xarr.sel(time=slice(win_sec[0], win_sec[1]))
     # Average trials per days.
-    data = data.groupby('day').mean(dim='trial')
+    xarr = xarr.groupby('day').mean(dim='trial')
     
-    data.name = 'psth'
-    data = data.to_dataframe().reset_index()
-    data['mouse_id'] = mouse_id
-    data['reward_group'] = reward_group
-    psth.append(data)
+    xarr.name = 'psth'
+    xarr = xarr.to_dataframe().reset_index()
+    xarr['mouse_id'] = mouse_id
+    xarr['reward_group'] = reward_group
+    psth.append(xarr)
 psth = pd.concat(psth)
 
 
 # Grand average psth's for all cells and projection neurons.
-# ----------------------------------------------------------
+# ##########################################################
 
-if variance_across == 'mice':
-    cell_counts = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
-    cell_counts = pd.read_csv(cell_counts)
-    psth = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
-    # Remove roi from mouse if less than n cells of that cell type.      
-    for ct in ['wM1', 'wS2']:
-        for mouse_id in psth.mouse_id.unique():
-            n_cells = cell_counts.loc[(cell_counts.mouse_id==mouse_id) & (cell_counts.cell_type==ct), 'roi']
-            # If no cells of that type (df count had no entry then - I could add 0).
-            if n_cells.empty:
-                continue
-            n_cells = n_cells.values[0]
-            if n_cells < 5:
-                psth = psth.loc[(psth.mouse_id!=mouse_id) | (psth.cell_type!=ct)]
-else:
-    psth = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
-
-psth = psth.loc[~psth.mouse_id.isin(['AR131'])]
-# # GF305 has baseline artefact on day -1 at auditory trials.
+# GF305 has baseline artefact on day -1 at auditory trials.
 # data = data.loc[~data.mouse_id.isin(['GF305'])]
 
 # mice_AR = [m for m in mice if m.startswith('AR')]
@@ -426,69 +433,103 @@ psth = psth.loc[~psth.mouse_id.isin(['AR131'])]
 # data = data.loc[data.mouse_id.isin(mice_AR)]
 # len(mice_GF)
 
-# data = data.loc[data['cell_type']=='wM1']
-# data = data.loc[~data.mouse_id.isin(['GF305', 'GF306', 'GF307'])]
+variance = 'cells'  # 'mice' or 'cells'
 
-fig = sns.relplot(data=psth, x='time', y='psth', errorbar='ci', col='day',
-            kind='line', hue='reward_group',
-            hue_order=['R-','R+'], palette=reward_palette,
-            height=3, aspect=0.8, estimator='mean')
-for ax in fig.axes.flatten():
-    ax.axvline(0, color='#FF9600', linestyle='--')
-    ax.set_title('')
+if variance == "mice":
+    min_cells = 3
+    data = filter_data_by_cell_count(psth, min_cells)
+    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type',])['psth'].agg('mean').reset_index()
+else:
+    data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
+# data = data.loc[~data.mouse_id.isin(['AR131'])]
 
-fig = sns.relplot(data=psth, x='time', y='psth', errorbar='ci', col='day', row='cell_type',
-            kind='line', hue='reward_group',
-            hue_order=['R-','R+'], palette=reward_palette, row_order=['wS2', 'wM1',],
-            height=3, aspect=0.8, estimator='mean')
-for ax in fig.axes.flatten():
-    ax.axvline(0, color='#FF9600', linestyle='--')
-    ax.set_title('')
+fig, axes = plt.subplots(3, len(days), figsize=(15, 10), sharey=True)
+# Plot for all cells.
+for j, day in enumerate(days):
+    d = data.loc[data['day'] == day]
+    sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0, j], legend=False)
+    axes[0, j].axvline(0, color='#FF9600', linestyle='--')
+    axes[0, j].set_title('All Cells')
+    axes[0, j].set_ylabel('DF/F0 (%)')
+    axes[0, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
+
+# Plot for each cell type.
+for i, cell_type in enumerate(['wS2', 'wM1']):
+    for j, day in enumerate(days):
+        d = data[(data['cell_type'] == cell_type) & (data['day'] == day)]
+        sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                     hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[i + 1, j], legend=False)
+        axes[i + 1, j].axvline(0, color='#FF9600', linestyle='--')
+        axes[i + 1, j].set_title(f'{cell_type} - Day {day}')
+        axes[i + 1, j].set_ylabel('DF/F0 (%)')
+        axes[i + 1, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
+# Adjust spacing between subplots to prevent title overlap
+plt.tight_layout()
+sns.despine()
+
+# Save fig to svg.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_across_days_across_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 # Individual mice PSTH's.
+# -----------------------
 
-output_dir = fr'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/sensory_plasticity/psth'
+output_dir = fr'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
-pdf_file = f'psth_individual_mice_mapping.pdf'
+pdf_file = f'psth_individual_mice_baseline.pdf'
 
 with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
     for mouse_id in mice:
         # Plot.
         data = psth.loc[psth['day'].isin([-2, -1, 0, 1, 2])
                       & (psth['mouse_id'] == mouse_id)]
+        fig, axes = plt.subplots(3, len(days), figsize=(15, 10), sharey=True)
+        # Plot for all cells.
+        for j, day in enumerate(days):
+            d = data.loc[data['day'] == day]
+            sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                        hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0, j], legend=False)
+            axes[0, j].axvline(0, color='#FF9600', linestyle='--')
+            axes[0, j].set_title('All Cells')
+            axes[0, j].set_ylabel('DF/F0 (%)')
+            axes[0, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
 
-        sns.relplot(data=data, x='time', y='psth', errorbar='ci', col='day',
-                    kind='line', hue='reward_group',
-                    hue_order=['R-','R+'], palette=reward_palette,)
-        plt.suptitle(mouse_id)
-        pdf.savefig(dpi=300)
-        plt.close()
-        
-        sns.relplot(data=data.loc[data.cell_type.isin(['wS2','wM1'])],
-                    x='time', y='psth', errorbar='ci', col='day',
-                    row='cell_type', kind='line', hue='reward_group',
-                    hue_order=['R-','R+'], palette=reward_palette,)
+        # Plot for each cell type.
+        for i, cell_type in enumerate(['wS2', 'wM1']):
+            for j, day in enumerate(days):
+                d = data[(data['cell_type'] == cell_type) & (data['day'] == day)]
+                sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                            hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[i + 1, j], legend=False)
+                axes[i + 1, j].axvline(0, color='#FF9600', linestyle='--')
+                axes[i + 1, j].set_title(f'{cell_type} - Day {day}')
+                axes[i + 1, j].set_ylabel('DF/F0 (%)')
+                axes[i + 1, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
+        # Adjust spacing between subplots to prevent title overlap
+        plt.tight_layout()
+        sns.despine()
         plt.suptitle(mouse_id)
         pdf.savefig(dpi=300)
         plt.close()
 
 
 # #############################################################################
-# Quantify the average response on baseline trials across days.
+# Quantify the average response amplitude on baseline trials across days.
 # #############################################################################
 
 sampling_rate = 30
-win_sec = (0, 0.180)  
+win_sec = (0, 0.300)
+baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days = [-2, -1, 0, +1, +2]
 days_str = ['-2', '-1', '0', '+1', '+2']
-cell_type = None
-variance_across = 'cells'
-
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',
-                                            experimenters=['GF', 'MI'])
+                                            experimenters=['AR', 'GF', 'MI'])
 
 # Load the data.
 # --------------
@@ -503,61 +544,371 @@ for mouse_id in mice:
 
     file_name = 'tensor_xarray_mapping_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
-    data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
-    data = imaging_utils.substract_baseline(data, 2, baseline_win)
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
     
     # Keep days of interest.
-    data = data.sel(trial=data['day'].isin(days))
+    xarr = xarr.sel(trial=xarr['day'].isin(days))
     # Average of time points.
-    data = data.sel(time=slice(win_sec[0], win_sec[1])).mean(dim='time')
+    xarr = xarr.sel(time=slice(win_sec[0], win_sec[1])).mean(dim='time')
     # Average trials per days.
-    data = data.groupby('day').mean(dim='trial')
+    xarr = xarr.groupby('day').mean(dim='trial')
     # Convert to dataframe.
-    data.name = 'average_response'
-    data = data.to_dataframe().reset_index()
-    data['mouse_id'] = mouse_id
-    data['reward_group'] = reward_group
-    avg_resp.append(data)
+    xarr.name = 'average_response'
+    xarr = xarr.to_dataframe().reset_index()
+    xarr['mouse_id'] = mouse_id
+    xarr['reward_group'] = reward_group
+    avg_resp.append(xarr)
 avg_resp = pd.concat(avg_resp)
+# Convert to percent dF/F0.
+avg_resp['average_response'] = avg_resp['average_response'] * 100
 
-# Remove roi from mouse if less than n cells of that cell type.
-if variance_across == 'mice':
-    cell_counts = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
-    cell_counts = pd.read_csv(cell_counts)
-    avg_resp = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
-    for ct in ['wM1', 'wS2']:
-        for mouse_id in avg_resp.mouse_id.unique():
-            n_cells = cell_counts.loc[(cell_counts.mouse_id==mouse_id) & (cell_counts.cell_type==ct), 'roi']
-            # If no cells of that type (df count had no entry then - I could add 0).
-            if n_cells.empty:
-                continue
-            n_cells = n_cells.values[0]
-            if n_cells < 5:
-                avg_resp = avg_resp.loc[(avg_resp.mouse_id!=mouse_id) | (avg_resp.cell_type!=ct)]
+
+# Grand average response.
+# -----------------------
+
+variance = 'cells'  # 'mice' or 'cells'
+
+if variance == "mice":
+    min_cells = 3
+    data_plot = filter_data_by_cell_count(avg_resp, min_cells)
+    data_plot = data_plot.groupby(['mouse_id', 'day', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
 else:
-    avg_resp = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
-    
+    data_plot = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
+data_plot = data_plot.loc[~data_plot.mouse_id.isin(['AR131'])]
+
 # Plot average response across days.
-fig = sns.catplot(data=avg_resp, x='day', y='average_response', hue='reward_group',
-                    kind='point', palette=reward_palette, hue_order=['R-', 'R+'],
-                    height=3, aspect=0.8, estimator='mean')
-ax = plt.gca()
-ax.set_title('')
-ax.set_xticklabels(days_str)
-ax.set_xlabel('Days')
-ax.set_ylabel('Average response to whisker stimulus (dF/F0)')
-ax.set_ylim(0, 0.08)
+fig, axes = plt.subplots(3, 1, figsize=(6, 12), sharex=True, sharey=True)
+
+# All cells.
+sns.pointplot(data=data_plot, x='day', y='average_response', hue='reward_group',
+              palette=reward_palette, hue_order=['R-', 'R+'], ax=axes[0], estimator='mean', legend=False)
+axes[0].set_title('All Cells')
+axes[0].set_ylabel('Average response (dF/F0)')
+axes[0].set_ylim(0, 10)
+
+# wS2 cells.
+sns.pointplot(data=data_plot[data_plot.cell_type == 'wS2'], x='day', y='average_response', hue='reward_group',
+              palette=reward_palette, hue_order=['R-', 'R+'], ax=axes[1], estimator='mean', legend=False)
+axes[1].set_title('wS2 Cells')
+axes[1].set_ylabel('Average response (dF/F0)')
+
+# wM1 cells.
+sns.pointplot(data=data_plot[data_plot.cell_type == 'wM1'], x='day', y='average_response', hue='reward_group',
+              palette=reward_palette, hue_order=['R-', 'R+'], ax=axes[2], estimator='mean', legend=False)
+axes[2].set_title('wM1 Cells')
+axes[2].set_ylabel('Average response (dF/F0)')
+axes[2].set_xlabel('Days')
 sns.despine()
-    
+
+# Stats.
+# Compare R+ and R- groups each day for all cells and projection neurons.
+results = []
+for day in days:
+    # All cells
+    data_stats = data_plot.loc[data_plot['day'] == day]
+    r_plus = data_stats[data_stats.reward_group == 'R+']['average_response']
+    r_minus = data_stats[data_stats.reward_group == 'R-']['average_response']
+
+    stat, p_value = mannwhitneyu(r_plus, r_minus, alternative='two-sided')
+    results.append({
+        'day': day,
+        'cell_type': 'all',
+        'stat': stat,
+        'p_value': p_value
+    })
+    # Projection neurons (wS2 and wM1)
+    for cell_type in ['wS2', 'wM1']:
+        data_stats_proj = data_stats[data_stats.cell_type == cell_type]
+        r_plus_proj = data_stats_proj[data_stats_proj.reward_group == 'R+']['average_response']
+        r_minus_proj = data_stats_proj[data_stats_proj.reward_group == 'R-']['average_response']
+
+        stat_proj, p_value_proj = mannwhitneyu(r_plus_proj, r_minus_proj, alternative='two-sided')
+        results.append({
+            'day': day,
+            'cell_type': cell_type,
+            'stat': stat_proj,
+            'p_value': p_value_proj
+        })
+stats = pd.DataFrame(results)
+stats['p_value'] = stats['p_value'].apply(lambda x: f'{x:.3}')
+print(stats)
+
 # Save figure.
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/sensory_plasticity/'
+output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
-pdf_file = f'average_response_across_days.pdf'
-# Save data.
-avg_resp.to_csv(os.path.join(output_dir, 'average_response_across_days.csv'), index=False)
-# Save figure to svg.
-svg_file = f'average_response_across_days.svg'
+svg_file = f'amplitude_response_across_days_across_{variance}.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save data.
+data_plot.to_csv(os.path.join(output_dir, f'amplitude_response_across_days_across_{variance}.csv'), index=False)
+# Save stats.
+stats.to_csv(os.path.join(output_dir, f'amplitude_response_across_days_across_{variance}_stats.csv'), index=False)
+
+
+# Same plot comparing projection types inside each reward group across cells.
+# --------------------------------------------------------------------------
+
+variance = "mice"  # 'mice' or 'cells'
+
+if variance == "mice":
+    min_cells = 3
+    data_plot = filter_data_by_cell_count(avg_resp, min_cells)
+    data_plot = data_plot.groupby(['mouse_id', 'day', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
+else:
+    data_plot = avg_resp.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
+# data_plot = data_plot.loc[~data_plot.mouse_id.isin(['AR131'])]
+
+# Plot average response across days comparing projection types within each reward group.
+fig, axes = plt.subplots(2, 1, figsize=(6, 8), sharex=True, sharey=True)
+
+# R+ group.
+sns.pointplot(data=data_plot[data_plot.reward_group == 'R+'], x='day', y='average_response', hue='cell_type',
+              palette=s2_m1_palette, hue_order=['wM1', 'wS2'], ax=axes[0], estimator='mean', legend=False)
+axes[0].set_title('R+ Group')
+axes[0].set_ylabel('Average response (dF/F0)')
+axes[0].set_ylim(0, 10)
+
+# R- group.
+sns.pointplot(data=data_plot[data_plot.reward_group == 'R-'], x='day', y='average_response', hue='cell_type',
+              palette=s2_m1_palette, hue_order=['wM1', 'wS2'], ax=axes[1], estimator='mean', legend=False)
+axes[1].set_title('R- Group')
+axes[1].set_ylabel('Average response (dF/F0)')
+axes[1].set_xlabel('Days')
+sns.despine()
+
+# Stats.
+# Compare wS2 and wM1 within each reward group and day.
+results = []
+for reward_group in ['R+', 'R-']:
+    for day in days:
+        data_stats = data_plot.loc[(data_plot['day'] == day) & (data_plot['reward_group'] == reward_group)]
+        wS2 = data_stats[data_stats.cell_type == 'wS2']['average_response']
+        wM1 = data_stats[data_stats.cell_type == 'wM1']['average_response']
+
+        stat, p_value = mannwhitneyu(wS2, wM1, alternative='two-sided')
+        results.append({
+            'reward_group': reward_group,
+            'day': day,
+            'stat': stat,
+            'p_value': p_value
+        })
+stats_projection = pd.DataFrame(results)
+stats_projection['p_value'] = stats_projection['p_value'].apply(lambda x: f'{x:.3}')
+print(stats_projection)
+
+# Save figure.
+output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'average_response_projection_comparison_across_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save stats.
+stats_projection.to_csv(os.path.join(output_dir, f'average_response_projection_comparison_across_{variance}_stats.csv'), index=False)
+# Save data.
+data_plot.to_csv(os.path.join(output_dir, f'average_response_projection_comparison_across_{variance}.csv'), index=False)
+
+
+# Quantifying response before and after learning inside reward groups.
+# ####################################################################
+
+sampling_rate = 30
+win_sec_amp = (0, 0.300)  
+win_sec_psth = (-0.5, 1.5)
+baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days = [-2, -1, 0, +1, +2]
+days_str = ['-2', '-1', '0', '+1', '+2']
+
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',
+                                            experimenters=['AR', 'GF', 'MI'])
+
+# Load the data.
+# --------------
+
+avg_resp = []
+psth = []
+
+for mouse_id in mice:
+    # Disregard these mice as the number of trials is too low.
+    # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
+    #     continue
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_mapping_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
+    
+    # Average response data.
+    # Keep days of interest.
+    avg = xarr.sel(trial=xarr['day'].isin(days))
+    # Average of time points.
+    avg = avg.sel(time=slice(win_sec_amp[0], win_sec_amp[1])).mean(dim='time')
+    # # Average trials per days.
+    # avg = avg.groupby('day').mean(dim='trial')
+    # Convert to dataframe.
+    avg.name = 'average_response'
+    avg = avg.to_dataframe().reset_index()
+    avg['mouse_id'] = mouse_id
+    avg['reward_group'] = reward_group
+    avg_resp.append(avg)
+    
+    # PSTH data.
+    # Keep days of interest.
+    p = xarr.sel(trial=xarr['day'].isin(days))
+    # Select PSTH trace length.
+    p = p.sel(time=slice(win_sec_psth[0], win_sec_psth[1]))
+    # Average trials per days.
+    p = p.groupby('day').mean(dim='trial')
+    
+    p.name = 'psth'
+    p = p.to_dataframe().reset_index()
+    p['mouse_id'] = mouse_id
+    p['reward_group'] = reward_group
+    psth.append(p)
+avg_resp = pd.concat(avg_resp)
+psth = pd.concat(psth)
+# Convert to percent dF/F0.
+avg_resp['average_response'] = avg_resp['average_response'] * 100
+psth['psth'] = psth['psth'] * 100
+
+# Add a new column 'learning_period' to group days into 'pre' and 'post'
+avg_resp['learning_period'] = avg_resp['day'].apply(lambda x: 'pre' if x in [-2,-1] else 'post')
+psth['learning_period'] = psth['day'].apply(lambda x: 'pre' if x in [-2,-1] else 'post')
+
+
+# Pre and post learning responses.
+# --------------------------------  
+
+variance = 'cells'  # 'mice' or 'cells'
+days_selected = [-2,-1, 0, 1,2]
+
+# Select days of interest.
+data_plot_avg = avg_resp[avg_resp['day'].isin(days_selected)]
+data_plot_psth = psth[psth['day'].isin(days_selected)]
+
+if variance == "mice":
+    min_cells = 3
+    data_plot_avg = filter_data_by_cell_count(data_plot_avg, min_cells)
+    data_plot_psth = filter_data_by_cell_count(data_plot_psth, min_cells)
+    data_plot_avg = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
+    data_plot_psth = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
+else:
+    data_plot_avg = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
+    data_plot_psth = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
+
+
+# Create the figure with four subplots
+fig, axes = plt.subplots(2, 6, figsize=(36, 10), sharex=False, sharey=False)
+
+# Top-left: PSTH for rewarded mice
+rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 0])
+axes[0, 0].set_title('PSTH (Rewarded Mice)')
+axes[0, 0].set_ylabel('DF/F0 (%)')
+axes[0, 0].axvline(0, color='orange', linestyle='--')
+
+# Bottom-left: PSTH for non-rewarded mice
+nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 0])
+axes[1, 0].set_title('PSTH (Non-Rewarded Mice)')
+axes[1, 0].set_ylabel('DF/F0 (%)')
+axes[1, 0].axvline(0, color='orange', linestyle='--')
+
+# Top-right: Response amplitude for rewarded mice
+rewarded_avg = data_plot_avg[data_plot_avg['reward_group'] == 'R+']
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 1])
+axes[0, 1].set_title('Response Amplitude (Rewarded Mice)')
+axes[0, 1].set_ylabel('Average Response (dF/F0)')
+
+# Bottom-right: Response amplitude for non-rewarded mice
+nonrewarded_avg = data_plot_avg[data_plot_avg['reward_group'] == 'R-']
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 1])
+axes[1, 1].set_title('Response Amplitude (Non-Rewarded Mice)')
+axes[1, 1].set_ylabel('Average Response (dF/F0)')
+
+# S2 PSTH
+rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+') & (data_plot_psth['cell_type'] == 'wS2')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 2])
+axes[0, 2].set_title('PSTH (Rewarded Mice)')
+axes[0, 2].set_ylabel('DF/F0 (%)')
+axes[0, 2].axvline(0, color='orange', linestyle='--')
+
+nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-') & (data_plot_psth['cell_type'] == 'wS2')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 2])
+axes[1, 2].set_title('PSTH (Non-Rewarded Mice)')
+axes[1, 2].set_ylabel('DF/F0 (%)')
+axes[1, 2].axvline(0, color='orange', linestyle='--')
+
+# S2 Response amplitude
+rewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R+') & (data_plot_avg['cell_type'] == 'wS2')]
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 3])
+axes[0, 3].set_title('Response Amplitude (Rewarded Mice)')
+axes[0, 3].set_ylabel('Average Response (dF/F0)')
+
+nonrewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R-') & (data_plot_avg['cell_type'] == 'wS2')]
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 3])
+axes[1, 3].set_title('Response Amplitude (Non-Rewarded Mice)')
+axes[1, 3].set_ylabel('Average Response (dF/F0)')
+
+# M1 PSTH
+rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+') & (data_plot_psth['cell_type'] == 'wM1')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 4])
+axes[0, 4].set_title('PSTH (Rewarded Mice)')
+axes[0, 4].set_ylabel('DF/F0 (%)')
+axes[0, 4].axvline(0, color='orange', linestyle='--')
+
+nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-') & (data_plot_psth['cell_type'] == 'wM1')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 4])
+axes[1, 4].set_title('PSTH (Non-Rewarded Mice)')
+axes[1, 4].set_ylabel('DF/F0 (%)')
+axes[1, 4].axvline(0, color='orange', linestyle='--')
+
+# M1 Response amplitude
+rewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R+') & (data_plot_avg['cell_type'] == 'wM1')]
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 5])
+axes[0, 5].set_title('Response Amplitude (Rewarded Mice)')
+axes[0, 5].set_ylabel('Average Response (dF/F0)')
+
+nonrewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R-') & (data_plot_avg['cell_type'] == 'wM1')]
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 5])
+axes[1, 5].set_title('Response Amplitude (Non-Rewarded Mice)')
+axes[1, 5].set_ylabel('Average Response (dF/F0)')
+
+
+# Adjust layout
+# plt.tight_layout()
+sns.despine()
+
+# Perform stats on response amplitude
+results = []
+for reward_group in ['R+', 'R-']:
+    for cell_type in ['all', 'wS2', 'wM1']:
+        if cell_type == 'all':
+            data_stats = data_plot_avg[data_plot_avg['reward_group'] == reward_group]
+        else:
+            data_stats = data_plot_avg[(data_plot_avg['reward_group'] == reward_group) & (data_plot_avg['cell_type'] == cell_type)]
+        pre = data_stats[data_stats['learning_period'] == 'pre']['average_response']
+        post = data_stats[data_stats['learning_period'] == 'post']['average_response']
+        stat, p_value = wilcoxon(pre, post)
+        results.append({
+            'reward_group': reward_group,
+            'cell_type': cell_type,
+            'stat': stat,
+            'p_value': p_value
+        })
+stats_df = pd.DataFrame(results)
+print(stats_df)
+
+# Save the figure and stats
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+stats_df.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_stats.csv'), index=False)
+data_plot_avg.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_data.csv'), index=False)
+
 
 
 # #############################################################################
