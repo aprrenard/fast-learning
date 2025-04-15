@@ -779,116 +779,139 @@ psth['learning_period'] = psth['day'].apply(lambda x: 'pre' if x in [-2,-1] else
 
 
 # Pre and post learning responses.
-# --------------------------------  
+# --------------------------------
 
 variance = 'cells'  # 'mice' or 'cells'
-days_selected = [-2,-1, 0, 1,2]
+days_selected = [-2,-1, 0,1,2]
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
 
 # Select days of interest.
 data_plot_avg = avg_resp[avg_resp['day'].isin(days_selected)]
 data_plot_psth = psth[psth['day'].isin(days_selected)]
 
 if variance == "mice":
+    # Just filter by cell count for the projection types.
     min_cells = 3
     data_plot_avg = filter_data_by_cell_count(data_plot_avg, min_cells)
     data_plot_psth = filter_data_by_cell_count(data_plot_psth, min_cells)
-    data_plot_avg = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
-    data_plot_psth = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
+    # Average for all cells and projection types independently.
+    data_plot_avg_all = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group'])['average_response'].agg('mean').reset_index()
+    data_plot_avg_proj = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
+    data_plot_psth_all = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time'])['psth'].agg('mean').reset_index()
+    data_plot_psth_proj = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type'])['psth'].agg('mean').reset_index()
 else:
-    data_plot_avg = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
-    data_plot_psth = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
-
-
+    data_plot_avg_all = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type', 'roi'])['average_response'].agg('mean').reset_index()
+    data_plot_psth_all = data_plot_psth.groupby(['mouse_id', 'learning_period', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
+    data_plot_avg_proj = data_plot_avg_all
+    data_plot_psth_proj = data_plot_psth_all
+ 
 # Create the figure with four subplots
-fig, axes = plt.subplots(2, 6, figsize=(36, 10), sharex=False, sharey=False)
+fig, axes = plt.subplots(2, 2, figsize=(6, 5), sharex=False, sharey=True)
 
 # Top-left: PSTH for rewarded mice
-rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+')]
-sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 0])
+rewarded_data = data_plot_psth_all[(data_plot_psth_all['reward_group'] == 'R+')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 0], legend=False )
 axes[0, 0].set_title('PSTH (Rewarded Mice)')
 axes[0, 0].set_ylabel('DF/F0 (%)')
 axes[0, 0].axvline(0, color='orange', linestyle='--')
 
 # Bottom-left: PSTH for non-rewarded mice
-nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-')]
-sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 0])
+nonrewarded_data = data_plot_psth_all[(data_plot_psth_all['reward_group'] == 'R-')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 0], legend=False )
 axes[1, 0].set_title('PSTH (Non-Rewarded Mice)')
 axes[1, 0].set_ylabel('DF/F0 (%)')
 axes[1, 0].axvline(0, color='orange', linestyle='--')
 
 # Top-right: Response amplitude for rewarded mice
-rewarded_avg = data_plot_avg[data_plot_avg['reward_group'] == 'R+']
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 1])
+rewarded_avg = data_plot_avg_all[data_plot_avg_all['reward_group'] == 'R+']
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
 axes[0, 1].set_title('Response Amplitude (Rewarded Mice)')
 axes[0, 1].set_ylabel('Average Response (dF/F0)')
 
 # Bottom-right: Response amplitude for non-rewarded mice
-nonrewarded_avg = data_plot_avg[data_plot_avg['reward_group'] == 'R-']
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 1])
+nonrewarded_avg = data_plot_avg_all[data_plot_avg_all['reward_group'] == 'R-']
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
 axes[1, 1].set_title('Response Amplitude (Non-Rewarded Mice)')
 axes[1, 1].set_ylabel('Average Response (dF/F0)')
 
+sns.despine()
+
+# Save figure.
+svg_file = f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_allcells.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+fig, axes = plt.subplots(2, 4, figsize=(12, 5), sharex=False, sharey=True)
+
 # S2 PSTH
-rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+') & (data_plot_psth['cell_type'] == 'wS2')]
-sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 2])
+rewarded_data = data_plot_psth_proj[(data_plot_psth_proj['reward_group'] == 'R+') & (data_plot_psth_proj['cell_type'] == 'wS2')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 0], legend=False)
+axes[0, 0].set_title('PSTH (Rewarded Mice)')
+axes[0, 0].set_ylabel('DF/F0 (%)')
+axes[0, 0].axvline(0, color='orange', linestyle='--')
+
+nonrewarded_data = data_plot_psth_proj[(data_plot_psth_proj['reward_group'] == 'R-') & (data_plot_psth_proj['cell_type'] == 'wS2')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 0], legend=False)
+axes[1, 0].set_title('PSTH (Non-Rewarded Mice)')
+axes[1, 0].set_ylabel('DF/F0 (%)')
+axes[1, 0].axvline(0, color='orange', linestyle='--')
+
+# S2 Response amplitude
+rewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R+') & (data_plot_avg_proj['cell_type'] == 'wS2')]
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
+axes[0, 1].set_title('Response Amplitude (Rewarded Mice)')
+axes[0, 1].set_ylabel('Average Response (dF/F0)')
+
+nonrewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R-') & (data_plot_avg_proj['cell_type'] == 'wS2')]
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
+axes[1, 1].set_title('Response Amplitude (Non-Rewarded Mice)')
+axes[1, 1].set_ylabel('Average Response (dF/F0)')
+
+# M1 PSTH
+rewarded_data = data_plot_psth_proj[(data_plot_psth_proj['reward_group'] == 'R+') & (data_plot_psth_proj['cell_type'] == 'wM1')]
+sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 2], legend=False)
 axes[0, 2].set_title('PSTH (Rewarded Mice)')
 axes[0, 2].set_ylabel('DF/F0 (%)')
 axes[0, 2].axvline(0, color='orange', linestyle='--')
 
-nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-') & (data_plot_psth['cell_type'] == 'wS2')]
-sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 2])
+nonrewarded_data = data_plot_psth_proj[(data_plot_psth_proj['reward_group'] == 'R-') & (data_plot_psth_proj['cell_type'] == 'wM1')]
+sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period',hue_order=['pre', 'post'],
+    palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 2], legend=False)
 axes[1, 2].set_title('PSTH (Non-Rewarded Mice)')
 axes[1, 2].set_ylabel('DF/F0 (%)')
 axes[1, 2].axvline(0, color='orange', linestyle='--')
 
-# S2 Response amplitude
-rewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R+') & (data_plot_avg['cell_type'] == 'wS2')]
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 3])
+# M1 Response amplitude
+rewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R+') & (data_plot_avg_proj['cell_type'] == 'wM1')]
+sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 3])
 axes[0, 3].set_title('Response Amplitude (Rewarded Mice)')
 axes[0, 3].set_ylabel('Average Response (dF/F0)')
 
-nonrewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R-') & (data_plot_avg['cell_type'] == 'wS2')]
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 3])
+nonrewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R-') & (data_plot_avg_proj['cell_type'] == 'wM1')]
+sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 3])
 axes[1, 3].set_title('Response Amplitude (Non-Rewarded Mice)')
 axes[1, 3].set_ylabel('Average Response (dF/F0)')
 
-# M1 PSTH
-rewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R+') & (data_plot_psth['cell_type'] == 'wM1')]
-sns.lineplot(data=rewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#1b9e77']), ax=axes[0, 4])
-axes[0, 4].set_title('PSTH (Rewarded Mice)')
-axes[0, 4].set_ylabel('DF/F0 (%)')
-axes[0, 4].axvline(0, color='orange', linestyle='--')
-
-nonrewarded_data = data_plot_psth[(data_plot_psth['reward_group'] == 'R-') & (data_plot_psth['cell_type'] == 'wM1')]
-sns.lineplot(data=nonrewarded_data, x='time', y='psth', hue='learning_period', palette=sns.color_palette(['#a3a3a3', '#c959affe']), ax=axes[1, 4])
-axes[1, 4].set_title('PSTH (Non-Rewarded Mice)')
-axes[1, 4].set_ylabel('DF/F0 (%)')
-axes[1, 4].axvline(0, color='orange', linestyle='--')
-
-# M1 Response amplitude
-rewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R+') & (data_plot_avg['cell_type'] == 'wM1')]
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', color='#1b9e77', ax=axes[0, 5])
-axes[0, 5].set_title('Response Amplitude (Rewarded Mice)')
-axes[0, 5].set_ylabel('Average Response (dF/F0)')
-
-nonrewarded_avg = data_plot_avg[(data_plot_avg['reward_group'] == 'R-') & (data_plot_avg['cell_type'] == 'wM1')]
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', color='#c959affe', ax=axes[1, 5])
-axes[1, 5].set_title('Response Amplitude (Non-Rewarded Mice)')
-axes[1, 5].set_ylabel('Average Response (dF/F0)')
-
-
-# Adjust layout
-# plt.tight_layout()
 sns.despine()
+
+# Save figure.
+svg_file = f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_proj.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
 
 # Perform stats on response amplitude
 results = []
 for reward_group in ['R+', 'R-']:
     for cell_type in ['all', 'wS2', 'wM1']:
         if cell_type == 'all':
-            data_stats = data_plot_avg[data_plot_avg['reward_group'] == reward_group]
+            data_stats = data_plot_avg_all[data_plot_avg_all['reward_group'] == reward_group]
         else:
-            data_stats = data_plot_avg[(data_plot_avg['reward_group'] == reward_group) & (data_plot_avg['cell_type'] == cell_type)]
+            data_stats = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == reward_group) & (data_plot_avg_proj['cell_type'] == cell_type)]
         pre = data_stats[data_stats['learning_period'] == 'pre']['average_response']
         post = data_stats[data_stats['learning_period'] == 'post']['average_response']
         stat, p_value = wilcoxon(pre, post)
@@ -902,12 +925,10 @@ stats_df = pd.DataFrame(results)
 print(stats_df)
 
 # Save the figure and stats
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
 stats_df.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_stats.csv'), index=False)
-data_plot_avg.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_data.csv'), index=False)
+data_plot_avg_all.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_data_allcells.csv'), index=False)
+data_plot_avg_proj.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_data_proj.csv'), index=False)
 
 
 
