@@ -46,7 +46,7 @@ def select_sessions_from_db(db_path, nwb_path, experimenters=None,
     for col in exclude_cols:
         db = db.loc[(db[col]!='exclude')]
         
-    mice_list = list(db.subject_id.unique())
+    mice_list = list(db.mouse_id.unique())
     session_list = list(db.session_id)
     if experimenters:
         session_list = [session for session in session_list
@@ -84,7 +84,7 @@ def select_mice_from_db(db_path, nwb_path, experimenters=None,
     for col in exclude_cols:
         db = db.loc[(db[col]!='exclude')]
         
-    mice_list = list(db.subject_id.unique())
+    mice_list = list(db.mouse_id.unique())
     if experimenters:
         mice_list = [mouse for mouse in mice_list
                      if mouse[:2] in experimenters]
@@ -180,3 +180,7 @@ def solve_common_paths(target):
 processed_dir = solve_common_paths('processed_data')
 nwb_dir = solve_common_paths('nwb')
 db_path = solve_common_paths('db')
+trial_indices_yaml = solve_common_paths('trial_indices')
+trial_indices_sensory_map_yaml = solve_common_paths('trial_indices_sensory_map')
+stop_flags_yaml = solve_common_paths('stop_flags')
+stop_flags_sensory_map_yaml = solve_common_paths('stop_flags_sensory_map')
