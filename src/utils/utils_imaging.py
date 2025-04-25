@@ -160,7 +160,7 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
     return X
 
 
-def compute_lmi(data_pre, data_post, nshuffles=1000):
+def compute_roc(data_pre, data_post, nshuffles=1000):
     '''
     Compute ROC analysis and Learning modulation index for each cell in data.
     data_pre: np array of shape (cell, trial).
@@ -175,7 +175,7 @@ def compute_lmi(data_pre, data_post, nshuffles=1000):
     lmi_p = np.full(ncell, np.nan)
 
     for icell in range(ncell):
-        print(f'LMI computation: {icell+1}/{ncell} cells', end='\r')
+        print(f'ROC computation: {icell+1}/{ncell} cells', end='\r')
         
         X_pre = data_pre[icell]
         X_post = data_post[icell]

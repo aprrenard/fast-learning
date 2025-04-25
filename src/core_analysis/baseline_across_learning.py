@@ -54,295 +54,6 @@ def filter_data_by_cell_count(data, min_cells):
     return data
 
 
-# #############################################################################
-# Count the number of cells and proportion of cell types.
-# #############################################################################
-
-_, _, mice, db = io.select_sessions_from_db(io.db_path,
-                                            io.nwb_dir,
-                                            two_p_imaging='yes',
-                                            experimenters=['GF', 'MI', 'AR'])
-
-# Get roi and cell type for each mouse.
-dataset = []
-for mouse_id in mice:
-    # Disregard these mice as the number of trials is too low.
-    # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
-    #     continue
-    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
-    file_name = 'tensor_xarray_mapping_data.nc'
-    folder = os.path.join(io.processed_dir, 'mice')
-    data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
-    
-    rois = data.coords['roi'].values
-    cts = data.coords['cell_type'].values
-    df = pd.DataFrame(data={'roi': rois, 'cell_type': cts})
-    df['mouse_id'] = mouse_id
-    df['reward_group'] = reward_group
-    dataset.append(df)
-dataset = pd.concat(dataset)
-
-# Counts.
-cell_count = dataset.groupby(['mouse_id', 'reward_group', 'cell_type'])['roi'].count().reset_index()
-temp = cell_count.groupby(['mouse_id', 'reward_group'])[['roi']].sum().reset_index()
-temp['cell_type'] = 'all_cells'
-cell_count = pd.concat([cell_count, temp])
-cell_count = cell_count.loc[cell_count.cell_type.isin(['all_cells', 'wS2', 'wM1'])]
-
-prop_ct = cell_count.loc[cell_count.cell_type.isin(['wS2', 'wM1'])]
-prop_ct = prop_ct.merge(cell_count.loc[cell_count.cell_type == 'all_cells', ['mouse_id', 'reward_group', 'roi']], on=['mouse_id', 'reward_group'], suffixes=('', '_total'))
-prop_ct['prop'] = prop_ct['roi'] / prop_ct['roi_total']
-
-# Save figures to PDF.
-save_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts'
-save_dir = io.adjust_path_to_host(save_dir)
-pdf_file = f'cell_counts.pdf'  # TODO set correct path
-
-with PdfPages(os.path.join(save_dir, pdf_file)) as pdf:
-    fig = sns.catplot(data=cell_count,
-                      x='reward_group', y='roi', hue='cell_type', kind='bar',
-                      palette=cell_types_palette, hue_order=['all_cells', 'wS2', 'wM1'])
-    fig.set_axis_labels('', 'Number of cells')
-    pdf.savefig(fig.figure)
-    plt.close(fig.figure)
-
-    fig = sns.catplot(data=prop_ct,
-                      x='reward_group', y='prop', hue='cell_type', kind='bar',
-                      palette=s2_m1_palette, hue_order=['wS2', 'wM1'])
-    fig.set_axis_labels('', 'Proportion of cells')
-    pdf.savefig(fig.figure)
-    plt.close(fig.figure)
-
-# Print counts.
-print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].sum().reset_index())
-print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].mean().reset_index())
-print(prop_ct.groupby(['reward_group', 'cell_type'])['prop'].mean().reset_index())
-
-# Save dataframe.
-cell_count.to_csv(os.path.join(save_dir, 'cell_counts.csv'), index=False)
-prop_ct.to_csv(os.path.join(save_dir, 'cell_proportions.csv'), index=False)
-
-# Count mice.
-print(cell_count[['mouse_id', 'reward_group']].drop_duplicates().groupby('reward_group').count().reset_index())
-print(prop_ct[['mouse_id', 'reward_group']].drop_duplicates().groupby('reward_group').count().reset_index())
-
-# Read counts from file.
-cell_count = io.adjust_path_to_host('/mnt/lsens-analysis/Anthony_Renard/analysis_output/counts/cell_counts.csv')
-cell_count = pd.read_csv(cell_count)
-cell_count
-mice_AR = [m for m in mice if m.startswith('AR')]
-mice_GF = [m for m in mice if m.startswith('GF') or m.startswith('MI')]
-cell_count.loc[cell_count.mouse_id.isin(mice_AR)].groupby(['reward_group', 'cell_type'])['roi'].sum()
-cell_count.loc[cell_count.mouse_id.isin(mice_GF)].groupby(['reward_group', 'cell_type'])['roi'].sum()
-
-
-# #############################################################################
-# Proportion of responsive cells across days.
-# #############################################################################
-
-processed_folder = io.solve_common_paths('processed_data')
-tests = pd.read_csv(os.path.join(processed_folder, 'response_test_results_win_300ms.csv'))
-
-_, _, mice, _ = io.select_sessions_from_db(io.db_path,
-                                            io.nwb_dir,
-                                            two_p_imaging='yes',
-                                            experimenters=['AR', 'GF', 'MI'])
-
-for mouse in tests.mouse_id.unique():
-    tests.loc[tests.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(io.db_path, mouse)
-
-# Select days.
-tests = tests.loc[tests.day.isin([-2, -1, 0, 1, 2])]
-
-tests['thr_5%_aud'] = tests['pval_aud'] <= 0.05
-tests['thr_5%_wh'] = tests['pval_wh'] <= 0.05
-tests['thr_5%_mapping'] = tests['pval_mapping'] <= 0.05
-tests['thr_5%_both'] = (tests['pval_aud'] <= 0.05) & (tests['pval_wh'] <= 0.05)
-
-prop = tests.groupby(['mouse_id', 'session_id', 'reward_group', 'day'])[['thr_5%_aud', 'thr_5%_wh', 'thr_5%_both', 'thr_5%_mapping']].apply(lambda x: x.sum() / x.count()).reset_index()
-prop_proj = tests.groupby([ 'mouse_id', 'session_id', 'reward_group', 'day', 'cell_type'])[['thr_5%_aud', 'thr_5%_wh', 'thr_5%_both', 'thr_5%_mapping']].apply(lambda x: x.sum() / x.count()).reset_index()
-# Convert to long format.
-prop = prop.melt(id_vars=['mouse_id', 'session_id', 'reward_group', 'day'], value_vars=['thr_5%_aud', 'thr_5%_wh', 'thr_5%_mapping'], var_name='test', value_name='prop')
-prop_proj = prop_proj.melt(id_vars=['mouse_id', 'session_id', 'reward_group', 'day', 'cell_type'], value_vars=['thr_5%_aud', 'thr_5%_wh', 'thr_5%_mapping'], var_name='test', value_name='prop')
-prop['prop'] = prop['prop'] * 100
-prop_proj['prop'] = prop_proj['prop'] * 100
-
-
-# Cell proportions across days. All cells.
-# ----------------------------------------
-
-fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
-palette = sns.color_palette(['#a6cee3', '#1f78b4'])
-sns.barplot(data=prop.loc[prop.test=='thr_5%_aud'],
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[0])
-plt.ylim(0, 30)
-
-palette = sns.color_palette(['#d95f02', '#1b9e77'])
-sns.barplot(data=prop.loc[prop.test=='thr_5%_wh'],
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[1])
-plt.ylim(0, 30)
-
-palette = sns.color_palette(['#d95f02', '#1b9e77'])
-sns.barplot(data=prop.loc[prop.test=='thr_5%_mapping'],
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[2])
-plt.ylim(0, 30)
-sns.despine()
-
-# Save fig to svg.
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/cell_proportions/'
-svg_file = f'prop_responsive_cells_across_days.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-
-
-# Cell proportions across days. Projection neurons.
-# -------------------------------------------------
-
-fig, axes = plt.subplots(2, 3, figsize=(12, 4), sharey=True)
-palette = sns.color_palette(['#a6cee3', '#1f78b4'])
-data = prop_proj.loc[(prop_proj.test=='thr_5%_aud') & (prop_proj.cell_type=='wS2')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[0,0])
-plt.ylim(0, 30)
-data = prop_proj.loc[(prop_proj.test=='thr_5%_aud') & (prop_proj.cell_type=='wM1')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[1,0])
-plt.ylim(0, 30)
-
-palette = sns.color_palette(['#d95f02', '#1b9e77'])
-data = prop_proj.loc[(prop_proj.test=='thr_5%_wh') & (prop_proj.cell_type=='wS2')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[0,1])
-plt.ylim(0, 30)
-data = prop_proj.loc[(prop_proj.test=='thr_5%_wh') & (prop_proj.cell_type=='wM1')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[1,1])
-plt.ylim(0, 30)
-
-palette = sns.color_palette(['#d95f02', '#1b9e77'])
-data = prop_proj.loc[(prop_proj.test=='thr_5%_mapping') & (prop_proj.cell_type=='wS2')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[0,2])
-plt.ylim(0, 30)
-data = prop_proj.loc[(prop_proj.test=='thr_5%_mapping') & (prop_proj.cell_type=='wM1')]
-sns.barplot(data=data,
-            x='day', y='prop', hue='reward_group',
-            palette=palette,
-            hue_order=['R-', 'R+'],
-            estimator=np.mean,
-            ax=axes[1,2])
-plt.ylim(0, 30)
-sns.despine()
-
-# Save fig to svg.
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/cell_proportions/'
-svg_file = f'prop_responsive_cells_projections_across_days.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-
-
-# #############################################################################
-# Proportion of LMI.
-# #############################################################################
-
-processed_folder = io.solve_common_paths('processed_data')
-lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
-
-_, _, mice, _ = io.select_sessions_from_db(io.db_path,
-                                            io.nwb_dir,
-                                            two_p_imaging='yes',)
-
-for mouse in lmi_df.mouse_id.unique():
-    lmi_df.loc[lmi_df.mouse_id==mouse, 'reward_group'] = io.get_mouse_reward_group_from_db(io.db_path, mouse)
-
-lmi_df = lmi_df.loc[lmi_df.mouse_id.isin(mice)]
-
-lmi_df['lmi_pos'] = lmi_df['lmi_p'] >= 0.975
-lmi_df['lmi_neg'] = lmi_df['lmi_p'] <= 0.025
-
-lmi_prop = lmi_df.groupby(['mouse_id', 'reward_group'])[['lmi_pos', 'lmi_neg']].apply(lambda x: x.sum() / x.count()).reset_index()
-lmi_prop_ct = lmi_df.groupby(['mouse_id', 'reward_group', 'cell_type'])[['lmi_pos', 'lmi_neg']].apply(lambda x: x.sum() / x.count()).reset_index()
-
-# Plot.
-fig, axes = plt.subplots(1, 6, figsize=(15, 3), sharey=True)
-sns.barplot(data=lmi_prop, x='reward_group', order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[0], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[0].set_title('LMI Positive')
-sns.barplot(data=lmi_prop, x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg',  ax=axes[1], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[1].set_title('LMI Negative')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[2], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[2].set_title('LMI Positive wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[3], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[3].set_title('LMI Negative wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[4], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[4].set_title('LMI Positive wM1')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[5], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[5].set_title('LMI Negative wM1')
-sns.despine(trim=True)
-
-# Stats.
-# Perform Mann-Whitney U test for each LMI group.
-results = []
-groups = ['lmi_pos', 'lmi_neg']
-cell_types = [None, 'wS2', 'wM1']
-
-for group in groups:
-    for cell_type in cell_types:
-        if cell_type:
-            data = lmi_prop_ct[lmi_prop_ct.cell_type == cell_type]
-        else:
-            data = lmi_prop
-
-        r_plus = data[data.reward_group == 'R+'][group]
-        r_minus = data[data.reward_group == 'R-'][group]
-
-        stat, p_value = mannwhitneyu(r_plus, r_minus, alternative='two-sided')
-        results.append({
-            'group': group,
-            'cell_type': cell_type if cell_type else 'all',
-            'stat': stat,
-            'p_value': p_value
-        })
-results_df = pd.DataFrame(results)
-results_df.to_csv(os.path.join(output_dir, 'prop_lmi_mannwhitney_results.csv'), index=False)
-
-# Save figure and data.
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/cell_proportions/'
-svg_file = f'prop_lmi.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-lmi_prop.to_csv(os.path.join(output_dir, 'prop_lmi.csv'), index=False)
-lmi_prop_ct.to_csv(os.path.join(output_dir, 'prop_lmi_ct.csv'), index=False)
- 
-
 # # #############################################################################
 # # Comparing xarray datasets with previous tensors.
 # # #############################################################################
@@ -386,7 +97,7 @@ _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             two_p_imaging='yes',
                                             experimenters=['AR', 'GF', 'MI'])
 # mice = [m for m in mice if m not in ['AR163']]
-mice_count = db[['subject_id', 'reward_group']].drop_duplicates()
+mice_count = db[['mouse_id', 'reward_group']].drop_duplicates()
 # print(mice_count)
 # print(mice_count.groupby('reward_group').count().reset_index())
 
@@ -484,6 +195,7 @@ pdf_file = f'psth_individual_mice_baseline.pdf'
 
 with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
     for mouse_id in mice:
+        print(f"\rProcessing {mouse_id} ({mice.index(mouse_id) + 1}/{len(mice)})", end="")
         # Plot.
         data = psth.loc[psth['day'].isin([-2, -1, 0, 1, 2])
                       & (psth['mouse_id'] == mouse_id)]
@@ -946,33 +658,53 @@ baseline_win = (-1, 0)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days_str = ['-2', '-1', '0', '+1', '+2']
 days = [-2, -1, 0, 1, 2]
-n_map_trials = 45
+n_map_trials = 40
 substract_baseline = True
-average_inside_days = True
+select_responsive_cells = False
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
 print(mice)
-# excluded_mice = ['GF307', 'GF310', 'GF333', 'MI075', 'AR144', 'AR135', 'AR163']
+# excluded_mice = ['AR187']
 # mice = [m for m in mice if m not in excluded_mice]
 
 
-mice = ['AR127']
+# mice = ['AR127']
+
 # Load data.
 # ----------
+
+# Responsiveness df.
+# test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
+# test_df = pd.read_csv(test_df)
+# test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
+# responsive_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
+
+test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
+test_df = pd.read_csv(test_df)
+test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
+test_df = test_df.loc[test_df['day'].isin(days)]
+# Select cells as responsive if they pass the test on at least one day.
+responsive_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
+responsive_cells = responsive_cells.loc[responsive_cells['pval_mapping'] <= 0.05/5]
+
 
 vectors_rew = []
 vectors_nonrew = []
 for mouse in mice:
     print(mouse)
-    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
     xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
     
+    # Select responsive cells.
+    if select_responsive_cells:
+        xarray = xarray.sel(cell=xarray['roi'].isin(responsive_cells.loc[responsive_cells['mouse_id'] == mouse]['roi']))
+        
     # Select days.
     xarray = xarray.sel(trial=xarray['day'].isin(days))
 
@@ -983,8 +715,8 @@ for mouse in mice:
         print(f'Not enough mapping trials for {mouse}.')
         continue
     
-    # Select first n_map_trials mapping trials for each day.
-    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(0, n_map_trials)))
+    # Select last n_map_trials mapping trials for each day.
+    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
     print(d.shape)
     
     d = d.sel(time=slice(win[0], win[1])).mean(dim='time')
@@ -994,33 +726,134 @@ for mouse in mice:
         vectors_rew.append(d)
 vectors_rew = xr.concat(vectors_rew, dim='cell')
 vectors_nonrew = xr.concat(vectors_nonrew, dim='cell')
+# Remove cells where activity is 0 for all trials.
+vectors_rew = vectors_rew.sel(cell=~(vectors_rew.mean(dim='trial') == 0))
+vectors_nonrew = vectors_nonrew.sel(cell=~(vectors_nonrew.mean(dim='trial') == 0))
 
 
-# Compute correlation matrices.
-# ------------------------------
+# Correlation matrices with all trials
+# ------------------------------------
 
-if average_inside_days:
-    data_rew = vectors_rew.groupby('day').mean(dim='trial')
-    data_nonrew = vectors_nonrew.groupby('day').mean(dim='trial')
+zscore = False
+
+if zscore:
+    # Z-score the data cell-wise
+    data_rew = (vectors_rew - vectors_rew.mean(dim='trial')) / vectors_rew.std(dim='trial')
+    data_nonrew = (vectors_nonrew - vectors_nonrew.mean(dim='trial')) / vectors_nonrew.std(dim='trial')
+else:
+    data_rew = vectors_rew
+    data_nonrew = vectors_nonrew
+    cm = np.corrcoef(data_rew.values.T)
+    cm_nodiag = cm.copy()
+    np.fill_diagonal(cm_nodiag, np.nan)
+    vmax = np.nanpercentile(cm_nodiag, 98.5)
+    vmin = np.nanpercentile(cm_nodiag, 2)
+
+    # Plot correlation matrix for rewarded group
+    plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
+    edges = np.cumsum([n_map_trials for _ in range(len(days))])
+    for edge in edges[:-1]:
+        plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+        plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+    plt.xticks(edges - n_map_trials / 2, days)
+    plt.yticks(edges - n_map_trials / 2, days)
+    plt.xlabel('Day')
+    plt.ylabel('Day')
+    plt.title('Correlation Matrix (Rewarded Group)')
+    plt.colorbar(label='Correlation')
+    plt.show()
+
+    cm = np.corrcoef(data_nonrew.values.T)
+    cm_nodiag = cm.copy()
+    np.fill_diagonal(cm_nodiag, np.nan)
+
+    # Plot correlation matrix for non-rewarded group
+    plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
+    for edge in edges[:-1]:
+        plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+        plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+    plt.xticks(edges - n_map_trials / 2, days)
+    plt.yticks(edges - n_map_trials / 2, days)
+    plt.xlabel('Day')
+    plt.ylabel('Day')
+    plt.title('Correlation Matrix (Non-Rewarded Group)')
+    plt.colorbar(label='Correlation')
+    plt.show()
+
+
+# Average correlation within and between days (5x5 matrix).
+# ---------------------------------------------------------
+
+zscore = False
+
+if zscore:
+    # Z-score the data cell-wise
+    data_rew = (vectors_rew - vectors_rew.mean(dim='trial')) / vectors_rew.std(dim='trial')
+    data_nonrew = (vectors_nonrew - vectors_nonrew.mean(dim='trial')) / vectors_nonrew.std(dim='trial')
 else:
     data_rew = vectors_rew
     data_nonrew = vectors_nonrew
 
-cm = np.corrcoef(data_rew.values.T)
-cm_nodiag = cm.copy()
-np.fill_diagonal(cm_nodiag, np.nan)
-plt.imshow(cm, cmap='grey_r', vmax=np.nanmax(cm_nodiag))
-cm = np.corrcoef(data_nonrew.values.T)
-cm_nodiag = cm.copy()
-np.fill_diagonal(cm_nodiag, np.nan)
-plt.imshow(cm, cmap='grey_r', vmax=np.nanmax(cm_nodiag))
+# Compute average correlation within and between days (5x5 matrix).
+day_corr_matrix_rew = np.zeros((len(days), len(days)))
+day_corr_matrix_nonrew = np.zeros((len(days), len(days)))
+
+for i, day1 in enumerate(days):
+    for j, day2 in enumerate(days):
+        # Select data for the two days.
+        day1_data_rew = data_rew.sel(trial=data_rew['day'] == day1)
+        day2_data_rew = data_rew.sel(trial=data_rew['day'] == day2)
+        day1_data_nonrew = data_nonrew.sel(trial=data_rew['day'] == day1)
+        day2_data_nonrew = data_nonrew.sel(trial=data_rew['day'] == day2)
+
+        # Compute correlation between days.
+        corr_rew = np.corrcoef(day1_data_rew.values.T, day2_data_rew.values.T)
+        corr_nonrew = np.corrcoef(day1_data_nonrew.values.T, day2_data_nonrew.values.T)
+
+        # If day1 is the same as day2, exclude the diagonal.
+        if day1 == day2:
+            np.fill_diagonal(corr_rew, np.nan)
+            np.fill_diagonal(corr_nonrew, np.nan)
+
+        # Compute average correlation between the two days.
+        avg_corr_rew = np.nanmean(corr_rew)
+        avg_corr_nonrew = np.nanmean(corr_nonrew)
+
+        # Store in the matrices.
+        day_corr_matrix_rew[i, j] = avg_corr_rew
+        day_corr_matrix_nonrew[i, j] = avg_corr_nonrew
+
+# vmax = np.nanmax(day_corr_matrix_rew)
+# vmin = np.nanmin(day_corr_matrix_rew)
+
+vmax=np.max(day_corr_matrix_rew)
+vmin=np.min(day_corr_matrix_nonrew)
+
+plt.figure(figsize=(6, 5))
+sns.heatmap(day_corr_matrix_rew, annot=True, vmax=vmax, vmin=vmin, xticklabels=days, yticklabels=days, cmap='viridis', cbar_kws={'label': 'Correlation'})
+plt.title('Correlation Matrix (Rewarded Group)')
+plt.xlabel('Day')
+plt.ylabel('Day')
+plt.show()
+
+# Plot correlation matrix for non-rewarded group.
+plt.figure(figsize=(6, 5))
+sns.heatmap(day_corr_matrix_nonrew, annot=True, vmax=vmax, vmin=vmin, xticklabels=days, yticklabels=days, cmap='viridis', cbar_kws={'label': 'Correlation'})
+plt.title('Correlation Matrix (Non-Rewarded Group)')
+plt.xlabel('Day')
+plt.ylabel('Day')
+plt.show()
 
 
-cm = np.corrcoef(data.sel(cell=(data.cell_type=='wS2')).values.T)
-plt.imshow(cm, cmap='viridis', vmin=-.19, vmax=0.7)
+
+
+
+
 
 
 # Illustrate pop vectors of AR127.
+# --------------------------------
+
 
 # Vectors during learning.
 file_name = 'tensor_xarray_learning_data.nc'
@@ -1048,6 +881,30 @@ im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
 for i in edges[:-1] - 0.5:
     plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
 plt.xticks(edges - 0.5, edges)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1100,9 +957,9 @@ lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 dfs = []
 for mouse in mice:
     print(mouse)
-    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
     if substract_baseline:
         xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
@@ -1198,9 +1055,9 @@ learning_trials = {'GF305':138, 'GF306': 200, 'GF317': 96, 'GF323': 211, 'GF318'
 dfs = []
 for mouse in mice:
     print(mouse)
-    io.processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
+    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
     if substract_baseline:
         xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)

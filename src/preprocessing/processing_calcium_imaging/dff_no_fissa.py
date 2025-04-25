@@ -134,7 +134,7 @@ experimenter = 'AR'
 # nwb_dir = io.nwb_dir
 # _, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=experimenter,
 #                             exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
-mice_ids = ['AR185', 'AR187']
+mice_ids = ['AR187',]
 
 suite2p_folders = []
 for mouse_id in mice_ids:
