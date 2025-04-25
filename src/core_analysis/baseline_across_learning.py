@@ -24,6 +24,7 @@ import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.core_analysis.behavior import compute_performance, plot_single_session
 from statannotations.Annotator import Annotator
+from scipy.stats import mannwhitneyu
 
 
 def filter_data_by_cell_count(data, min_cells):
@@ -644,11 +645,12 @@ data_plot_avg_proj.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{va
 
 
 
-# #############################################################################
-# Correlation matrices during mapping across days.
-# #############################################################################
+# #########################################
+# Correlation matrices average across mice.
+# #########################################
 
-# Parameters.
+# Similar to the previous section, but compute a correlation matrix for
+# each mouse and then average across mice.
 
 sampling_rate = 30
 win = (0, 0.300)  # from stimulus onset to 300 ms after.
@@ -661,193 +663,234 @@ days = [-2, -1, 0, 1, 2]
 n_map_trials = 40
 substract_baseline = True
 select_responsive_cells = False
+select_lmi = False
+zscore = False
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
 print(mice)
-# excluded_mice = ['AR187']
-# mice = [m for m in mice if m not in excluded_mice]
-
-
-# mice = ['AR127']
 
 # Load data.
-# ----------
+vectors_rew = []
+vectors_nonrew = []
 
+# Load responsive cells.
 # Responsiveness df.
 # test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
 # test_df = pd.read_csv(test_df)
 # test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
-# responsive_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
+# selected_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
 
-test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
-test_df = pd.read_csv(test_df)
-test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
-test_df = test_df.loc[test_df['day'].isin(days)]
-# Select cells as responsive if they pass the test on at least one day.
-responsive_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
-responsive_cells = responsive_cells.loc[responsive_cells['pval_mapping'] <= 0.05/5]
+if select_responsive_cells:
+    test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
+    test_df = pd.read_csv(test_df)
+    test_df = test_df.loc[test_df['day'].isin(days)]
+    # Select cells as responsive if they pass the test on at least one day.
+    selected_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
+    selected_cells = selected_cells.loc[selected_cells['pval_mapping'] <= 0.05/5]
+
+if select_lmi:
+    lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
+    lmi_df = pd.read_csv(lmi_df)
+    selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
 
 
-vectors_rew = []
-vectors_nonrew = []
 for mouse in mice:
-    print(mouse)
+    print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
     xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
     xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
-    
-    # Select responsive cells.
-    if select_responsive_cells:
-        xarray = xarray.sel(cell=xarray['roi'].isin(responsive_cells.loc[responsive_cells['mouse_id'] == mouse]['roi']))
-        
+
     # Select days.
     xarray = xarray.sel(trial=xarray['day'].isin(days))
-
-    # Check that each day has at least n_map_trials mapping trial
+    
+    # Select responsive cells.
+    if select_responsive_cells or select_lmi:
+        xarray = xarray.sel(cell=xarray['roi'].isin(selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']))
+        
+    # Check that each day has at least n_map_trials mapping trials
     # and select the first n_map_trials mapping trials for each day.
-    n_trials = xarray[0,:,0].groupby('day').count(dim='trial').values
+    n_trials = xarray[0, :, 0].groupby('day').count(dim='trial').values
     if np.any(n_trials < n_map_trials):
         print(f'Not enough mapping trials for {mouse}.')
         continue
-    
+
     # Select last n_map_trials mapping trials for each day.
-    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
-    print(d.shape)
-    
+    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))    
     d = d.sel(time=slice(win[0], win[1])).mean(dim='time')
+    # Z-score
+    if zscore:
+        d = (d - d.mean(dim='trial')) / d.std(dim='trial')
+
     if rew_gp == 'R-':
         vectors_nonrew.append(d)
     elif rew_gp == 'R+':
         vectors_rew.append(d)
-vectors_rew = xr.concat(vectors_rew, dim='cell')
-vectors_nonrew = xr.concat(vectors_nonrew, dim='cell')
-# Remove cells where activity is 0 for all trials.
-vectors_rew = vectors_rew.sel(cell=~(vectors_rew.mean(dim='trial') == 0))
-vectors_nonrew = vectors_nonrew.sel(cell=~(vectors_nonrew.mean(dim='trial') == 0))
 
+# # Compute correlation matrices for each mouse and average across mice.
+# def compute_average_correlation(vectors):
+#     correlation_matrices = []
+#     for vector in vectors:
+#         cm = np.corrcoef(vector.values.T)
+#         np.fill_diagonal(cm, np.nan)  # Exclude diagonal
+#         correlation_matrices.append(cm)
+#     return np.nanmean(correlation_matrices, axis=0)
 
-# Correlation matrices with all trials
-# ------------------------------------
+# avg_corr_rew = compute_average_correlation(vectors_rew)
+# avg_corr_nonrew = compute_average_correlation(vectors_nonrew)
+# # Plot average correlation matrix for rewarded group using sns heatmap.
+# plt.figure(figsize=(6, 5))
+# sns.heatmap(avg_corr_rew, annot=False, cmap='viridis', cbar_kws={'label': 'Correlation'})
+# edges = np.cumsum([n_map_trials for _ in range(len(days))])
+# for edge in edges[:-1]:
+#     plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+#     plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+# plt.xticks(edges - n_map_trials / 2, days)
+# plt.yticks(edges - n_map_trials / 2, days)
+# plt.title('Average Correlation Matrix (Rewarded Group)')
+# plt.xlabel('Day')
+# plt.ylabel('Day')
+# plt.show()
 
-zscore = False
+# # Plot average correlation matrix for non-rewarded group using sns heatmap.
+# plt.figure(figsize=(6, 5))
+# sns.heatmap(avg_corr_nonrew, annot=False, cmap='viridis', cbar_kws={'label': 'Correlation'})
+# for edge in edges[:-1]:
+#     plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+#     plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+# plt.xticks(edges - n_map_trials / 2, days)
+# plt.yticks(edges - n_map_trials / 2, days)
+# plt.title('Average Correlation Matrix (Non-Rewarded Group)')
+# plt.xlabel('Day')
+# plt.ylabel('Day')
+# plt.show()
 
-if zscore:
-    # Z-score the data cell-wise
-    data_rew = (vectors_rew - vectors_rew.mean(dim='trial')) / vectors_rew.std(dim='trial')
-    data_nonrew = (vectors_nonrew - vectors_nonrew.mean(dim='trial')) / vectors_nonrew.std(dim='trial')
-else:
-    data_rew = vectors_rew
-    data_nonrew = vectors_nonrew
-    cm = np.corrcoef(data_rew.values.T)
-    cm_nodiag = cm.copy()
-    np.fill_diagonal(cm_nodiag, np.nan)
-    vmax = np.nanpercentile(cm_nodiag, 98.5)
-    vmin = np.nanpercentile(cm_nodiag, 2)
+# Compute average correlation for each pair of days for each mouse and return a 5x5 matrix averaged across mice.
+def compute_daywise_average_correlation(vectors, days):
+    daywise_correlation_matrices = []
+    correlation_change_indices = []
+    normalized_indices = []
+    for vector in vectors:
+        day_corr_matrix = np.zeros((len(days), len(days)))
+        for i, day1 in enumerate(days):
+            for j, day2 in enumerate(days):
+                # Select data for the two days.
+                day1_data = vector.sel(trial=vector['day'] == day1)
+                day2_data = vector.sel(trial=vector['day'] == day2)
 
-    # Plot correlation matrix for rewarded group
-    plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
-    edges = np.cumsum([n_map_trials for _ in range(len(days))])
-    for edge in edges[:-1]:
-        plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-        plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-    plt.xticks(edges - n_map_trials / 2, days)
-    plt.yticks(edges - n_map_trials / 2, days)
-    plt.xlabel('Day')
-    plt.ylabel('Day')
-    plt.title('Correlation Matrix (Rewarded Group)')
-    plt.colorbar(label='Correlation')
-    plt.show()
+                # Compute correlation between days.
+                corr = np.corrcoef(day1_data.values.T, day2_data.values.T)
 
-    cm = np.corrcoef(data_nonrew.values.T)
-    cm_nodiag = cm.copy()
-    np.fill_diagonal(cm_nodiag, np.nan)
+                # If day1 is the same as day2, exclude the diagonal.
+                if day1 == day2:
+                    np.fill_diagonal(corr, np.nan)
 
-    # Plot correlation matrix for non-rewarded group
-    plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
-    for edge in edges[:-1]:
-        plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-        plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-    plt.xticks(edges - n_map_trials / 2, days)
-    plt.yticks(edges - n_map_trials / 2, days)
-    plt.xlabel('Day')
-    plt.ylabel('Day')
-    plt.title('Correlation Matrix (Non-Rewarded Group)')
-    plt.colorbar(label='Correlation')
-    plt.show()
+                # Compute average correlation between the two days.
+                avg_corr = np.nanmean(corr)
+                day_corr_matrix[i, j] = avg_corr
 
+        daywise_correlation_matrices.append(day_corr_matrix)
 
-# Average correlation within and between days (5x5 matrix).
-# ---------------------------------------------------------
+        # Compute correlation change index and normalized index
+        days_pre = [0, 1]  # Indices for pretraining days
+        days_post = [3, 4]  # Indices for posttraining days
 
-zscore = False
+        corr_within_pre = day_corr_matrix[np.ix_(days_pre, days_pre)]
+        avg_corr_within_pre = np.nanmean(corr_within_pre)
 
-if zscore:
-    # Z-score the data cell-wise
-    data_rew = (vectors_rew - vectors_rew.mean(dim='trial')) / vectors_rew.std(dim='trial')
-    data_nonrew = (vectors_nonrew - vectors_nonrew.mean(dim='trial')) / vectors_nonrew.std(dim='trial')
-else:
-    data_rew = vectors_rew
-    data_nonrew = vectors_nonrew
+        corr_within_post = day_corr_matrix[np.ix_(days_post, days_post)]
+        avg_corr_within_post = np.nanmean(corr_within_post)
 
-# Compute average correlation within and between days (5x5 matrix).
-day_corr_matrix_rew = np.zeros((len(days), len(days)))
-day_corr_matrix_nonrew = np.zeros((len(days), len(days)))
+        corr_between = day_corr_matrix[np.ix_(days_pre, days_post)]
+        avg_corr_between = np.nanmean(corr_between)
 
-for i, day1 in enumerate(days):
-    for j, day2 in enumerate(days):
-        # Select data for the two days.
-        day1_data_rew = data_rew.sel(trial=data_rew['day'] == day1)
-        day2_data_rew = data_rew.sel(trial=data_rew['day'] == day2)
-        day1_data_nonrew = data_nonrew.sel(trial=data_rew['day'] == day1)
-        day2_data_nonrew = data_nonrew.sel(trial=data_rew['day'] == day2)
+        index = (avg_corr_within_pre + avg_corr_within_post) / 2 - avg_corr_between
+        normalized_index = (avg_corr_within_pre + avg_corr_within_post - 2 * avg_corr_between) / (
+            avg_corr_within_pre + avg_corr_within_post + 2 * avg_corr_between
+        )
 
-        # Compute correlation between days.
-        corr_rew = np.corrcoef(day1_data_rew.values.T, day2_data_rew.values.T)
-        corr_nonrew = np.corrcoef(day1_data_nonrew.values.T, day2_data_nonrew.values.T)
+        correlation_change_indices.append(index)
+        normalized_indices.append(normalized_index)
 
-        # If day1 is the same as day2, exclude the diagonal.
-        if day1 == day2:
-            np.fill_diagonal(corr_rew, np.nan)
-            np.fill_diagonal(corr_nonrew, np.nan)
+    # Average across mice.
+    avg_correlation_matrix = np.nanmean(daywise_correlation_matrices, axis=0)
 
-        # Compute average correlation between the two days.
-        avg_corr_rew = np.nanmean(corr_rew)
-        avg_corr_nonrew = np.nanmean(corr_nonrew)
+    return avg_correlation_matrix, correlation_change_indices, normalized_indices
 
-        # Store in the matrices.
-        day_corr_matrix_rew[i, j] = avg_corr_rew
-        day_corr_matrix_nonrew[i, j] = avg_corr_nonrew
+# Compute daywise average correlation for rewarded and non-rewarded groups
+daywise_avg_corr_rew, cci_rew, nci_rew = compute_daywise_average_correlation(vectors_rew, days)
+daywise_avg_corr_nonrew, cci_nonrew, nci_nonrew = compute_daywise_average_correlation(vectors_nonrew, days)
 
-# vmax = np.nanmax(day_corr_matrix_rew)
-# vmin = np.nanmin(day_corr_matrix_rew)
+# vmax and vmin for consistent color scaling across both matrices
+# vmax = np.nanmax(daywise_avg_corr_rew)
+# vmin = np.nanmin(daywise_avg_corr_nonrew)
+vmax = 0.40
+vmin = 0.15
 
-vmax=np.max(day_corr_matrix_rew)
-vmin=np.min(day_corr_matrix_nonrew)
+# Create a figure with two subplots
+fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
 
-plt.figure(figsize=(6, 5))
-sns.heatmap(day_corr_matrix_rew, annot=True, vmax=vmax, vmin=vmin, xticklabels=days, yticklabels=days, cmap='viridis', cbar_kws={'label': 'Correlation'})
-plt.title('Correlation Matrix (Rewarded Group)')
-plt.xlabel('Day')
-plt.ylabel('Day')
+# Plot daywise average correlation matrix for rewarded group
+sns.heatmap(daywise_avg_corr_rew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
+            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[0])
+axes[0].set_title('Daywise Average Correlation (Rewarded Group)')
+axes[0].set_xlabel('Day')
+axes[0].set_ylabel('Day')
+
+# Plot daywise average correlation matrix for non-rewarded group
+sns.heatmap(daywise_avg_corr_nonrew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
+            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[1])
+axes[1].set_title('Daywise Average Correlation (Non-Rewarded Group)')
+axes[1].set_xlabel('Day')
+
+# Adjust layout
+plt.tight_layout()
 plt.show()
 
-# Plot correlation matrix for non-rewarded group.
-plt.figure(figsize=(6, 5))
-sns.heatmap(day_corr_matrix_nonrew, annot=True, vmax=vmax, vmin=vmin, xticklabels=days, yticklabels=days, cmap='viridis', cbar_kws={'label': 'Correlation'})
-plt.title('Correlation Matrix (Non-Rewarded Group)')
-plt.xlabel('Day')
-plt.ylabel('Day')
-plt.show()
+# Save plot.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = 'daywise_average_correlation.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
+# Combine CCI (Correlation Change Index) for rewarded and non-rewarded groups into a single DataFrame
+cci_df = pd.DataFrame({
+    'reward_group': ['R+'] * len(cci_rew) + ['R-'] * len(cci_nonrew),
+    'cci': cci_rew + cci_nonrew
+})
 
+# Plot the CCI for each mouse, grouped by reward group
+plt.figure(figsize=(3, 5))
+sns.stripplot(data=cci_df, x='reward_group', y='cci', hue='reward_group', palette=reward_palette[::-1],
+              order=['R+', 'R-'], alpha=0.5, jitter=True)
+sns.pointplot(data=cci_df, x='reward_group', y='cci', hue='reward_group', palette=reward_palette[::-1],
+              order=['R+', 'R-'], estimator='mean')
+plt.title('Correlation Change Index')
+plt.ylabel('CCI')
+plt.xlabel('Reward Group')
+plt.ylim(0, 0.14)
+sns.despine()
 
+# Perform statistical comparison between the two groups (R+ and R-) for CCI
 
+# Mann-Whitney U test for CCI
+r_plus_cci = cci_df[cci_df['reward_group'] == 'R+']['cci']
+r_minus_cci = cci_df[cci_df['reward_group'] == 'R-']['cci']
+stat, p_value = mannwhitneyu(r_plus_cci, r_minus_cci, alternative='two-sided')
+
+# Save stats to a CSV file
+stats_output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
+stats_output_dir = io.adjust_path_to_host(stats_output_dir)
+cci_stats_file = 'cci_stats.csv'
+pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(stats_output_dir, cci_stats_file), index=False)
+
+# Save cci data.
+cci_df.to_csv(os.path.join(stats_output_dir, 'cci_data.csv'), index=False)
 
 
 
