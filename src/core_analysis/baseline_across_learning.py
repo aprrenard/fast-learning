@@ -153,39 +153,48 @@ if variance == "mice":
     data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type',])['psth'].agg('mean').reset_index()
 else:
     data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi'])['psth'].agg('mean').reset_index()
-# data = data.loc[~data.mouse_id.isin(['AR131'])]
 
-fig, axes = plt.subplots(3, len(days), figsize=(15, 10), sharey=True)
+# Convert data to percent dF/F0.
+data['psth'] = data['psth'] * 100
+
 # Plot for all cells.
+fig, axes = plt.subplots(1, len(days), figsize=(18, 5), sharey=True)
 for j, day in enumerate(days):
     d = data.loc[data['day'] == day]
     sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
-                hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0, j], legend=False)
-    axes[0, j].axvline(0, color='#FF9600', linestyle='--')
-    axes[0, j].set_title('All Cells')
-    axes[0, j].set_ylabel('DF/F0 (%)')
-    axes[0, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
-
-# Plot for each cell type.
-for i, cell_type in enumerate(['wS2', 'wM1']):
-    for j, day in enumerate(days):
-        d = data[(data['cell_type'] == cell_type) & (data['day'] == day)]
-        sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
-                     hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[i + 1, j], legend=False)
-        axes[i + 1, j].axvline(0, color='#FF9600', linestyle='--')
-        axes[i + 1, j].set_title(f'{cell_type} - Day {day}')
-        axes[i + 1, j].set_ylabel('DF/F0 (%)')
-        axes[i + 1, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y * 100:.0f}'))
+                 hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[j], legend=False)
+    axes[j].axvline(0, color='#FF9600', linestyle='--')
+    axes[j].set_title(f'Day {day} - All Cells')
+    axes[j].set_ylabel('DF/F0 (%)')
+plt.ylim(-1, 12)
 # Adjust spacing between subplots to prevent title overlap
 plt.tight_layout()
 sns.despine()
 
-# Save fig to svg.
+# Save figure for all cells.
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'psth_across_days_across_{variance}.svg'
+svg_file = f'psth_across_days_all_cells_{variance}.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
+# Plot for each cell type.
+fig, axes = plt.subplots(2, len(days), figsize=(18, 10), sharey=True)
+for i, cell_type in enumerate(['wS2', 'wM1']):
+    for j, day in enumerate(days):
+        d = data[(data['cell_type'] == cell_type) & (data['day'] == day)]
+        sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                     hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[i, j], legend=False)
+        axes[i, j].axvline(0, color='#FF9600', linestyle='--')
+        axes[i, j].set_title(f'{cell_type} - Day {day}')
+        axes[i, j].set_ylabel('DF/F0 (%)')
+plt.ylim(-1, 16)
+# Adjust spacing between subplots to prevent title overlap
+plt.tight_layout()
+sns.despine()
+
+# Save figure for projection types.
+svg_file = f'psth_across_days_projection_types_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 # Individual mice PSTH's.
 # -----------------------
@@ -280,7 +289,7 @@ avg_resp['average_response'] = avg_resp['average_response'] * 100
 # Grand average response.
 # -----------------------
 
-variance = 'cells'  # 'mice' or 'cells'
+variance = 'mice'  # 'mice' or 'cells'
 
 if variance == "mice":
     min_cells = 3
@@ -361,7 +370,7 @@ stats.to_csv(os.path.join(output_dir, f'amplitude_response_across_days_across_{v
 # Same plot comparing projection types inside each reward group across cells.
 # --------------------------------------------------------------------------
 
-variance = "mice"  # 'mice' or 'cells'
+variance = "cells"  # 'mice' or 'cells'
 
 if variance == "mice":
     min_cells = 3
@@ -494,7 +503,7 @@ psth['learning_period'] = psth['day'].apply(lambda x: 'pre' if x in [-2,-1] else
 # Pre and post learning responses.
 # --------------------------------
 
-variance = 'cells'  # 'mice' or 'cells'
+variance = 'mice'  # 'mice' or 'cells'
 days_selected = [-2,-1, 0,1,2]
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
@@ -831,18 +840,17 @@ daywise_avg_corr_nonrew, cci_nonrew, nci_nonrew = compute_daywise_average_correl
 vmax = 0.40
 vmin = 0.15
 
-# Create a figure with two subplots
 fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
 
 # Plot daywise average correlation matrix for rewarded group
-sns.heatmap(daywise_avg_corr_rew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
+sns.heatmap(daywise_avg_corr_rew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
             cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[0])
 axes[0].set_title('Daywise Average Correlation (Rewarded Group)')
 axes[0].set_xlabel('Day')
 axes[0].set_ylabel('Day')
 
 # Plot daywise average correlation matrix for non-rewarded group
-sns.heatmap(daywise_avg_corr_nonrew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
+sns.heatmap(daywise_avg_corr_nonrew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
             cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[1])
 axes[1].set_title('Daywise Average Correlation (Non-Rewarded Group)')
 axes[1].set_xlabel('Day')
@@ -854,7 +862,7 @@ plt.show()
 # Save plot.
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'daywise_average_correlation.svg'
+svg_file = 'daywise_average_correlation_noannot.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
@@ -897,72 +905,43 @@ cci_df.to_csv(os.path.join(stats_output_dir, 'cci_data.csv'), index=False)
 # Illustrate pop vectors of AR127.
 # --------------------------------
 
-
 # Vectors during learning.
-file_name = 'tensor_xarray_learning_data.nc'
-xarray = imaging_utils.load_mouse_xarray(mouse, io.processed_dir, file_name)
+file_name = 'tensor_xarray_mapping_data.nc'
+folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+mouse = 'AR127'
+
+xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
 xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
 # Select days.
-xarray = xarray.sel(trial=xarray['day'].isin([2]))
-xarray = xarray.sel(trial=xarray['whisker_stim']==1)
+xarray = xarray.sel(trial=xarray['day'].isin([-2, -1, 0, 1, 2]))
 
-xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
+xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
 
 
 # Plot
 vectors_rew = xarray.values
-vmax = np.percentile(vectors_rew, 98)
-vmin = np.percentile(vectors_rew, 2)
-edges = np.cumsum([n_map_trials for _ in range(5)])
+vmax = np.percentile(vectors_rew, 99.5)
+vmin = np.percentile(vectors_rew, 0.5)
+edges = np.cumsum([50 for _ in range(5)])
 f = plt.figure(figsize=(10, 6))
 im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
 
-
+# Add colorbar
+cbar = plt.colorbar(im)
+cbar.set_label('Activity')
 
 for i in edges[:-1] - 0.5:
     plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
 plt.xticks(edges - 0.5, edges)
 
 
+# ###################################################
+# Projection of whisker trials on learning dimension.
+# ###################################################
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #############################################################################
-# 2. Gradual learning during Day 0.
-# #############################################################################
-
-
-# Parameters.
+# Compute the learning dimension as the difference vector between pre and post training vectors.
+# PProjection whisker trials during learning on the learning dimension.
 
 sampling_rate = 30
 win = (0, 0.300)  # from stimulus onset to 300 ms after.
@@ -972,232 +951,75 @@ baseline_win = (-1, 0)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days_str = ['-2', '-1', '0', '+1', '+2']
 days = [-2, -1, 0, 1, 2]
+n_map_trials = 40
 substract_baseline = True
-average_inside_days = True
+select_responsive_cells = False
+select_lmi = False
+zscore = False
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
-
-processed_folder = io.solve_common_paths('processed_data')  
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
+print(mice)
 
-
-# excluded_mice = ['GF307', 'GF310', 'GF333', 'MI075', 'AR144', 'AR135', 'AR163']
-# mice = [m for m in mice if m not in excluded_mice]
-
-
-# Load LMI dataframe.
-# -------------------
-
-lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
-
-
-# Load data.
-#  ----------
-
-
-dfs = []
+# Load data for mapping trials and whisker trials
+pre_trials = []
+post_trials = []
+whisker_trials_day0 = []
 for mouse in mice:
-    print(mouse)
-    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-    file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-    if substract_baseline:
-        xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+    print(f"Processing mouse: {mouse}")
+    folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    file_name = 'tensor_xarray_mapping_data.nc'
+    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+    xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
-    
-    # Select day 0. 
-    xarray = xarray.sel(trial=xarray['day'] == 0)
-    # Select whisker trials.
-    xarray = xarray.sel(trial=xarray['whisker_stim']==1)
-    # Average time bin.
     xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
-    # Select positive LMI cells.
-    lmi_pos = lmi_df.loc[(lmi_df.mouse_id==mouse) & (lmi_df.lmi_p>=0.975), 'roi']
-    xa_pos = xarray.sel(cell=xarray['roi'].isin(lmi_pos))
-    print(xa_pos.shape)
     
-    # Select negative LMI cells.
-    lmi_neg = lmi_df.loc[(lmi_df.mouse_id==mouse) & (lmi_df.lmi_p<=0.025), 'roi']
-    xa_neg = xarray.sel(cell=xarray['roi'].isin(lmi_neg))
-    print(xa_neg.shape)
-    
-    xa_pos.name = 'activity'
-    xa_neg.name = 'activity'
-    df_pos = xa_pos.to_dataframe().reset_index()
-    df_pos['lmi'] = 'positive'
-    df_neg = xa_neg.to_dataframe().reset_index()
-    df_neg['lmi'] = 'negative'
-    df = pd.concat([df_pos, df_neg])
-    df['mouse_id'] = mouse
-    df['reward_group'] = rew_gp
-    dfs.append(df)
-    # Close the xarray dataset.
-    xarray.close()
-dfs = pd.concat(dfs)
+    # Select pre, post, and day 0 mapping trials
+    pre = xarray.sel(trial=xarray['day'].isin([-2, -1,]))
+    pre = pre.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
+    post = xarray.sel(trial=xarray['day'].isin([1, 2]))
+    post = post.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
 
-# Plot.
-
-data = dfs.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w', 'cell_type'])['activity'].agg('mean').reset_index()
-
-# sns.relplot(data=data.loc[data.trial<100], x='trial', y='activity', col='lmi', row='reward_group', hue='cell_type', kind='line', palette=cell_types_palette, height=3, aspect=0.8)
-sns.relplot(data=data.loc[data.trial_w<100], x='trial_w', y='activity',
-            col='lmi', row='reward_group', kind='line',
-            palette=reward_palette, height=3, aspect=0.8,
-            col_order=['positive', 'negative'],
-            row_order=['R+', 'R-'],)
-
-
-
-
-
-
-# #############################################################################
-# 3. Gradual learning during Day 0 realigned to "learning trial".
-# #############################################################################
-
-# keep plot before meeting with the most gradual four mice (from GF)
-
-sampling_rate = 30
-win = (0, 0.300)  # from stimulus onset to 300 ms after.
-win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
-# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
-baseline_win = (-1, 0)
-baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
-days_str = ['-2', '-1', '0', '+1', '+2']
-days = [-2, -1, 0, 1, 2]
-substract_baseline = True
-average_inside_days = True
-realigned_to_learning = False
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
-
-processed_folder = io.solve_common_paths('processed_data')  
-
-_, _, mice, db = io.select_sessions_from_db(io.db_path,
-                                            io.nwb_dir,
-                                            two_p_imaging='yes',)
-
-
-# excluded_mice = ['GF307', 'GF310', 'GF333', 'MI075', 'AR144', 'AR135', 'AR163']
-# mice = [m for m in mice if m not in excluded_mice]
-# mice = ['GF305', 'GF306', 'GF317', 'GF323', 'GF318', 'GF313']
-# mice = ['GF305', 'GF306', 'GF317', ]
-
-# Load LMI dataframe.
-# -------------------
-
-lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
-
-learning_trials = {'GF305':138, 'GF306': 200, 'GF317': 96, 'GF323': 211, 'GF318': 208, 'GF313': 141}
-
-
-# Load data.
-#  ----------
-
-dfs = []
-for mouse in mice:
-    print(mouse)
-    processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    # Select whisker trials for Day 0
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-    if substract_baseline:
-        xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
-    
-    # Select day 0. 
-    xarray = xarray.sel(trial=xarray['day'] == 0)
-    # Select whisker trials.
-    xarray = xarray.sel(trial=xarray['whisker_stim']==1)
-    
-    if realigned_to_learning:
-        eureka = learning_trials[mouse]
-        eureka_w = xarray.sel(trial=xarray['trial_id']==eureka).trial_w.values
-        # Select trials around the learning trial.
-        xarray = xarray.sel(trial=xarray['trial_w']>=eureka_w-60)
-        xarray = xarray.sel(trial=xarray['trial_w']<=eureka_w+20)
-        xarray.coords['trial_w'] = xarray['trial_w'] - eureka_w
-    
-    # Average time bin.
+    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+    xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
-    # Select positive LMI cells.
-    lmi_pos = lmi_df.loc[(lmi_df.mouse_id==mouse) & (lmi_df.lmi_p>=0), 'roi']
-    xa_pos = xarray.sel(cell=xarray['roi'].isin(lmi_pos))
-    print(xa_pos.shape)
+
+    day0 = xarray.sel(trial=(xarray['day'] == 0) & (xarray['trial_type'] == 'whisker_trial'))
+    day0 = day0[:, :70]
+
+    learning_dim = pre.mean(dim='trial') - post.mean(dim='trial')
+    learning_dim = learning_dim / np.linalg.norm(learning_dim, axis=0)
+
+    # Project mapping trials onto the learning dimension
+    pre_mapping_proj = np.dot(pre.values, learning_dim.values)
+    day0_mapping_proj = np.dot(day0.values, learning_dim.values)
+    post_mapping_proj = np.dot(post.values, learning_dim.values)
     
-    # Select negative LMI cells.
-    lmi_neg = lmi_df.loc[(lmi_df.mouse_id==mouse) & (lmi_df.lmi_p<=0.025), 'roi']
-    xa_neg = xarray.sel(cell=xarray['roi'].isin(lmi_neg))
-    print(xa_neg.shape)
     
-    xa_pos.name = 'activity'
-    xa_neg.name = 'activity'
-    df_pos = xa_pos.to_dataframe().reset_index()
-    df_pos['lmi'] = 'positive'
-    df_neg = xa_neg.to_dataframe().reset_index()
-    df_neg['lmi'] = 'negative'
-    df = pd.concat([df_pos, df_neg])
-    df['mouse_id'] = mouse
-    df['reward_group'] = rew_gp
-    dfs.append(df)
-    # Close the xarray dataset.
-    xarray.close()
-dfs = pd.concat(dfs)
-
-# Plot.
-
-data = dfs.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w', 'cell_type'])[['activity', 'outcome_w']].agg('mean').reset_index()
-
-# Smooth activity and outcome with a rolling window.
-rolling_window = 10  # Define the size of the rolling window.
-data['activity_smoothed'] = data.groupby(['mouse_id', 'lmi', 'reward_group', 'cell_type'])['activity'].transform(lambda x: x.rolling(rolling_window, center=True).mean())
-data['outcome_w_smoothed'] = data.groupby(['mouse_id', 'reward_group'])['outcome_w'].transform(lambda x: x.rolling(rolling_window, center=True).mean())
-
-plt.figure(dpi=300,)
-sns.lineplot(data=data, x='trial_w', y='hr_w',
-            palette=reward_palette)
-sns.despine()
-plt.figure(dpi=300, figsize=(15, 5))
-sns.relplot(data=data, x='trial_w', y='activity',
-            col='lmi', row='reward_group', kind='line', palette=reward_palette,
-            height=3, aspect=0.8, col_order=['positive', 'negative'])
-# Save plot
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/sensory_plasticity/gradual_learning'
-svg_file = 'gradual_potentiation.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-# sns.relplot(data=data, x='trial_w', y='activity', col='lmi', row='reward_group', hue='cell_type', kind='line', palette=cell_types_palette, height=3, aspect=0.8)
-
-# Same but smoothed
-plt.figure(dpi=300,)
-sns.lineplot(data=data, x='trial_w', y='outcome_w_smoothed',
-            palette=reward_palette)
-sns.despine()
-plt.figure(dpi=300, figsize=(15, 5))
-sns.relplot(data=data, x='trial_w', y='activity_smoothed',
-            col='lmi', row='reward_group', kind='line', palette=reward_palette,
-            height=3, aspect=0.8, col_order=['positive', 'negative'])
-# Save plot
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/sensory_plasticity/gradual_learning'
-svg_file = 'gradual_potentiation_smoothed.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
-# plt.plot(data.loc[data.mouse_id=='GF305'].outcome_w)
-
-# d = dfs.loc[dfs.mouse_id=='GF306']
-# plt.scatter(x=d.loc[d.lick_flag==0]['trial_w'],y=d.loc[d.lick_flag==0]['outcome_w']-0.15)
-# plt.scatter(x=d.loc[d.lick_flag==1]['trial_w'],y=d.loc[d.lick_flag==1]['outcome_w']-1.15)
 
 
-# # Remove mice that licked to first whisker stim.
-# mice_to_keep = dfs.loc[(dfs.trial_w==1.0) & (dfs.outcome_w==0.0), 'mouse_id'].unique()
-# # mice_to_keep = mice_to_keep[-6:]
-# data = dfs.loc[(dfs.mouse_id.isin(mice_to_keep))]
-# data = data.loc[(data.outcome_w==1.0)]
-# data = data.groupby(['mouse_id', 'lmi', 'cell', 'reward_group', 'trial'])['activity'].agg('mean').reset_index()
-# data = data.loc[(data.reward_group=='R+') & (data.lmi=='positive')]
-# data = data.loc[data.trial<100]
-# sns.lineplot(data=data, x='trial', y='activity', palette=cell_types_palette)
 
-# dfs.mouse_id.unique()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
