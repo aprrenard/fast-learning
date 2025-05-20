@@ -117,6 +117,9 @@ with PdfPages(os.path.join(save_dir, pdf_file)) as pdf:
 print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].sum().reset_index())
 print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].mean().reset_index())
 print(prop_ct.groupby(['reward_group', 'cell_type'])['prop'].mean().reset_index())
+print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].std().reset_index())
+print(cell_count.groupby(['reward_group', 'cell_type'])['roi'].std().reset_index())
+print(prop_ct.groupby(['reward_group', 'cell_type'])['prop'].std().reset_index())
 
 # Save dataframe.
 cell_count.to_csv(os.path.join(save_dir, 'cell_counts.csv'), index=False)

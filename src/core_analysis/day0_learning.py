@@ -28,7 +28,7 @@ from scipy.stats import mannwhitneyu
 
 
 # #############################################################################
-# 2. Gradual learning during Day 0.
+# Gradual learning during Day 0.
 # #############################################################################
 
 # Parameters.
@@ -122,7 +122,7 @@ sns.relplot(data=data.loc[data.trial_w<100], x='trial_w', y='activity',
 
 
 # #############################################################################
-# 3. Gradual learning during Day 0 realigned to "learning trial".
+# Gradual learning during Day 0 realigned to "learning trial".
 # #############################################################################
 
 # keep plot before meeting with the most gradual four mice (from GF)
@@ -270,5 +270,106 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 # dfs.mouse_id.unique()
 
+
+# #############################################################################
+# Day 0 modulation index.
+# #############################################################################
+
+# Look for cells active during the first whisk trials of the 
+# session but stop firing at some point and cells initially silent that became
+# active by the end.
+# I expect the rewarded group to have less cells that stop firing which are
+# consolidated by reward.
+
+
+sampling_rate = 30
+win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
+# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
+baseline_win = (-1, 0)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days_str = ['-2', '-1', '0', '+1', '+2']
+substract_baseline = True
+n_first = 15
+n_last = 15
+
+sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
+
+processed_folder = io.solve_common_paths('processed_data')  
+
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',)
+
+# Load day 0 LMI.
+lmi_df = os.path.join(io.processed_dir, f'lmi_day0_results.csv')
+lmi_df = pd.read_csv(lmi_df)
+selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
+
+psth = []
+for mouse_id in mice:
+    # Disregard these mice as the number of trials is too low.
+    # if mouse_id in ['GF307', 'GF310', 'GF333', 'AR144', 'AR135']:
+    #     continue
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_learning_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
+    
+    
+    # Keep days of interest.
+    xarr = xarr.sel(trial=xarr['day'].isin([0]))
+    # Select whisker trials.
+    xarr = xarr.sel(trial=xarr['whisker_stim']==1)
+    # Select PSTH trace length.
+    xarr = xarr.sel(time=slice(win[0], win[1]))
+    # Average trials per days.
+    xarr = xarr.groupby('day').mean(dim='trial')
+    
+    xarr.name = 'psth'
+    xarr = xarr.to_dataframe().reset_index()
+    xarr['mouse_id'] = mouse_id
+    xarr['reward_group'] = reward_group
+    psth.append(xarr)
+psth = pd.concat(psth)
+    
+# Plot proportion of pre vs post modulated cells for both reward groups during
+# day 0.
+
+# Compute and plot proportion across mice for both reward groups
+lmi_df['reward_group'] = lmi_df['mouse_id'].map(lambda m: io.get_mouse_reward_group_from_db(io.db_path, m, db))
+mouse_props = []
+for mouse, group in lmi_df.groupby('mouse_id'):
+    reward_group = group['reward_group'].iloc[0]
+    n_cells = group['roi'].nunique()
+    n_pos = group.loc[group['lmi_p'] >= 0.975, 'roi'].nunique()
+    n_neg = group.loc[group['lmi_p'] <= 0.025, 'roi'].nunique()
+    mouse_props.append({
+        'mouse_id': mouse,
+        'reward_group': reward_group,
+        'prop_positive': n_pos / n_cells if n_cells > 0 else np.nan,
+        'prop_negative': n_neg / n_cells if n_cells > 0 else np.nan
+    })
+mouse_props_df = pd.DataFrame(mouse_props)
+
+plt.figure(figsize=(6,4), dpi=150)
+sns.barplot(data=mouse_props_df.melt(id_vars=['mouse_id', 'reward_group'], 
+                                     value_vars=['prop_positive', 'prop_negative'],
+                                     var_name='modulation', value_name='proportion'),
+            x='reward_group', y='proportion', hue='modulation', ci='sd')
+sns.stripplot(data=mouse_props_df.melt(id_vars=['mouse_id', 'reward_group'], 
+                                       value_vars=['prop_positive', 'prop_negative'],
+                                       var_name='modulation', value_name='proportion'),
+              x='reward_group', y='proportion', hue='modulation', 
+              dodge=True, marker='o', alpha=0.7, linewidth=0.5, edgecolor='k')
+plt.title('Proportion of significantly modulated ROIs per mouse')
+plt.ylabel('Proportion')
+plt.xlabel('Reward group')
+plt.legend(title='Modulation', bbox_to_anchor=(1.05, 1), loc='upper left')
+sns.despine()
+plt.tight_layout()
+plt.show()
 
 

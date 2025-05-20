@@ -22,8 +22,7 @@ def load_session_2p_imaging(mouse_id, session_id, dir_path):
 def load_mouse_xarray(mouse_id, dir_path, file_name):
     
     array_path = os.path.join(dir_path, mouse_id, file_name)
-    with xr.open_dataarray(array_path) as ds:
-        data = ds.copy()
+    data = xr.open_dataarray(array_path)
     return data
 
 

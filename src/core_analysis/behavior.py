@@ -258,23 +258,23 @@ def plot_perf_across_blocks(df, reward_group, day, palette, nmax_trials=None, ax
                 ['mouse_id','session_id','block_id','hr_c','hr_a','hr_w']]
     df = df.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg("mean")
 
-    color_c = palette[4]
+    color_c = palette[5]
     if reward_group=='R-':
-        color_c = palette[5]
+        color_c = palette[4]
     sns.lineplot(data=df, x='block_id', y='hr_c', estimator='mean',
                  color=color_c, alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
     
-    color_a = palette[0]
+    color_a = palette[1]
     if reward_group=='R-':
-        color_a = palette[1]
+        color_a = palette[0]
     sns.lineplot(data=df, x='block_id', y='hr_a', estimator='mean',
                  color=color_a, alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
     
-    color_wh = palette[2]
+    color_wh = palette[3]
     if reward_group=='R-':
-        color_wh = palette[3]
+        color_wh = palette[2]
     sns.lineplot(data=df, x='block_id', y='hr_w', estimator='mean',
                  color=color_wh ,alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
@@ -490,7 +490,7 @@ if __name__ == "__main__":
     # save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv'
     # table.to_csv(save_path, index=False)
 
-    # Load tabe.
+    # Load table.
     table_file = io.adjust_path_to_host(r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
     table = pd.read_csv(table_file)
 
@@ -644,25 +644,49 @@ if __name__ == "__main__":
     # Performance over blocks during whisker learning sessions across mice.
     # #####################################################################
 
-
+    # Read behavior results.
+    db_path = io.db_path
+    # db_path = 'C://Users//aprenard//recherches//fast-learning//docs//sessions_muscimol_GF.xlsx'
+    nwb_dir = io.nwb_dir
+    stop_flag_yaml = io.stop_flags_yaml
+    trial_indices_yaml = io.trial_indices_yaml
+    
+    experimenters = ['AR']
+    mice_imaging = io.select_mice_from_db(db_path, nwb_dir,
+                                        experimenters = experimenters,
+                                        exclude_cols = ['exclude',  'two_p_exclude'],
+                                        optogenetic = ['no', np.nan],
+                                        pharmacology = ['no',np.nan],
+                                        )
+    # Load the table from the CSV file.
+    table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
+    table = pd.read_csv(table_file)
+    
+    table = table.loc[table.mouse_id.isin(mice_imaging)]
+    
     # Performance over blocks.
     # ------------------------
+    # Adjust seaborn context for thicker lines
+    sns.set_context("paper", font_scale=1.2, rc={"lines.linewidth": 2.5, "axes.titlesize": 14, "axes.labelsize": 12, "xtick.labelsize": 10, "ytick.labelsize": 10})
 
+    # Performance over blocks   
     df = table
-    fig, axes = plt.subplots(1, 3, sharey=True)
-    plot_perf_across_blocks(df, "R-", 0, PALETTE, nmax_trials=240, ax=axes[0])
-    plot_perf_across_blocks(df, "R-", 1, PALETTE, nmax_trials=240, ax=axes[1])
-    plot_perf_across_blocks(df, "R-", 2, PALETTE, nmax_trials=240, ax=axes[2])
+    fig, axes = plt.subplots(1, 3, sharey=True, figsize=(15, 4))
+    plot_perf_across_blocks(df, "R-", 0, behavior_palette, nmax_trials=240, ax=axes[0])
+    plot_perf_across_blocks(df, "R-", 1, behavior_palette, nmax_trials=240, ax=axes[1])
+    plot_perf_across_blocks(df, "R-", 2, behavior_palette, nmax_trials=240, ax=axes[2])
 
-    plot_perf_across_blocks(df, "R+", 0, PALETTE, nmax_trials=240, ax=axes[0])
-    plot_perf_across_blocks(df, "R+", 1, PALETTE, nmax_trials=240, ax=axes[1])
-    plot_perf_across_blocks(df, "R+", 2, PALETTE, nmax_trials=240, ax=axes[2])
+    plot_perf_across_blocks(df, "R+", 0, behavior_palette, nmax_trials=240, ax=axes[0])
+    plot_perf_across_blocks(df, "R+", 1, behavior_palette, nmax_trials=240, ax=axes[1])
+    plot_perf_across_blocks(df, "R+", 2, behavior_palette, nmax_trials=240, ax=axes[2])
 
     sns.despine(trim=True)
-
-    nmice_rew = df.loc[df.reward_group=='R+','mouse_id'].nunique()
-    nmice_nonrew = df.loc[df.reward_group=='R-','mouse_id'].nunique()
-    plt.suptitle(f'Imaging mice: {nmice_rew} rewarded, {nmice_nonrew} non-rewarded')
+    
+    # Save the figure
+    output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
+    output_file = os.path.join(output_dir, 'performance_over_blocks.svg')
+    plt.savefig(output_file, format='svg', dpi=300)
+    plt.close()
 
 
     # Performance over trials aligned to first hit.
