@@ -27,34 +27,6 @@ from statannotations.Annotator import Annotator
 from scipy.stats import mannwhitneyu
 
 
-def filter_data_by_cell_count(data, min_cells):
-    """
-    Filters the data to exclude entries where the number of distinct ROIs of a specific type
-    for a mouse is below a given threshold.
-
-    Parameters:
-    - data (pd.DataFrame): The data to filter, containing columns 'mouse_id', 'cell_type', 'roi', etc.
-    - min_cells (int): Minimum number of distinct ROIs required to keep the data.
-
-    Returns:
-    - pd.DataFrame: Filtered data.
-    """
-    # Count distinct ROIs per mouse and cell type
-    roi_counts = data.groupby(['mouse_id', 'cell_type'])['roi'].nunique().reset_index()
-    roi_counts = roi_counts.rename(columns={'roi': 'roi_count'})
-
-    # Merge ROI counts back into the data
-    data = data.merge(roi_counts, on=['mouse_id', 'cell_type'])
-
-    # Filter out entries where the ROI count is below the threshold
-    data = data[data['roi_count'] >= min_cells]
-
-    # Drop the auxiliary 'roi_count' column
-    data = data.drop(columns=['roi_count'])
-
-    return data
-
-
 # # #############################################################################
 # # Comparing xarray datasets with previous tensors.
 # # #############################################################################
@@ -86,7 +58,7 @@ def filter_data_by_cell_count(data, min_cells):
 # -----------
 
 sampling_rate = 30
-win_sec = (-0.5, 1.5)  
+win_sec = (-0.5, 4)  
 baseline_win = (0, 1)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days = [-2, -1, 0, +1, +2]
@@ -145,7 +117,7 @@ psth = pd.concat(psth)
 # data = data.loc[data.mouse_id.isin(mice_AR)]
 # len(mice_GF)
 
-variance = 'cells'  # 'mice' or 'cells'
+variance = 'mice'  # 'mice' or 'cells'
 
 if variance == "mice":
     min_cells = 3
@@ -174,7 +146,7 @@ sns.despine()
 # Save figure for all cells.
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'psth_across_days_all_cells_{variance}.svg'
+svg_file = f'psth_across_days_all_cells_{variance}_long.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 # Plot for each cell type.
@@ -193,8 +165,9 @@ plt.tight_layout()
 sns.despine()
 
 # Save figure for projection types.
-svg_file = f'psth_across_days_projection_types_{variance}.svg'
+svg_file = f'psth_across_days_projection_types_{variance}_long.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
 
 # Individual mice PSTH's.
 # -----------------------
@@ -789,82 +762,115 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
+# #############################################################################
+# Population vectors for individual mice.
+# #############################################################################
+
+# Parameters.
+sampling_rate = 30
+win = (0, 0.180)  # from stimulus onset to 300 ms after.
+win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
+# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
+baseline_win = (-1, 0)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days_str = ['-2', '-1', '0', '+1', '+2']
+days = [-2, -1, 0, 1, 2]
+n_map_trials = 40
+substract_baseline = True
+average_inside_days = False
+sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
+
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',)
 
 
 
-# Illustrate pop vectors of AR127.
-
-# Vectors during learning.
-mouse = 'AR179'
-n_map_trials = 50
-processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-win = (0, 0.300)
-
-file_name = 'tensor_xarray_mapping_data.nc'
-xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-
-# Select days.
-xarray = xarray.sel(trial=xarray['day'].isin([-2,-1,0,1,2]))
-# xarray = xarray.sel(trial=xarray['whisker_stim']==1)
-
-xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
-
-# Plot
-vectors_rew = xarray.values
-vmax = np.percentile(vectors_rew, 98)
-vmin = np.percentile(vectors_rew, 6)
-edges = np.cumsum([n_map_trials for _ in range(5)])
-f = plt.figure(figsize=(10, 6))
-im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
-
-# Add color bar
-cbar = plt.colorbar(im)
-cbar.set_label('Activity')
-
-for i in edges[:-1] - 0.5:
-    plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
-plt.xticks(edges - 0.5, edges)
-
-# Save the figure
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'{mouse}_pop_vectors.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+pdf_file = 'pop_vectors_individual_mice_180ms.pdf'
+
+with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
+    for mouse in mice:
+        print(mouse)
+
+        # Vectors during learning.
+        processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+        win = (0, 0.300)
+        reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse)
+
+        file_name = 'tensor_xarray_mapping_data.nc'
+        xarr_learning = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+        xarr_learning = xarr_learning - np.nanmean(xarr_learning.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+
+        # Select days.
+        xarr_learning = xarr_learning.sel(trial=xarr_learning['day'].isin([-2,-1,0,1,2]))
+        # xarr_learning = xarr_learning.sel(trial=xarr_learning['whisker_stim']==1)
+        xarr_learning = xarr_learning.sel(time=slice(win[0], win[1])).mean(dim='time')
+
+        vectors_mapping = xarr_learning.values
+        # Count number of whisker trials for each of the 5 days
+        whisker_trial_counts = []
+        for day in [-2, -1, 0, 1, 2]:
+            count = int(np.sum(xarr_learning['day'].values == day))
+            whisker_trial_counts.append(count)
+
+        edges = np.cumsum(whisker_trial_counts)
 
 
+        for i in edges[:-1] - 0.5:
+            plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
+        plt.xticks(edges - 0.5, edges)
 
-# Vectors during learning.
-n_map_trials = 50
-processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-win = (0, 0.300)
+        # Vectors during learning.
+        processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+        win = (0, 0.300)
+        file_name = 'tensor_xarray_learning_data.nc'
+        xarr_mapping = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
+        xarr_mapping = xarr_mapping - np.nanmean(xarr_mapping.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
 
-file_name = 'tensor_xarray_learning_data.nc'
-xarray = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+        # Select whisker stim.
+        xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['whisker_stim']==1)
+        # Select days.
+        xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['day'].isin([0]))
+        # xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['whisker_stim']==1)
+        xarr_mapping = xarr_mapping.sel(time=slice(win[0], win[1])).mean(dim='time')
+        vectors_learning = xarr_mapping.values
+        
+        
+        # Concatenate mapping and learning vectors, placing learning vectors after day -1 and before day 0
+        # mapping order: [-2, -1, 0, 1, 2]
+        # learning order: [0]
+        # So, order: mapping(-2), mapping(-1), learning(0), mapping(0), mapping(1), mapping(2)
+        vectors_concat = np.concatenate([
+            vectors_mapping[:, xarr_learning['day'].values == -2],
+            vectors_mapping[:, xarr_learning['day'].values == -1],
+            vectors_learning,
+            vectors_mapping[:, xarr_learning['day'].values == 0],
+            vectors_mapping[:, xarr_learning['day'].values == 1],
+            vectors_mapping[:, xarr_learning['day'].values == 2]
+        ], axis=1)
+        
+        vmax = np.percentile(vectors_mapping, 98)
+        vmin = np.percentile(vectors_mapping, 2)
+        
+        f = plt.figure(figsize=(10, 6))
+        im = plt.imshow(vectors_concat, cmap='viridis', vmin=vmin, vmax=vmax)
+        cbar = plt.colorbar(im)
+        cbar.set_label('Activity')
 
-# Select whisker stim.
-xarray = xarray.sel(trial=xarray['whisker_stim']==1)
-
-# Select days.
-xarray = xarray.sel(trial=xarray['day'].isin([0]))
-# xarray = xarray.sel(trial=xarray['whisker_stim']==1)
-
-xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
-
-
-# Plot
-vectors_rew = xarray.values
-
-f = plt.figure(figsize=(10, 6))
-im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
-
-# Save the figure
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'{mouse}_pop_vectors_day0learning.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-
+        whisker_trial_counts = whisker_trial_counts[:2] + [vectors_learning.shape[1]] + whisker_trial_counts[2:]
+        edges = np.cumsum(whisker_trial_counts)
+        for i in edges[:-1] - 0.5:
+            plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
+        plt.xticks(edges - 0.5, edges)
+        plt.xlabel('Trials')
+        plt.ylabel('Cells')
+        plt.title(f'{mouse} - {reward_group}')
+        plt.tight_layout()
+        # Save the figure to the PDF
+        pdf.savefig(dpi=300)
+        print(f"Saved figure for mouse {mouse} to PDF.")
 
 
 # #########################################

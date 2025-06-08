@@ -10,6 +10,7 @@ import xarray as xr
 
 
 
+
 def load_session_2p_imaging(mouse_id, session_id, dir_path):
     array_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d.npy")
     tensor_metadata_path = os.path.join(dir_path, mouse_id, session_id, "tensor_4d_metadata.pickle")
@@ -19,10 +20,25 @@ def load_session_2p_imaging(mouse_id, session_id, dir_path):
     return np.float32(data), metadata
 
 
-def load_mouse_xarray(mouse_id, dir_path, file_name):
-    
+def load_mouse_xarray(mouse_id, dir_path, file_name, substracted=True):
+
+    if substracted:
+        file_name = file_name.replace('.nc', '_baselinesubstracted.nc')
     array_path = os.path.join(dir_path, mouse_id, file_name)
+    # Check if file exists locally to speed up loading.
+    # local_path = array_path.replace('/mnt/lsens-analysis/Anthony_Renard/data_processed', '/raid0/anthony/data_processed')
+    # if os.path.exists(local_path):
+    #     array_path = local_path
+    # # Load the xarray dataset.
+    print(f'Loading {array_path}')
     data = xr.open_dataarray(array_path)
+    
+    # Deal with a few artefact cells.
+    if mouse_id == 'AR176':
+        data = data.sel(cell=~data['roi'].isin([46, 85, 105]))
+    if mouse_id == 'AR180':
+        data = data.sel(cell=data['roi'] != 79)
+
     return data
 
 
@@ -38,12 +54,14 @@ def substract_baseline(arr, time_axis, baseline_win):
     Returns:
         numpy.array: Array of shape (n_neurons, n_trials, n_timepoints).
     """
-    ndims = arr.ndim
-    slices = [slice(None),] * ndims
-    slices[time_axis] = slice(baseline_win[0], baseline_win[1])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        baseline = np.nanmean(arr[*slices], axis=time_axis, keepdims=True)
+    # ndims = arr.ndim
+    # slices = [slice(None),] * ndims
+    # slices[time_axis] = slice(baseline_win[0], baseline_win[1])
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore", category=RuntimeWarning)
+    #     baseline = np.nanmean(arr[*slices], axis=time_axis, keepdims=True)
+    
+    baseline = np.nanmean(arr[:,:,baseline_win[0]:baseline_win[1]], axis=2, keepdims=True)
     arr = arr - baseline
     return arr
 
@@ -197,3 +215,31 @@ def compute_roc(data_pre, data_post, nshuffles=1000):
             lmi_p[icell] = np.nan
     print('')
     return lmi, lmi_p
+
+
+def filter_data_by_cell_count(data, min_cells):
+    """
+    Filters the data to exclude entries where the number of distinct ROIs of a specific type
+    for a mouse is below a given threshold.
+
+    Parameters:
+    - data (pd.DataFrame): The data to filter, containing columns 'mouse_id', 'cell_type', 'roi', etc.
+    - min_cells (int): Minimum number of distinct ROIs required to keep the data.
+
+    Returns:
+    - pd.DataFrame: Filtered data.
+    """
+    # Count distinct ROIs per mouse and cell type
+    roi_counts = data.groupby(['mouse_id', 'cell_type'])['roi'].nunique().reset_index()
+    roi_counts = roi_counts.rename(columns={'roi': 'roi_count'})
+
+    # Merge ROI counts back into the data
+    data = data.merge(roi_counts, on=['mouse_id', 'cell_type'])
+
+    # Filter out entries where the ROI count is below the threshold
+    data = data[data['roi_count'] >= min_cells]
+
+    # Drop the auxiliary 'roi_count' column
+    data = data.drop(columns=['roi_count'])
+
+    return data

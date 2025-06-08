@@ -25,6 +25,7 @@ from src.utils.utils_plot import *
 from src.core_analysis.behavior import compute_performance, plot_single_session
 from statannotations.Annotator import Annotator
 from scipy.stats import mannwhitneyu
+from scipy.stats import wilcoxon
 
 
 # #############################################################################
@@ -269,6 +270,778 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 # sns.lineplot(data=data, x='trial', y='activity', palette=cell_types_palette)
 
 # dfs.mouse_id.unique()
+
+
+
+
+
+
+
+
+
+
+
+
+# #############################################################################
+# PSTH during learning.
+# #############################################################################
+
+# Parameters.
+sampling_rate = 30
+win_psth = (-0.5, 1.5)
+win_bin = (0, 0.180)
+baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days = [0]
+days_str = ['0']
+
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',
+                                            experimenters=['AR', 'GF', 'MI'])
+
+
+# Load the data.
+# --------------
+
+psth = []
+for mouse_id in mice:
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_learning_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
+
+    # Select days.
+    xarr = xarr.sel(trial=xarr['day'].isin(days))
+    # Select PSTH trace length.
+    xarr = xarr.sel(time=slice(win_psth[0], win_psth[1]))
+    # Select whisker trials.
+    xarr_wh = xarr.sel(trial=xarr['whisker_stim']==1)
+    # Average trials per days.
+    xarr_wh = xarr_wh.groupby('day').mean(dim='trial')
+    
+    # Select auditory trials.
+    xarr_aud = xarr.sel(trial=xarr['auditory_stim']==1)
+    # Average trials per days.
+    xarr_aud = xarr_aud.groupby('day').mean(dim='trial')
+    
+    # Select no stim trials.
+    xarr_ns = xarr.sel(trial=xarr['no_stim']==1)
+    # Average trials per days.
+    xarr_ns = xarr_ns.groupby('day').mean(dim='trial')
+    # 
+    xarr_wh.name = 'psth'
+    xarr_wh = xarr_wh.to_dataframe().reset_index()
+    xarr_wh['mouse_id'] = mouse_id
+    xarr_wh['reward_group'] = reward_group
+    xarr_wh['stim'] = 'whisker'
+    psth.append(xarr_wh)
+    
+    xarr_aud.name = 'psth'
+    xarr_aud = xarr_aud.to_dataframe().reset_index()
+    xarr_aud['mouse_id'] = mouse_id
+    xarr_aud['reward_group'] = reward_group
+    xarr_aud['stim'] = 'auditory'
+    psth.append(xarr_aud)
+    
+    xarr_ns.name = 'psth'
+    xarr_ns = xarr_ns.to_dataframe().reset_index()
+    xarr_ns['mouse_id'] = mouse_id
+    xarr_ns['reward_group'] = reward_group
+    xarr_ns['stim'] = 'no_stim'
+    psth.append(xarr_ns)
+
+psth = pd.concat(psth)
+
+
+# PSTH for the three stimuli.
+# ###########################
+
+variance = 'mice'  # 'mice' or 'cells'
+
+if variance == "mice":
+    min_cells = 3
+    data = imaging_utils.filter_data_by_cell_count(psth, min_cells)
+    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim'])['psth'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'stim'])['psth'].agg('mean').reset_index()
+else:
+    data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi', 'stim'])['psth'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi', 'stim'])['psth'].agg('mean').reset_index()
+# Convert data to percent dF/F0.
+data['psth'] = data['psth'] * 100
+
+
+# Plot for all cells.
+# -------------------
+
+fig, axes = plt.subplots(3, figsize=(3, 8), sharey=True)
+
+# Whisker stim.
+d = data.loc[(data['stim'] == 'whisker')]    
+sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+            hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0], legend=False)
+axes[0].axvline(0, color='#FF9600', linestyle='--')
+
+# Auditory stim.
+d = data.loc[(data['stim'] == 'auditory')]    
+sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+            hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[1], legend=False)
+axes[1].axvline(0, color='#1f77b4', linestyle='--')
+
+# No stim.
+d = data.loc[(data['stim'] == 'no_stim')]    
+sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+            hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[2], legend=False)
+axes[2].axvline(0, color='#333333', linestyle='--')
+
+axes[0].set_title('All cells')
+axes[0].set_ylabel('Whisker stim')
+axes[1].set_ylabel('Auditory stim')
+axes[2].set_ylabel('No stim')
+plt.ylim(-1, 12)
+sns.despine()
+
+# Save figure for all cells.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_three_stim_on_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Plot for projectors.
+# --------------------
+
+cell_types = ['wM1', 'wS2']
+fig, axes = plt.subplots(3, 2, figsize=(6, 8), sharey=True)
+
+# Whisker stim.
+for j, ct in enumerate(cell_types):
+    if ct == 'all':
+        d = data.loc[(data['stim'] == 'whisker')]    
+    else:
+        d = data.loc[(data['cell_type'] == ct) & (data['stim'] == 'whisker')]    
+    sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0, j], legend=False)
+    axes[0, j].axvline(0, color='#FF9600', linestyle='--')
+
+# Auditory stim.
+for j, ct in enumerate(cell_types):
+    if ct == 'all':
+        d = data.loc[(data['stim'] == 'auditory')]    
+    else:
+        d = data.loc[(data['cell_type'] == ct) & (data['stim'] == 'auditory')]    
+    sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[1, j], legend=False)
+    axes[1, j].axvline(0, color='#1f77b4', linestyle='--')
+
+# No stim.
+for j, ct in enumerate(cell_types):
+    if ct == 'all':
+        d = data.loc[(data['stim'] == 'no_stim')]    
+    else:
+        d = data.loc[(data['cell_type'] == ct) & (data['stim'] == 'no_stim')]    
+    sns.lineplot(data=d, x='time', y='psth', errorbar='ci', hue='reward_group',
+                hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[2, j], legend=False)
+    axes[2, j].axvline(0, color='#333333', linestyle='--')
+
+axes[0, 0].set_title('wM1 projectors')
+axes[0, 1].set_title('wS2 projectors')
+axes[0, 0].set_ylabel('Whisker stim')
+axes[1, 0].set_ylabel('Auditory stim')
+axes[2, 0].set_ylabel('No stim')
+plt.ylim(-1, 20)
+sns.despine()
+
+# Save figure for all cells.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_three_stim_projectors_on_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# #############################################################################
+# PSTH during learning. Early vs last trials.
+# #############################################################################
+
+# Parameters.
+sampling_rate = 30
+win_psth = (-0.5, 1.5)
+win_bin = (0, 0.180)
+baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days = [0]
+days_str = ['0']
+early_trials = range(0, 10)
+late_trials = range(20, 200)  # Last trials of the session.
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',
+                                            experimenters=['AR', 'GF', 'MI'])
+
+
+# Load the data.
+# --------------
+
+psth = []
+for mouse_id in mice:
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_learning_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+
+    # Select days.
+    xarr = xarr.sel(trial=xarr['day'].isin(days))
+    # Select PSTH trace length.
+    xarr = xarr.sel(time=slice(win_psth[0], win_psth[1]))
+    
+    # Select whisker trials.
+    xarr_wh = xarr.sel(trial=xarr['whisker_stim']==1)
+    # Average trials per days.
+    xarr_wh_early = xarr_wh.sel(trial=xarr_wh['trial_w'].isin(early_trials))
+    xarr_wh_late = xarr_wh.sel(trial=xarr_wh['trial_w'].isin(late_trials))
+    xarr_wh_early = xarr_wh_early.groupby('day').mean(dim='trial')
+    xarr_wh_late = xarr_wh_late.groupby('day').mean(dim='trial')
+    
+    xarr_wh_early.name = 'activity'
+    xarr_wh_early = xarr_wh_early.to_dataframe().reset_index()
+    xarr_wh_early['mouse_id'] = mouse_id
+    xarr_wh_early['reward_group'] = reward_group
+    xarr_wh_early['stim'] = 'whisker'
+    xarr_wh_early['epoch'] = 'early'
+    psth.append(xarr_wh_early)
+    
+    xarr_wh_late.name = 'activity'
+    xarr_wh_late = xarr_wh_late.to_dataframe().reset_index()
+    xarr_wh_late['mouse_id'] = mouse_id
+    xarr_wh_late['reward_group'] = reward_group
+    xarr_wh_late['stim'] = 'whisker'
+    xarr_wh_late['epoch'] = 'late'
+    psth.append(xarr_wh_late)
+
+psth = pd.concat(psth)
+
+
+variance = 'mice'  # 'mice' or 'cells'
+if variance == "mice":
+    min_cells = 3
+    data = imaging_utils.filter_data_by_cell_count(psth, min_cells)
+    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+else:
+    data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+# Convert data to percent dF/F0.
+data['activity'] = data['activity'] * 100
+
+
+# Plot for psth all cells.
+# ------------------------
+
+fig, axes = plt.subplots(2, figsize=(3, 8), sharey=True)
+
+# Whisker stim.
+sns.lineplot(data=data.loc[data.reward_group=='R+'], x='time', y='activity',
+            errorbar='ci', style='epoch', style_order=['late', 'early'],
+            color=reward_palette[1], estimator='mean', legend=False, ax=axes[0])
+sns.lineplot(data=data.loc[data.reward_group=='R-'], x='time', y='activity',
+            errorbar='ci', style='epoch', style_order=['late', 'early'],
+            color=reward_palette[0], estimator='mean', legend=False, ax=axes[1])
+axes[0].axvline(0, color='#FF9600', linestyle='--')
+axes[1].axvline(0, color='#FF9600', linestyle='--')
+
+axes[0].set_title(f'All cells - early vs late trials {early_trials}-{late_trials}')
+axes[0].set_ylabel('R+')
+axes[1].set_ylabel('R-')
+plt.ylim(-1, 12)
+sns.despine()
+
+# Save figure for all cells.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Plot for projectors.
+# --------------------
+
+cell_types = ['wM1', 'wS2']
+
+fig, axes = plt.subplots(2,2, figsize=(6, 8), sharey=True)
+
+for j, ct in enumerate(cell_types):
+    d = data.loc[(data.reward_group=='R+') & (data.cell_type==ct)]
+    sns.lineplot(data=d, x='time', y='activity', errorbar='ci', style='epoch', style_order=['late', 'early'],
+                color=reward_palette[1], estimator='mean', legend=False, ax=axes[0, j])
+    d = data.loc[(data.reward_group=='R-') & (data.cell_type==ct)]
+    sns.lineplot(data=d, x='time', y='activity', errorbar='ci', style='epoch', style_order=['late', 'early'],
+                color=reward_palette[0], estimator='mean', legend=False, ax=axes[1, j])
+    axes[0, j].axvline(0, color='#FF9600', linestyle='--')
+    axes[1, j].axvline(0, color='#FF9600', linestyle='--')
+
+axes[0,0].set_title(f'wM1 - early vs late trials {early_trials}-{late_trials}')
+axes[0,1].set_title(f'wS2 - early vs late trials {early_trials}-{late_trials}')
+axes[0,0].set_ylabel('R+')
+axes[1,0].set_ylabel('R-')
+plt.ylim(-2, 20)
+sns.despine()
+
+# Save figure for all cells.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_earlyvslate_projectors_on_{variance}_{early_trials}_{late_trials}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Bar plot and stats.
+# -------------------
+fig, axes = plt.subplots(2, 3, figsize=(9, 8), sharey=True)
+
+# All cells
+sns.barplot(
+    data=data.loc[data.reward_group == 'R+'],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[1], estimator='mean', ax=axes[0, 0]
+)
+sns.barplot(
+    data=data.loc[data.reward_group == 'R-'],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[0], estimator='mean', ax=axes[1, 0]
+)
+axes[0, 0].set_title('All cells')
+axes[0, 0].set_ylabel('R+')
+axes[1, 0].set_ylabel('R-')
+
+# wS2 projectors
+sns.barplot(
+    data=data.loc[(data.reward_group == 'R+') & (data.cell_type == 'wS2')],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[1], estimator='mean', ax=axes[0, 1]
+)
+sns.barplot(
+    data=data.loc[(data.reward_group == 'R-') & (data.cell_type == 'wS2')],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[0], estimator='mean', ax=axes[1, 1]
+)
+axes[0, 1].set_title('wS2 projectors')
+
+# wM1 projectors
+sns.barplot(
+    data=data.loc[(data.reward_group == 'R+') & (data.cell_type == 'wM1')],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[1], estimator='mean', ax=axes[0, 2]
+)
+sns.barplot(
+    data=data.loc[(data.reward_group == 'R-') & (data.cell_type == 'wM1')],
+    x='epoch', y='activity',
+    errorbar='ci', order=['early', 'late'],
+    color=reward_palette[0], estimator='mean', ax=axes[1, 2]
+)
+axes[0, 2].set_title('wM1 projectors')
+
+for ax in axes.flat:
+    ax.set_xlabel('')
+
+plt.ylim(0, 8)
+sns.despine()
+plt.tight_layout()
+
+# Save figure for all cells and projectors.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_all_wS2_wM1.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Stats.
+# Prepare data for stats and export
+barplot_data = data.groupby(['mouse_id', 'reward_group', 'cell_type', 'epoch'])['activity'].mean().reset_index()
+
+stats_results = []
+
+# 1. All cells (ignore cell_type)
+for group in barplot_data['reward_group'].unique():
+    d = barplot_data[barplot_data['reward_group'] == group]
+    # Average across cell types for each mouse and epoch
+    d_all = d.groupby(['mouse_id', 'epoch'])['activity'].mean().reset_index()
+    early = d_all[d_all['epoch'] == 'early'].set_index('mouse_id')['activity']
+    late = d_all[d_all['epoch'] == 'late'].set_index('mouse_id')['activity']
+    common = early.index.intersection(late.index)
+    if len(common) > 0:
+        stat, p = wilcoxon(early.loc[common], late.loc[common])
+    else:
+        stat, p = np.nan, np.nan
+    stats_results.append({'reward_group': group, 'cell_type': 'all', 'wilcoxon_stat': stat, 'p_value': p})
+
+# 2. wS2 and 3. wM1
+for cell_type in ['wS2', 'wM1']:
+    for group in barplot_data['reward_group'].unique():
+        d = barplot_data[(barplot_data['reward_group'] == group) & (barplot_data['cell_type'] == cell_type)]
+        early = d[d['epoch'] == 'early'].set_index('mouse_id')['activity']
+        late = d[d['epoch'] == 'late'].set_index('mouse_id')['activity']
+        common = early.index.intersection(late.index)
+        if len(common) > 0:
+            stat, p = wilcoxon(early.loc[common], late.loc[common])
+        else:
+            stat, p = np.nan, np.nan
+        stats_results.append({'reward_group': group, 'cell_type': cell_type, 'wilcoxon_stat': stat, 'p_value': p})
+
+stats_df = pd.DataFrame(stats_results)
+
+# Save barplot data and stats to CSV
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
+output_dir = io.adjust_path_to_host(output_dir)
+barplot_data.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_data.csv'), index=False)
+stats_df.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_stats.csv'), index=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# #############################################################################
+# PSTH during learning. Hit VS miss trials.
+# #############################################################################
+
+# Parameters.
+sampling_rate = 30
+win_psth = (-0.5, 4)
+win_bin = (0, 0.180)
+baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days = [0]
+days_str = ['0']
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',
+                                            experimenters=['AR', 'GF', 'MI'])
+
+
+# Load the data.
+# --------------
+
+psth = []
+for mouse_id in mice:
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_learning_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+
+    # Select days.
+    xarr = xarr.sel(trial=xarr['day'].isin(days))
+    # Select PSTH trace length.
+    xarr = xarr.sel(time=slice(win_psth[0], win_psth[1]))
+    
+    # Select whisker trials.
+    xarr_wh = xarr.sel(trial=xarr['whisker_stim']==1)
+    # Average trials per days.
+    xarr_wh_hit = xarr_wh.sel(trial=xarr_wh['outcome_w']==1)
+    xarr_wh_miss = xarr_wh.sel(trial=xarr_wh['outcome_w']==0)
+    xarr_wh_hit = xarr_wh_hit.groupby('day').mean(dim='trial')
+    xarr_wh_miss = xarr_wh_miss.groupby('day').mean(dim='trial')
+    
+    xarr_wh_hit.name = 'activity'
+    xarr_wh_hit = xarr_wh_hit.to_dataframe().reset_index()
+    xarr_wh_hit['mouse_id'] = mouse_id
+    xarr_wh_hit['reward_group'] = reward_group
+    xarr_wh_hit['stim'] = 'whisker'
+    xarr_wh_hit['outcome'] = 'hit'
+    psth.append(xarr_wh_hit)
+    
+    xarr_wh_miss.name = 'activity'
+    xarr_wh_miss = xarr_wh_miss.to_dataframe().reset_index()
+    xarr_wh_miss['mouse_id'] = mouse_id
+    xarr_wh_miss['reward_group'] = reward_group
+    xarr_wh_miss['stim'] = 'whisker'
+    xarr_wh_miss['outcome'] = 'miss'
+    psth.append(xarr_wh_miss)
+   
+    # Select no stim trials.
+    xarr_nt = xarr.sel(trial=xarr['no_stim']==1)
+    
+    # Check if that nouse has FA trials.
+    if xarr_nt.sel(trial=xarr_nt['outcome_c']==1).size == 0:
+        # If no FA trials, we can skip this mouse.
+        continue
+    # Average trials per days.
+    xarr_nt_hit = xarr_nt.sel(trial=xarr_nt['outcome_c']==1)
+    xarr_nt_miss = xarr_nt.sel(trial=xarr_nt['outcome_c']==0)
+    xarr_nt_hit = xarr_nt_hit.groupby('day').mean(dim='trial')
+    xarr_nt_miss = xarr_nt_miss.groupby('day').mean(dim='trial')
+    
+    xarr_nt_hit.name = 'activity'
+    xarr_nt_hit = xarr_nt_hit.to_dataframe().reset_index()
+    xarr_nt_hit['mouse_id'] = mouse_id
+    xarr_nt_hit['reward_group'] = reward_group
+    xarr_nt_hit['stim'] = 'no_stim'
+    xarr_nt_hit['outcome'] = 'hit'
+    psth.append(xarr_nt_hit)
+    
+    xarr_nt_miss.name = 'activity'
+    xarr_nt_miss = xarr_nt_miss.to_dataframe().reset_index()
+    xarr_nt_miss['mouse_id'] = mouse_id
+    xarr_nt_miss['reward_group'] = reward_group
+    xarr_nt_miss['stim'] = 'no_stim'
+    xarr_nt_miss['outcome'] = 'miss'
+    psth.append(xarr_nt_miss)
+
+psth = pd.concat(psth)
+
+
+variance = 'cell'  # 'mice' or 'cells'
+if variance == "mice":
+    min_cells = 3
+    data = imaging_utils.filter_data_by_cell_count(psth, min_cells)
+    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'outcome'])['activity'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'stim', 'outcome'])['activity'].agg('mean').reset_index()
+else:
+    data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi', 'stim', 'outcome'])['activity'].agg('mean').reset_index()
+    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
+    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi', 'stim', 'outcome'])['activity'].agg('mean').reset_index()
+# Convert data to percent dF/F0.
+data['activity'] = data['activity'] * 100
+
+
+# Plot for psth all cells.
+# ------------------------
+
+fig, axes = plt.subplots(2, 2, figsize=(6, 8), sharey=True)
+
+# Whisker stim.
+d = data.loc[(data.reward_group=='R+') & (data.stim=='whisker')]
+sns.lineplot(data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[1], estimator='mean', legend=False, ax=axes[0,0])
+d = data.loc[(data.reward_group=='R-') & (data.stim=='whisker')]
+sns.lineplot(data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[0], estimator='mean', legend=False, ax=axes[1,0])
+
+d = data.loc[(data.reward_group=='R+') & (data.stim=='no_stim')]
+sns.lineplot(data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[1], estimator='mean', legend=False, ax=axes[0,1])
+d = data.loc[(data.reward_group=='R-') & (data.stim=='no_stim')]
+sns.lineplot(data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[0], estimator='mean', legend=False, ax=axes[1,1])
+
+for ax in axes.flat:
+    ax.axvline(0, color='#FF9600', linestyle='--')
+
+axes[0,0].set_title('Whisker stim')
+axes[0,1].set_title('No stim')
+axes[0,0].set_ylabel('R+')
+axes[1,0].set_ylabel('R-')
+plt.ylim(-1, 12)
+sns.despine()
+
+# Save figure for all cells.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/hit_vs_miss/'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_hitvsmiss_on_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Plot for projectors.
+# --------------------
+cell_types = ['wM1', 'wS2']
+stims = ['whisker', 'no_stim']
+stim_titles = {'whisker': 'Whisker stim', 'no_stim': 'No stim'}
+
+fig, axes = plt.subplots(2, 4, figsize=(12, 8), sharey=True)
+
+for j, ct in enumerate(cell_types):
+    for k, stim in enumerate(stims):
+        # R+
+        d = data.loc[
+            (data.reward_group == 'R+') &
+            (data.cell_type == ct) &
+            (data.stim == stim)
+        ]
+        sns.lineplot(
+            data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[1], estimator='mean', legend=False, ax=axes[0, j*2 + k]
+        )
+        axes[0, j*2 + k].axvline(0, color='#FF9600', linestyle='--')
+        axes[0, j*2 + k].set_title(f"{ct} - {stim_titles[stim]}")
+        # R-
+        d = data.loc[
+            (data.reward_group == 'R-') &
+            (data.cell_type == ct) &
+            (data.stim == stim)
+        ]
+        sns.lineplot(
+            data=d, x='time', y='activity',
+            errorbar='ci', style='outcome', style_order=['hit', 'miss'],
+            color=reward_palette[0], estimator='mean', legend=False, ax=axes[1, j*2 + k]
+        )
+        axes[1, j*2 + k].axvline(0, color='#FF9600', linestyle='--')
+
+axes[0, 0].set_ylabel('R+')
+axes[1, 0].set_ylabel('R-')
+plt.ylim(-2, 20)
+sns.despine()
+
+# Save figure for projector neurons.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/hit_vs_miss/'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = f'psth_day0_hitvsmiss_projectors_on_{variance}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+# Bar plot and stats for hit vs miss, for both whisker and no_stim.
+# -----------------------------------------------------------------
+for stim in ['whisker', 'no_stim']:
+    stim_title = 'Whisker stim' if stim == 'whisker' else 'No stim'
+    fig, axes = plt.subplots(2, 3, figsize=(9, 8), sharey=True)
+
+    # All cells
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R+') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[1], estimator='mean', ax=axes[0, 0]
+    )
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R-') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[0], estimator='mean', ax=axes[1, 0]
+    )
+    axes[0, 0].set_title('All cells')
+    axes[0, 0].set_ylabel('R+')
+    axes[1, 0].set_ylabel('R-')
+
+    # wS2 projectors
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R+') & (data.cell_type == 'wS2') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[1], estimator='mean', ax=axes[0, 1]
+    )
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R-') & (data.cell_type == 'wS2') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[0], estimator='mean', ax=axes[1, 1]
+    )
+    axes[0, 1].set_title('wS2 projectors')
+
+    # wM1 projectors
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R+') & (data.cell_type == 'wM1') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[1], estimator='mean', ax=axes[0, 2]
+    )
+    sns.barplot(
+        data=data.loc[(data.reward_group == 'R-') & (data.cell_type == 'wM1') & (data.stim == stim)],
+        x='outcome', y='activity',
+        errorbar='ci', order=['hit', 'miss'],
+        color=reward_palette[0], estimator='mean', ax=axes[1, 2]
+    )
+    axes[0, 2].set_title('wM1 projectors')
+
+    for ax in axes.flat:
+        ax.set_xlabel('')
+
+    plt.suptitle(f'Hit vs Miss: {stim_title}')
+    plt.ylim(0, 8)
+    sns.despine()
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+
+    # Save figure for all cells and projectors.
+    output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/hit_vs_miss/'
+    output_dir = io.adjust_path_to_host(output_dir)
+    svg_file = f'barplot_day0_hitvsmiss_{stim}_on_{variance}_all_wS2_wM1.svg'
+    plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+    plt.close(fig)
+
+    # Stats.
+    # Prepare data for stats and export
+    barplot_data = data.loc[data.stim == stim].groupby(['mouse_id', 'reward_group', 'cell_type', 'outcome'])['activity'].mean().reset_index()
+
+    stats_results = []
+
+    # 1. All cells (ignore cell_type)
+    for group in barplot_data['reward_group'].unique():
+        d = barplot_data[barplot_data['reward_group'] == group]
+        # Average across cell types for each mouse and outcome
+        d_all = d.groupby(['mouse_id', 'outcome'])['activity'].mean().reset_index()
+        hit = d_all[d_all['outcome'] == 'hit'].set_index('mouse_id')['activity']
+        miss = d_all[d_all['outcome'] == 'miss'].set_index('mouse_id')['activity']
+        common = hit.index.intersection(miss.index)
+        if len(common) > 0:
+            stat, p = wilcoxon(hit.loc[common], miss.loc[common])
+        else:
+            stat, p = np.nan, np.nan
+        stats_results.append({'stim': stim, 'reward_group': group, 'cell_type': 'all', 'wilcoxon_stat': stat, 'p_value': p})
+
+    # 2. wS2 and 3. wM1
+    for cell_type in ['wS2', 'wM1']:
+        for group in barplot_data['reward_group'].unique():
+            d = barplot_data[(barplot_data['reward_group'] == group) & (barplot_data['cell_type'] == cell_type)]
+            hit = d[d['outcome'] == 'hit'].set_index('mouse_id')['activity']
+            miss = d[d['outcome'] == 'miss'].set_index('mouse_id')['activity']
+            common = hit.index.intersection(miss.index)
+            if len(common) > 0:
+                stat, p = wilcoxon(hit.loc[common], miss.loc[common])
+            else:
+                stat, p = np.nan, np.nan
+            stats_results.append({'stim': stim, 'reward_group': group, 'cell_type': cell_type, 'wilcoxon_stat': stat, 'p_value': p})
+
+    stats_df = pd.DataFrame(stats_results)
+
+    # Save barplot data and stats to CSV
+    barplot_data.to_csv(os.path.join(output_dir, f'barplot_day0_hitvsmiss_{stim}_on_{variance}_all_wS2_wM1_data.csv'), index=False)
+    stats_df.to_csv(os.path.join(output_dir, f'barplot_day0_hitvsmiss_{stim}_on_{variance}_all_wS2_wM1_stats.csv'), index=False)
+
+
+
+
+
+
 
 
 # #############################################################################

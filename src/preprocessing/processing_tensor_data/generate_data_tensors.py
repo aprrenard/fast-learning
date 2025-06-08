@@ -453,8 +453,45 @@ for mouse in mice_list:
     ds.to_netcdf(save_path)
 
 
+# #############################################################################
+#  Load xarrays and substract baseline.
+# #############################################################################
 
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+trial_indices_sensory_map_yaml = io.solve_common_paths('trial_indices_sensory_map')
+stop_flag_sensory_map_yaml = io.solve_common_paths('stop_flags_sensory_map')
+processed_data_dir = io.solve_common_paths('processed_data')
+days = ['-3', '-2', '-1', '0', '+1', '+2']
+baseline_win = (0, 1)
 
+_, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes')
+
+for mouse_id in mice_list:
+    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
+
+    file_name = 'tensor_xarray_learning_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
+    # Save the xarray.
+    save_path = os.path.join(folder, mouse_id, 'tensor_xarray_learning_data_baselinesubstracted.nc')
+    xarr.to_netcdf(save_path)
+
+    file_name = 'tensor_xarray_mapping_data.nc'
+    folder = os.path.join(io.processed_dir, 'mice')
+    xarr = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
+    xarr = imaging_utils.substract_baseline(xarr, 2, baseline_win)
+    # Save the xarray.
+    save_path = os.path.join(folder, mouse_id, 'tensor_xarray_mapping_data_baselinesubstracted.nc')
+    xarr.to_netcdf(save_path)
+
+    
 
 # #############################################################################
 # Lick-aligned xarrays.
