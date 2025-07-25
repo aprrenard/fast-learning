@@ -14,6 +14,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import spearmanr
 from matplotlib.backends.backend_pdf import PdfPages
 import xarray as xr
+from scipy.stats import mannwhitneyu
+from matplotlib.backends.backend_pdf import PdfPages
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import cross_val_score
+from scipy.stats import bootstrap
+from joblib import Parallel, delayed
+from sklearn.svm import SVC
 
 # sys.path.append(r'H:/anthony/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
@@ -22,10 +31,10 @@ sys.path.append(r'/home/aprenard/repos/fast-learning')
 import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
-from src.core_analysis.behavior import compute_performance, plot_single_session
-from statannotations.Annotator import Annotator
-from scipy.stats import mannwhitneyu
+from src.utils.utils_behavior import *
 
+sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+            rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
 
 # # #############################################################################
 # # Comparing xarray datasets with previous tensors.
@@ -1145,10 +1154,9 @@ folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
 mouse = 'AR180'
 
 xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
-xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
 
 # Select days.
-xarray = xarray.sel(trial=xarray['day'].isin([-2, -1, 0, 1, 2]))
+xarray = xarray.sel(trial=xarray['day'].isin([0]))
 
 xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
 
@@ -1205,7 +1213,28 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
+# Example traces 
 
+dff = "/mnt/lsens-analysis/Anthony_Renard/data/AR180/AR180_20241215_190049/suite2p/plane0/dff.npy"
+dff = np.load(dff)
+
+dff.shape
+
+sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=2)
+
+cells = [2, 4, 5, 8, 10, 11, 18, 21, 22, 25, 27, 28, 35, 36, 49, 54, 55, 67, 69, 77]
+counter = 0
+plt.figure(figsize=(16, 12))
+for icell in cells:
+    if icell == 31:
+        continue
+    plt.plot(dff[icell, 1000:15000] + counter * 3)
+    counter += 1
+
+# Save plot.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/illustrations'
+file_name = 'AR180_example_traces.svg'
+plt.savefig(os.path.join(output_dir, file_name), format='svg', dpi=300)
 
 
 # ###################################################
@@ -1260,7 +1289,7 @@ for mouse in mice:
         print(f'Not enough mapping trials for {mouse}.')
         continue
     
-    # Select pre, post, and day 0 mapping trials
+    # Select pre, post mapping trials and day 0 whisker trials.
     pre = xarray.sel(trial=xarray['day'].isin([-1,]))
     pre = pre.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
     post = xarray.sel(trial=xarray['day'].isin([2]))
@@ -1500,7 +1529,7 @@ results_df.to_csv(os.path.join(output_dir, 'correlation_with_post_learning_vecto
 # ###########################################################
 
 sampling_rate = 30
-win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win = (0, 0.180)  # from stimulus onset to 300 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
 # win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
@@ -1508,10 +1537,10 @@ baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * samp
 days_str = ['-2', '-1', '0', '+1', '+2']
 days = [-2, -1, 0, 1, 2]
 n_map_trials = 40
-n_learning_trials = 50
+n_learning_trials = 60
 substract_baseline = True
 select_responsive_cells = False
-select_lmi = True
+select_lmi = False
 zscore = False
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
@@ -1519,12 +1548,14 @@ _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
 print(mice)
-mice = ['AR127']
+# mice = ['AR127']
 # Load data.
 vectors_map_rew = []
 vectors_map_nonrew = []
 vectors_learning_rew = []
 vectors_learning_nonrew = []
+mice_rew = []
+mice_nonrew = []
 
 # Load responsive cells.
 # Responsiveness df.
@@ -1551,13 +1582,18 @@ for mouse in mice:
     print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray_map = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
-    xarray_map = xarray_map - np.nanmean(xarray_map.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
-    file_name = 'tensor_xarray_learning_data.nc'
-    xarray_learning = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
-    xarray_learning = xarray_learning - np.nanmean(xarray_learning.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+    xarray_map = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=substract_baseline)
 
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
+    if rew_gp == 'R-':
+        mice_nonrew.append(mouse)
+    elif rew_gp == 'R+':
+        mice_rew.append(mouse)
+    file_name = 'tensor_xarray_learning_data.nc'
+    xarray_learning = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=substract_baseline)
+
+    
+    
     # Select days.
     xarray_map = xarray_map.sel(trial=xarray_map['day'].isin(days))
     xarray_learning = xarray_learning.sel(trial=xarray_learning['day'].isin(days))
@@ -1630,6 +1666,79 @@ def compute_daywise_average_correlation(map_vectors, learning_vectors):
     
     return avg_correlation_matrix
 
+
+# For each mouse, plot population vectors and correlation matrix.
+# ---------------------------------------------------------------
+
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/during_learning'
+output_dir = io.adjust_path_to_host(output_dir)
+pdf_file = 'pop_vectors_mapping_learning_justday0.pdf'
+
+with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
+    # Rewarded group
+    for imouse in range(len(mice_rew)):
+        mouse = mice_rew[imouse]
+        print(f"Processing rewarded mouse: {mouse}")
+        vectors_map = vectors_map_rew[imouse]
+        vectors_learning = vectors_learning_rew[imouse]
+        combined_vectors = [
+            vectors_map.sel(trial=vectors_map['day'] == -2),
+            vectors_map.sel(trial=vectors_map['day'] == -1),
+            vectors_learning.sel(trial=vectors_learning['day'] == 0),
+            vectors_map.sel(trial=vectors_map['day'] == 0),
+            # vectors_learning.sel(trial=vectors_learning['day'] == 1),
+            vectors_map.sel(trial=vectors_map['day'] == 1),
+            # vectors_learning.sel(trial=vectors_learning['day'] == 2),
+            vectors_map.sel(trial=vectors_map['day'] == 2),
+        ]
+        combined_vectors = np.concatenate([vect.values for vect in combined_vectors], axis=1)
+        plt.figure(figsize=(10, 6),  dpi=300)
+        plt.imshow(combined_vectors, cmap='viridis', vmin=-.2, vmax=0.4)
+        # edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials])
+        edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_map_trials, n_map_trials])
+        for edge in edges[:-1]:
+            plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+        plt.title(f'Rewarded Mouse: {mouse}')
+        plt.xlabel('Trials')
+        plt.ylabel('Cells')
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+
+    # Non-rewarded group
+    for imouse in range(len(mice_nonrew)):
+        # Use correct mouse index for non-rewarded group
+        # Find the mouse name in the original mice list if possible
+        mouse = mice_nonrew[imouse]
+        print(f"Processing non-rewarded mouse: {mouse}")
+        vectors_map = vectors_map_nonrew[imouse]
+        vectors_learning = vectors_learning_nonrew[imouse]
+        combined_vectors = [
+            vectors_map.sel(trial=vectors_map['day'] == -2),
+            vectors_map.sel(trial=vectors_map['day'] == -1),
+            vectors_learning.sel(trial=vectors_learning['day'] == 0),
+            vectors_map.sel(trial=vectors_map['day'] == 0),
+            # vectors_learning.sel(trial=vectors_learning['day'] == 1),
+            vectors_map.sel(trial=vectors_map['day'] == 1),
+            # vectors_learning.sel(trial=vectors_learning['day'] == 2),
+            vectors_map.sel(trial=vectors_map['day'] == 2),
+        ]
+        combined_vectors = np.concatenate([vect.values for vect in combined_vectors], axis=1)
+        plt.figure(figsize=(10, 6),  dpi=300)
+        plt.imshow(combined_vectors, cmap='viridis', vmin=-.2, vmax=0.4)
+        # edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials])
+        edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_map_trials, n_map_trials])
+        for edge in edges[:-1]:
+            plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
+        plt.title(f'Non-Rewarded Mouse: {mouse}')
+        plt.xlabel('Trials')
+        plt.ylabel('Cells')
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+
+
+
 # Compute average correlation for each pair of days for each mouse and return an 8x8 matrix averaged across mice.
 def compute_trialwise_average_correlation(map_vectors, learning_vectors):
     trialwise_correlation_matrices = []
@@ -1666,7 +1775,6 @@ def compute_trialwise_average_correlation(map_vectors, learning_vectors):
         # Compute correlation between the two sets of trials
         corr = np.corrcoef(combined_vectors)
         trialwise_correlation_matrices.append(corr)
-        
     
     # Average across mice
     avg_correlation_matrix = np.nanmean(trialwise_correlation_matrices, axis=0)
@@ -1749,3 +1857,510 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
+# ##################################################
+# Decoding before and after learning.
+# ##################################################
+
+
+# Similar to the previous section, but compute a correlation matrix for
+# each mouse and then average across mice.
+
+sampling_rate = 30
+win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
+# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
+baseline_win = (-1, 0)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
+days_str = ['-2', '-1', '+1', '+2']
+days = [-2, -1,  1, 2]
+n_map_trials = 40
+substract_baseline = True
+select_responsive_cells = False
+select_lmi = False
+projection_type = None  # 'wS2', 'wM1' or None
+
+_, _, mice, db = io.select_sessions_from_db(io.db_path,
+                                            io.nwb_dir,
+                                            two_p_imaging='yes',)
+print(mice)
+
+# Load data.
+vectors_rew = []
+vectors_nonrew = []
+mice_rew = []
+mice_nonrew = []
+
+# Load responsive cells.
+# Responsiveness df.
+# test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
+# test_df = pd.read_csv(test_df)
+# test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
+# selected_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
+
+if select_responsive_cells:
+    test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
+    test_df = pd.read_csv(test_df)
+    test_df = test_df.loc[test_df['day'].isin(days)]
+    # Select cells as responsive if they pass the test on at least one day.
+    selected_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
+    selected_cells = selected_cells.loc[selected_cells['pval_mapping'] <= 0.05/5]
+
+if select_lmi:
+    lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
+    lmi_df = pd.read_csv(lmi_df)
+    selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
+
+
+for mouse in mice:
+    print(f"Processing mouse: {mouse}")
+    folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    file_name = 'tensor_xarray_mapping_data.nc'
+    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+    xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
+
+    # Select days.
+    xarray = xarray.sel(trial=xarray['day'].isin(days))
+    
+    # Select responsive cells.
+    if select_responsive_cells or select_lmi:
+        selected_cells_for_mouse = selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']
+        xarray = xarray.sel(cell=xarray['roi'].isin(selected_cells_for_mouse))
+    # Option to select a specific projection type or all cells
+    if projection_type is not None:
+        xarray = xarray.sel(cell=xarray['cell_type'] == projection_type)
+        if xarray.sizes['cell'] == 0:
+            print(f"No cells of type {projection_type} for mouse {mouse}.")
+            continue
+        
+    # Check that each day has at least n_map_trials mapping trials
+    # and select the first n_map_trials mapping trials for each day.
+    n_trials = xarray[0, :, 0].groupby('day').count(dim='trial').values
+    if np.any(n_trials < n_map_trials):
+        print(f'Not enough mapping trials for {mouse}.')
+        continue
+
+    # Select last n_map_trials mapping trials for each day.
+    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
+    # Average bins.
+    d = d.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    # # Equalize the mean activity of each cell across days by shifting (additive constant).
+    # # For each cell, compute its mean activity on each day.
+    # # Use the mean across all days as the reference mean.
+    # # For each day, add a constant so that its mean matches the reference mean.
+    # cell_axis = 0  # axis for cells
+    # trial_axis = 1  # axis for trials
+    # if 'cell' in d.dims:
+    #     cell_dim = 'cell'
+    # else:
+    #     cell_dim = 'roi'
+    # trial_dim = 'trial'
+    # day_per_trial = d['day'].values
+    # unique_days = np.unique(day_per_trial)
+    # arr = d.values  # shape: (n_cells, n_trials)
+    # arr_eq = arr.copy()
+    # for icell in range(arr.shape[cell_axis]):
+    #     # For each cell, get trial indices for each day
+    #     cell_vals = arr[icell, :]
+    #     # Compute mean across all days (reference)
+    #     ref_mean = np.nanmean(cell_vals)
+    #     for day in unique_days:
+    #         day_mask = (day_per_trial == day)
+    #         if np.any(day_mask):
+    #             day_mean = np.nanmean(cell_vals[day_mask])
+    #             shift = ref_mean - day_mean
+    #             arr_eq[icell, day_mask] = cell_vals[day_mask] + shift
+    # # Replace d.values with the shifted array
+    # d.values[:] = arr_eq
+
+    # Remove artefacts by setting them at 0. To avoid NaN values and
+    # mismatches (that concerns a single cell).
+    print(np.isnan(d.values).sum(), 'NaN values in the data.')
+    d = d.fillna(0)
+    
+    if rew_gp == 'R-':
+        vectors_nonrew.append(d)
+        mice_nonrew.append(mouse)
+    elif rew_gp == 'R+':
+        vectors_rew.append(d)
+        mice_rew.append(mouse)
+
+# Decoding accuracy between reward groups.
+# ----------------------------------------
+# Train a single classifier per mouse and plot average cross-validated accuracy
+# Convoluted function because I test mean equalization without leaks to test sets.
+
+
+def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, return_weights=False, equalize=False, debug=False, n_jobs=20):
+    accuracies = []
+    chance_accuracies = []
+    weights_per_mouse = []
+    rng = np.random.default_rng(seed)
+
+    for d in vectors:
+        days_per_trial = d['day'].values
+        mask = np.isin(days_per_trial, [-2, -1, 1, 2])
+        trials = d.values[:, mask].T
+        labels = np.array(['pre' if day in [-2, -1] else 'post' for day in days_per_trial[mask]])
+        X = trials
+        y = labels
+
+        y_enc = label_encoder.transform(y)
+        clf = SVC(kernel='linear', probability=False, random_state=seed)
+        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=seed)
+        fold_scores = []
+        all_true = []
+        all_pred = []
+        fold_weights = []
+        for train_idx, test_idx in cv.split(X, y_enc):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y_enc[train_idx], y_enc[test_idx]
+            # Equalization
+            if equalize:
+                ref_means = np.nanmean(X_train, axis=0)
+                pre_label = label_encoder.transform(['pre'])[0]
+                post_label = label_encoder.transform(['post'])[0]
+                pre_mask_train = y_train == pre_label
+                post_mask_train = y_train == post_label
+                for icell in range(X_train.shape[1]):
+                    pre_mean = np.nanmean(X_train[pre_mask_train, icell])
+                    post_mean = np.nanmean(X_train[post_mask_train, icell])
+                    X_train[pre_mask_train, icell] += ref_means[icell] - pre_mean
+                    X_train[post_mask_train, icell] += ref_means[icell] - post_mean
+                pre_mask_test = y_test == pre_label
+                post_mask_test = y_test == post_label
+                for icell in range(X_test.shape[1]):
+                    pre_mean = np.nanmean(X_test[pre_mask_test, icell])
+                    post_mean = np.nanmean(X_test[post_mask_test, icell])
+                    X_test[pre_mask_test, icell] += ref_means[icell] - pre_mean
+                    X_test[post_mask_test, icell] += ref_means[icell] - post_mean
+            # Scaling (always applied)
+            scaler = StandardScaler()
+            X_train_proc = scaler.fit_transform(X_train)
+            X_test_proc = scaler.transform(X_test)
+            clf.fit(X_train_proc, y_train)
+            y_pred = clf.predict(X_test_proc)
+            fold_scores.append(np.mean(y_pred == y_test))
+            all_true.extend(y_test)
+            all_pred.extend(y_pred)
+            if return_weights:
+                fold_weights.append(clf.coef_.flatten())
+        acc = np.mean(fold_scores)
+        accuracies.append(acc)
+
+        if debug:
+            print("Accuracy:", acc)
+            print("True labels:", all_true)
+            print("Predicted labels:", all_pred)
+            print("Label counts (true):", np.bincount(all_true))
+            print("Label counts (pred):", np.bincount(all_pred))
+
+        # Estimate chance level by shuffling labels n_shuffles times (parallelized)
+        def shuffle_score(clf, X, y_enc, cv):
+            y_shuff = rng.permutation(y_enc)
+            fold_scores = []
+            for train_idx, test_idx in cv.split(X, y_shuff):
+                X_train, X_test = X[train_idx], X[test_idx]
+                y_train, y_test = y_shuff[train_idx], y_shuff[test_idx]
+                # Equalization
+                if equalize:
+                    ref_means = np.nanmean(X_train, axis=0)
+                    pre_label = label_encoder.transform(['pre'])[0]
+                    post_label = label_encoder.transform(['post'])[0]
+                    pre_mask_train = y_train == pre_label
+                    post_mask_train = y_train == post_label
+                    for icell in range(X_train.shape[1]):
+                        pre_mean = np.nanmean(X_train[pre_mask_train, icell])
+                        post_mean = np.nanmean(X_train[post_mask_train, icell])
+                        X_train[pre_mask_train, icell] += ref_means[icell] - pre_mean
+                        X_train[post_mask_train, icell] += ref_means[icell] - post_mean
+                        pre_mask_test = y_test == pre_label
+                        post_mask_test = y_test == post_label
+                    for icell in range(X_test.shape[1]):
+                        pre_mean = np.nanmean(X_test[pre_mask_test, icell])
+                        post_mean = np.nanmean(X_test[post_mask_test, icell])
+                        X_test[pre_mask_test, icell] += ref_means[icell] - pre_mean
+                        X_test[post_mask_test, icell] += ref_means[icell] - post_mean
+                # Scaling (always applied)
+                scaler = StandardScaler()
+                X_train_proc = scaler.fit_transform(X_train)
+                X_test_proc = scaler.transform(X_test)
+                clf.fit(X_train_proc, y_train)
+                y_pred = clf.predict(X_test_proc)
+                fold_scores.append(np.mean(y_pred == y_test))
+            return np.mean(fold_scores)
+
+        shuffle_scores = Parallel(n_jobs=n_jobs)(
+            delayed(shuffle_score)(clf, X, y_enc, cv) for _ in range(n_shuffles)
+        )
+        chance_accuracies.append(np.mean(shuffle_scores))
+
+        if return_weights:
+            avg_weights = np.mean(fold_weights, axis=0) if fold_weights else np.zeros(X.shape[1])
+            weights_per_mouse.append(avg_weights)
+            
+    if return_weights:
+        return np.array(accuracies), np.array(chance_accuracies), weights_per_mouse
+    else:
+        return np.array(accuracies), np.array(chance_accuracies)
+
+
+le = LabelEncoder()
+le.fit(['pre', 'post'])
+
+accs_rew, chance_rew, weights_rew = per_mouse_cv_accuracy(vectors_rew, le, n_shuffles=100, return_weights=True, equalize=True)
+accs_nonrew, chance_nonrew, weights_nonrew = per_mouse_cv_accuracy(vectors_nonrew, le, n_shuffles=100, return_weights=True, equalize=True)
+
+for w in weights_rew:
+    plt.plot(w, label='R+')
+
+print(f"Mean accuracy R+: {np.nanmean(accs_rew):.3f} +/- {np.nanstd(accs_rew):.3f}")
+print(f"Mean accuracy R-: {np.nanmean(accs_nonrew):.3f} +/- {np.nanstd(accs_nonrew):.3f}")
+
+# Plot
+plt.figure(figsize=(4, 5))
+# Plot chance levels in grey
+sns.pointplot(data=[chance_rew, chance_nonrew], color='grey', estimator=np.nanmean, errorbar='ci', linestyles="none")
+# Plot actual accuracies
+sns.stripplot(data=[accs_rew, accs_nonrew], palette=reward_palette[::-1], alpha=0.7)
+sns.pointplot(data=[accs_rew, accs_nonrew], palette=reward_palette[::-1], linestyle=None, estimator=np.nanmean, errorbar='ci')
+plt.xticks([0, 1], ['R+', 'R-'])
+plt.ylabel('Cross-validated accuracy')
+plt.title('Pre vs post learning classification accuracy across mice')
+plt.ylim(0, 1)
+sns.despine()
+
+# Statistical test: Mann-Whitney U test between R+ and R- accuracies
+stat, p_value = mannwhitneyu(accs_rew, accs_nonrew, alternative='two-sided')
+print(f"Mann-Whitney U test: stat={stat:.3f}, p-value={p_value:.4f}")
+
+# Save figure.
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = 'decoding_accuracy.svg'
+if projection_type is not None:
+    svg_file = f'decoding_accuracy_{projection_type}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save results.
+results_df = pd.DataFrame({
+    'accuracy': np.concatenate([accs_rew, accs_nonrew]),
+    'reward_group': ['R+'] * len(accs_rew) + ['R-'] * len(accs_nonrew),
+    'chance_accuracy': np.concatenate([chance_rew, chance_nonrew]),
+})
+results_csv_file = 'decoding_accuracy_data.csv'
+if projection_type is not None:
+    results_csv_file = f'decoding_accuracy_data_{projection_type}.csv'
+results_df.to_csv(os.path.join(output_dir, results_csv_file), index=False)
+# Save stats.
+
+stat_file = 'decoding_accuracy_stats.csv'
+if projection_type is not None:
+    stat_file = f'decoding_accuracy_stats_{projection_type}.csv'
+pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(output_dir, stat_file), index=False)
+
+
+# Relationship between classifier weights and learning modualtion index.
+# ----------------------------------------------------------------------
+
+lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
+lmi_df = pd.read_csv(lmi_df)
+
+# Associate classifier weights with cells and plot relationship across mice
+
+# For each mouse, get the classifier weights and the corresponding cell LMI
+all_weights = []
+all_lmi = []
+all_mouse = []
+
+for i, (mouse, weights) in enumerate(zip(mice_rew + mice_nonrew, weights_rew + weights_nonrew)):
+    # Get the vector object for this mouse (to get cell order)
+    if mouse in mice_rew:
+        idx = mice_rew.index(mouse)
+        d = vectors_rew[idx]
+    else:
+        idx = mice_nonrew.index(mouse)
+        d = vectors_nonrew[idx]
+    # Get cell IDs in the same order as weights
+    cell_ids = d['roi'].values if 'roi' in d.coords else d['cell'].values
+    # Get LMI for these cells
+    lmi_mouse = lmi_df[(lmi_df['mouse_id'] == mouse) & (lmi_df['roi'].isin(cell_ids))]
+    # Ensure order matches
+    lmi_mouse = lmi_mouse.set_index('roi').reindex(cell_ids)
+    lmi_values = lmi_mouse['lmi'].values
+    # Store
+    all_weights.append(weights)
+    all_lmi.append(lmi_values)
+    all_mouse.extend([mouse] * len(weights))
+
+# Flatten arrays
+all_weights_flat = np.concatenate(all_weights)
+all_lmi_flat = np.concatenate(all_lmi)
+all_mouse_flat = np.array(all_mouse)
+# Plot relationship using seaborn
+plt.figure(figsize=(6, 5))
+abs_lmi = np.abs(all_lmi_flat)
+abs_weights = np.abs(all_weights_flat)
+
+# Create a DataFrame for seaborn
+df = pd.DataFrame({
+    'abs_lmi': abs_lmi,
+    'abs_weight': abs_weights,
+    'mouse': all_mouse_flat
+})
+
+# Interpolate a curve for each mouse
+
+mice_unique = np.unique(df['mouse'])
+lmi_grid = np.linspace(0, np.nanmax(abs_lmi), 100)
+interp_weights = []
+
+for mouse in mice_unique:
+    sub = df[df['mouse'] == mouse].dropna()
+    if len(sub) < 2:
+        continue
+    # Sort by abs_lmi
+    sub = sub.sort_values('abs_lmi')
+    # Interpolate
+    interp = np.interp(lmi_grid, sub['abs_lmi'], sub['abs_weight'])
+    interp_weights.append(interp)
+
+interp_weights = np.array(interp_weights)
+mean_curve = np.nanmean(interp_weights, axis=0)
+sem_curve = np.nanstd(interp_weights, axis=0) / np.sqrt(interp_weights.shape[0])
+
+plt.plot(lmi_grid, mean_curve, color='C0')
+plt.fill_between(lmi_grid, mean_curve - sem_curve, mean_curve + sem_curve, color='C0', alpha=0.3)
+plt.xlabel('Absolute Learning Modulation Index (|LMI|)')
+plt.ylabel('Absolute Classifier Weight (|weight|)')
+plt.title('Mean interpolated |weight| vs |LMI| across mice')
+
+
+# Compute and print Spearman correlation
+rho, pval = spearmanr(all_lmi_flat, all_weights_flat)
+print(f"Spearman correlation: rho={rho:.3f}, p={pval:.3g}")
+
+# Save plot
+plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi.svg'), format='svg', dpi=300)
+
+
+
+# Accuracy as a function of percent most modulated cells removed.
+# ---------------------------------------------------------------
+
+# This is to show that without the cells modulated on average, no information
+# can be decoded. The non-modulated cells could still carry some information
+# similarly to non-place cells in the hippocampus.
+
+# Accuracy as a function of percent most modulated cells removed.
+# ---------------------------------------------------------------
+
+lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
+lmi_df = pd.read_csv(lmi_df)
+
+le = LabelEncoder()
+le.fit(['pre', 'post'])
+percentiles = np.arange(0, 91, 5)  # 0% to 60% in steps of 5%
+accs_rew_curve = []
+accs_nonrew_curve = []
+
+for perc in percentiles:
+    accs_rew_perc = []
+    accs_nonrew_perc = []
+    for group, vectors, mice_group in zip(
+        ['R+', 'R-'],
+        [vectors_rew, vectors_nonrew],
+        [mice_rew, mice_nonrew]
+    ):
+        for i, mouse in enumerate(mice_group):
+            # Get vector and cell LMI for this mouse
+            d = vectors[i]
+            cell_ids = d['roi'].values if 'roi' in d.coords else d['cell'].values
+            lmi_mouse = lmi_df[(lmi_df['mouse_id'] == mouse) & (lmi_df['roi'].isin(cell_ids))]
+            lmi_mouse = lmi_mouse.set_index('roi').reindex(cell_ids)
+            abs_lmi = np.abs(lmi_mouse['lmi'].values)
+            # Sort cells by abs(LMI)
+            sorted_idx = np.argsort(-abs_lmi)  # descending
+            n_cells = len(cell_ids)
+            n_remove = int(np.round(n_cells * perc / 100))
+            keep_idx = sorted_idx[n_remove:]
+            # If less than 2 cells remain, skip
+            if len(keep_idx) < 2:
+                continue
+            # Subset vector
+            d_sub = d.isel({d.dims[0]: keep_idx})
+            # Classification
+            days_per_trial = d_sub['day'].values
+            mask = np.isin(days_per_trial, [-2, -1, 1, 2])
+            trials = d_sub.values[:, mask].T
+            labels = np.array(['pre' if day in [-2, -1] else 'post' for day in days_per_trial[mask]])
+            y_enc = le.transform(labels)
+            clf = LogisticRegression(max_iter=50000)
+            cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+            scaler = StandardScaler()
+            X = scaler.fit_transform(trials)
+            scores = cross_val_score(clf, X, y_enc, cv=cv, n_jobs=1)
+            acc = np.mean(scores)
+            if group == 'R+':
+                accs_rew_perc.append(acc)
+            else:
+                accs_nonrew_perc.append(acc)
+    accs_rew_curve.append(accs_rew_perc)
+    accs_nonrew_curve.append(accs_nonrew_perc)
+# Plot with bootstrap confidence intervals
+mean_rew = []
+ci_rew = []
+mean_nonrew = []
+ci_nonrew = []
+x_vals = 100 - percentiles  # 100% to 40% retained
+
+for a in accs_rew_curve:
+    mean_rew.append(np.nanmean(a))
+    if len(a) > 1:
+        res = bootstrap((np.array(a),), np.nanmean, confidence_level=0.95, n_resamples=1000, method='basic')
+        ci_rew.append(res.confidence_interval)
+    else:
+        ci_rew.append((np.nan, np.nan))
+for a in accs_nonrew_curve:
+    mean_nonrew.append(np.nanmean(a))
+    if len(a) > 1:
+        res = bootstrap((np.array(a),), np.nanmean, confidence_level=0.95, n_resamples=1000, method='basic')
+        ci_nonrew.append(res.confidence_interval)
+    else:
+        ci_nonrew.append((np.nan, np.nan))
+
+# Prepare DataFrame for seaborn
+df_plot = pd.DataFrame({
+    'percent_cells_retained': np.tile(x_vals, 2),
+    'accuracy': np.concatenate([mean_rew, mean_nonrew]),
+    'ci_low': np.concatenate([np.array([ci.low for ci in ci_rew]), np.array([ci.low for ci in ci_nonrew])]),
+    'ci_high': np.concatenate([np.array([ci.high for ci in ci_rew]), np.array([ci.high for ci in ci_nonrew])]),
+    'reward_group': ['R+'] * len(x_vals) + ['R-'] * len(x_vals)
+})
+
+plt.figure(figsize=(6, 5))
+sns.lineplot(data=df_plot, x='percent_cells_retained', y='accuracy', hue='reward_group', palette=reward_palette[::-1])
+for group, color in zip(['R+', 'R-'], reward_palette[::-1]):
+    sub = df_plot[df_plot['reward_group'] == group]
+    plt.fill_between(sub['percent_cells_retained'], sub['ci_low'], sub['ci_high'], color=color, alpha=0.3)
+plt.xlabel('Percent of cells retained')
+plt.ylabel('Classification accuracy')
+plt.title('Accuracy vs percent modulated cells retained')
+plt.legend()
+plt.ylim(0, 1)
+plt.xlim(100, min(x_vals))  # Flip x-axis: start at 100% and go down
+sns.despine()
+
+# Save figure
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'accuracy_vs_percent_modulated_cells.svg'), format='svg', dpi=300)
+
+# Save data
+curve_df = pd.DataFrame({
+    'percent_cells_retained': np.tile(100 - percentiles, 2),
+    'accuracy': np.concatenate([mean_rew, mean_nonrew]),
+    'sem': np.concatenate([sem_rew, sem_nonrew]),
+    'reward_group': ['R+'] * len(percentiles) + ['R-'] * len(percentiles)
+})
+curve_df.to_csv(os.path.join(output_dir, 'accuracy_vs_percent_modulated_cells.csv'), index=False)

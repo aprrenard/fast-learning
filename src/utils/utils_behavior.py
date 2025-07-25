@@ -173,112 +173,127 @@ def plot_single_mouse_performance_across_days(df, mouse_id, color_palette):
     fig.suptitle(f'{mouse_id}')
     sns.despine()
 
-def plot_single_session(table, session_id, palette, ax=None):
-    """ Plots performance of a single session with average per block and single tri al raster plot.
 
-    Args:
-        table (_type_): _description_
-        mouse_id (_type_): _description_
-        palette (_type_): _description_
-    """
+def plot_single_session(table, session_id, palette, ax=None, do_scatter=True, linewidth=2):
+        """ Plots performance of a single session with average per block and single trial raster plot.
+
+        Args:
+            table (_type_): _description_
+            session_id (_type_): _description_
+            palette (_type_): _description_
+            ax: matplotlib axis (optional)
+            do_scatter: bool, whether to plot scatter raster
+            n_trial_xticks: int, x-tick interval
+            linewidth: int or float, line width for line plots
+        """
+        
+        # Set plot parameters.
+        raster_marker = 2
+        marker_width = 2
+        figsize = (15,6)
+        block_size = 20
+        reward_group = table.loc[table.session_id==session_id, 'reward_group'].iloc[0]
+        color_wh = palette[3]
+        if reward_group == 'R-':  # #238443 for whisker R+, #d51a1c for R-.
+            color_wh = palette[2]    
+
+        # Initialize figure.
+        if ax is None:
+            f = plt.figure(figsize=figsize)
+            ax = plt.gca()
+
+        # Plot performance of the session across time.
+        d = table.loc[table.session_id==session_id]
+        # Select entries with trial numbers at middle of each block for alignment with
+        # raster plot.
+        d = d.sort_values(['block_id'])
+        d = d.loc[d.early_lick==0][int(block_size/2)::block_size]
+        if not d.hr_c.isna().all():
+            sns.lineplot(data=d, x='block_id', y='hr_c', color=palette[5], ax=ax,
+                         marker='o', linewidth=linewidth)
+        if not d.hr_a.isna().all():
+            sns.lineplot(data=d, x='block_id', y='hr_a', color=palette[1], ax=ax,
+                         marker='o', linewidth=linewidth)
+        if not d.hr_w.isna().all():
+            sns.lineplot(data=d, x='block_id', y='hr_w', color=color_wh, ax=ax,
+                         marker='o', linewidth=linewidth)
+
+        if do_scatter:
+            # Plot single trial raster plot.
+            d = table.loc[table.session_id==session_id]
+            if not d.hr_c.isna().all():
+                ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'], y=d.loc[d.lick_flag==0]['outcome_c']-0.1,
+                           color=palette[4], marker=raster_marker, linewidths=marker_width)
+                ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'], y=d.loc[d.lick_flag==1]['outcome_c']-1.1,
+                           color=palette[5], marker=raster_marker, linewidths=marker_width)
+
+            if not d.hr_a.isna().all():
+                ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'], y=d.loc[d.lick_flag==0]['outcome_a']-0.15,
+                           color=palette[0], marker=raster_marker, linewidths=marker_width)
+                ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'], y=d.loc[d.lick_flag==1]['outcome_a']-1.15,
+                           color=palette[1], marker=raster_marker, linewidths=marker_width)
+
+            if not d.hr_w.isna().all():
+                ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'], y=d.loc[d.lick_flag==0]['outcome_w']-0.2,
+                           color=palette[2], marker=raster_marker, linewidths=marker_width)
+                ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'], y=d.loc[d.lick_flag==1]['outcome_w']-1.2,
+                           color=palette[3], marker=raster_marker, linewidths=marker_width)
+
+        nmax_blocks = d.block_id.max()
+        if do_scatter:
+            ax.set_ylim([-0.2,1.05])
+        else:
+            ax.set_ylim([-0.1,1.1])
+        # Set x-ticks and labels for each block
+        if nmax_blocks is not None and not np.isnan(nmax_blocks):
+            xticks = np.arange(0, nmax_blocks + 1)
+            ax.set_xticks(xticks)
+            ax.set_xticklabels([str(x) for x in xticks])
+        ax.set_xlabel('Block (20 trials)')
+        ax.set_ylabel('Lick probability')
+        ax.set_title(f'{session_id}')
+        sns.despine()
     
-    # Set plot parameters.
-    raster_marker = 2
-    marker_width = 2
-    figsize = (15,6)
-    block_size = 20
-    reward_group = table.loc[table.session_id==session_id, 'reward_group'].iloc[0]
-    color_wh = palette[2]
-    if reward_group == 'R-':  # #238443 for whisker R+, #d51a1c for R-.
-        color_wh = palette[3]    
 
-    # Initialize figure.
-    if ax is None:
-        f = plt.figure(figsize=figsize)
-        ax = plt.gca()
-
-    # Plot performance of the session across time.
-    d = table.loc[table.session_id==session_id]
-    # Select entries with trial numbers at middle of each block for alignment with
-    # raster plot.
-    d = d.sort_values(['trial_id'])
-    d = d.loc[d.early_lick==0][int(block_size/2)::block_size]
-    if not d.hr_c.isna().all():
-        sns.lineplot(data=d,x='trial_id',y='hr_c',color=palette[5],ax=ax,
-                    marker='o')
-    if not d.hr_a.isna().all():
-        sns.lineplot(data=d,x='trial_id',y='hr_a',color=palette[0],ax=ax,
-                    marker='o')
-    if not d.hr_w.isna().all():
-        sns.lineplot(data=d,x='trial_id',y='hr_w',color=color_wh,ax=ax,
-                     marker='o')
-
-    # Plot single trial raster plot.
-    d = table.loc[table.session_id==session_id]
-    if not d.hr_c.isna().all():
-        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_c']-0.1,
-                        color=palette[4],marker=raster_marker, linewidths=marker_width)
-        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_c']-1.1,
-                        color=palette[5],marker=raster_marker, linewidths=marker_width)
-
-    if not d.hr_a.isna().all():
-        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_a']-0.15,
-                        color=palette[1],marker=raster_marker, linewidths=marker_width)
-        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_a']-1.15,
-                        color=palette[0],marker=raster_marker, linewidths=marker_width)
-
-    if not d.hr_w.isna().all():
-        ax.scatter(x=d.loc[d.lick_flag==0]['trial_id'],y=d.loc[d.lick_flag==0]['outcome_w']-0.2,
-                        color=palette[3],marker=raster_marker, linewidths=marker_width)
-        ax.scatter(x=d.loc[d.lick_flag==1]['trial_id'],y=d.loc[d.lick_flag==1]['outcome_w']-1.2,
-                        color=palette[2],marker=raster_marker, linewidths=marker_width)
-
-    nmax_trials = d.trial_id.max()
-    ax.set_ylim([-0.2,1.05])
-    ax.set_xticks(range(0,nmax_trials + nmax_trials%20,20))
-    ax.set_xlabel('Trial number')
-    ax.set_ylabel('Lick probability')
-    ax.set_title(f'{session_id}')
-    sns.despine()
+def plot_perf_across_blocks(data, reward_group, day, palette, nmax_trials=None, ax=None):
     
-
-def plot_perf_across_blocks(df, reward_group, day, palette, nmax_trials=None, ax=None):
-
     if nmax_trials:
-        df = df.loc[(df.trial_id<=nmax_trials)]
-    df = df.loc[(df.reward_group==reward_group) & (df.day==day),
+        data = data.loc[(data.trial_id<=nmax_trials)]
+    data = data.loc[(data.reward_group==reward_group) & (data.day==day),
                 ['mouse_id','session_id','block_id','hr_c','hr_a','hr_w']]
-    df = df.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg("mean")
+    data = data.groupby(['mouse_id','session_id', 'block_id'], as_index=False).agg("mean")
 
     color_c = palette[5]
     if reward_group=='R-':
         color_c = palette[4]
-    sns.lineplot(data=df, x='block_id', y='hr_c', estimator='mean',
+    sns.lineplot(data=data, x='block_id', y='hr_c', estimator='mean',
                  color=color_c, alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
     
     color_a = palette[1]
     if reward_group=='R-':
         color_a = palette[0]
-    sns.lineplot(data=df, x='block_id', y='hr_a', estimator='mean',
+    sns.lineplot(data=data, x='block_id', y='hr_a', estimator='mean',
                  color=color_a, alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
     
     color_wh = palette[3]
     if reward_group=='R-':
         color_wh = palette[2]
-    sns.lineplot(data=df, x='block_id', y='hr_w', estimator='mean',
+    sns.lineplot(data=data, x='block_id', y='hr_w', estimator='mean',
                  color=color_wh ,alpha=1, legend=True, marker='o',
                  errorbar='ci', err_style='band', ax=ax)
 
-    nblocks = int(df.block_id.max())
+    nblocks = int(data.block_id.max())
     if not ax:
         ax = plt.gca()
-    ax.set_xticks(range(nblocks))
+    ax.set_xticks(range(1, 14))
+    ax.set_xticklabels([str(i) for i in range(1, 14)])
     ax.set_ylim([0,1.1])
     ax.set_yticks([i*0.2 for i in range(6)])
     ax.set_xlabel('Block (20 trials)')
     ax.set_ylabel('Lick probability')
+    sns.despine(trim=True)
 
 
 def fit_learning_curve(outcomes):
@@ -396,4 +411,3 @@ def compute_learning_trial(table, n_consecutive_trials=5):
         table.loc[(table.session_id==session) & (table.whisker_stim==1), 'learning_curve_chance'] = interp_p_far
         table.loc[(table.session_id==session), 'learning_trial'] = learning_trial
     return table
-

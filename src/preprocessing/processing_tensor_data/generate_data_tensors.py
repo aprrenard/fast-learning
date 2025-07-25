@@ -21,8 +21,8 @@ import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
-from src.core_analysis.behavior import make_behavior_table
-from src.utils.utils_imaging import compute_lmi
+from src.utils.utils_behavior import make_behavior_table
+from src.utils.utils_imaging import compute_roc
 
 
 # # =============================================================================
@@ -464,7 +464,9 @@ trial_indices_sensory_map_yaml = io.solve_common_paths('trial_indices_sensory_ma
 stop_flag_sensory_map_yaml = io.solve_common_paths('stop_flags_sensory_map')
 processed_data_dir = io.solve_common_paths('processed_data')
 days = ['-3', '-2', '-1', '0', '+1', '+2']
+sampling_rate = 30  # Hz, for imaging data.
 baseline_win = (0, 1)
+baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 
 _, nwb_list, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
                                                 exclude_cols=['exclude', 'two_p_exclude'],

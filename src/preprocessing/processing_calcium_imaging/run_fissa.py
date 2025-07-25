@@ -93,6 +93,7 @@ EXPERIMENTER_MAP = {
     'MS': 'Lana_Smith',
     'GF': 'Anthony_Renard',
     'MI': 'Anthony_Renard',
+    'AS': 'Morgane_Storey',
 }
 
 
@@ -231,15 +232,15 @@ if __name__ == '__main__':
 
 
 
-#####
-stat_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\stat.npy"
-stat = np.load(stat_file, allow_pickle = True)
-ops_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\ops.npy"
-ops = np.load(ops_file, allow_pickle = True).item()
+# #####
+# stat_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\stat.npy"
+# stat = np.load(stat_file, allow_pickle = True)
+# ops_file = r"\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data\AR163\suite2p\plane0\ops.npy"
+# ops = np.load(ops_file, allow_pickle = True).item()
 
-plt.plot(ops['yoff'])
-plt.plot(ops['xoff'])
+# plt.plot(ops['yoff'])
+# plt.plot(ops['xoff'])
 
-ops.keys()
+# ops.keys()
 
-ops['badframes']
+# ops['badframes']
