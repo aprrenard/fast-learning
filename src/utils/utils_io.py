@@ -1,3 +1,4 @@
+import io
 import os
 import pickle
 from datetime import datetime
@@ -105,6 +106,14 @@ def get_mouse_reward_group_from_db(db_path, mouse_id, db=None):
     reward_group = db.loc[db['mouse_id']==mouse_id, 'reward_group'].values[0]
 
     return reward_group
+
+
+def add_reward_col_to_df(df, mice_list=None):
+    if mice_list is None:
+        mice_list = df['mouse_id'].unique()
+    reward_dict = {mouse: get_mouse_reward_group_from_db(db_path, mouse) for mouse in mice_list}
+    df['reward_group'] = df['mouse_id'].map(reward_dict)
+    return df
 
 
 def read_group_yaml(group_yaml_path):

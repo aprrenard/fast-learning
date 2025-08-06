@@ -4,7 +4,6 @@ import sys
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
-import yaml
 
 # sys.path.append(r'H:/anthony/repos/NWB_analysis')
 # sys.path.append(r'C:/Users/aprenard/repos/fast-learning/src')
@@ -88,7 +87,7 @@ def compute_dff(F_raw, F_neu, fs, window=30, sigma_win=5):
     window: running window size on each side of sample for percentile computation
     '''
     F_cor = F_raw - 0.7 * F_neu
-    F_cor[F_cor<0] = 0  # Unsure non negative values.
+    F_cor[F_cor<0] = 0  # Ensure non negative values.
     F0_raw, _ = compute_baseline(F_raw, fs, window, sigma_win=5)
     F0_raw[F0_raw<1] = 1  # Avoid division by < 1.
     F0_cor, _ = compute_baseline(F_cor, fs, window, sigma_win=5)
@@ -107,6 +106,7 @@ EXPERIMENTER_MAP = {
     'MS': 'Lana_Smith',
     'GF': 'Anthony_Renard',
     'MI': 'Anthony_Renard',
+    'AS': 'Morgane_Storey',
 }
 
 
@@ -128,19 +128,27 @@ def get_experimenter_analysis_folder(initials):
 # Compute dff for full data (sessions not split).
 # ------------------------------------------------
 
-experimenter = 'AR'
+experimenter = 'AS'
 
 # db_path = io.dir_path
 # nwb_dir = io.nwb_dir
 # _, _, mice_ids, _ = io.select_sessions_from_db(db_path, nwb_dir, experimenters=experimenter,
 #                             exclude_cols=['exclude', 'two_p_exclude'], two_p_imaging='yes')
-mice_ids = ['AR187',]
+mice_ids = ['AS026',]
+session_ids = ['AS026_20250728_161930']
 
 suite2p_folders = []
 for mouse_id in mice_ids:
-    suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
-                                mouse_id, 'suite2p', 'plane0')
-    suite2p_folders.append(suite2p_folder)
+    if session_ids:
+        for session_id in session_ids:
+            if mouse_id in session_id:
+                suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
+                                            mouse_id, session_id, 'suite2p', 'plane0')
+                suite2p_folders.append(suite2p_folder)
+    else:
+        suite2p_folder = os.path.join(get_experimenter_analysis_folder(experimenter),
+                                    mouse_id, 'suite2p', 'plane0')
+        suite2p_folders.append(suite2p_folder)
 
 for suite2p_folder in suite2p_folders:
     print(f'Processing {suite2p_folder}.')
@@ -214,3 +222,30 @@ for suite2p_folder in suite2p_folders:
 
 #     print(f'Data saved.')
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+dff = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/dff.npy"
+dff = np.load(dff)
+
+Fraw = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F_raw.npy"
+Fraw = np.load(Fraw)
+
+Fneu = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F_neu.npy"
+Fneu = np.load(Fneu)
+
+F0raw = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F0_raw.npy"
+F0raw = np.load(F0raw)
+
+for icell in range(2,15):
+
+icell = 4
+t0 = 1000
+t1 = 1500
+fig, axes = plt.subplots(1,2, figsize=(15,5))
+axes[0].plot(Fraw[icell, t0:t1], label='F_raw')
+axes[0].plot(Fneu[icell, t0:t1], label='F_neu')
+axes[0].plot(F0raw[icell, t0:t1], label='F0_raw')
+axes[0].legend()
+
+axes[1].plot(dff[icell, t0:t1], label='dff')

@@ -7,6 +7,7 @@ from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
 from scipy.stats import percentileofscore
 import xarray as xr
+from joblib import Parallel, delayed
 
 
 
@@ -177,39 +178,41 @@ def shape_features_matrix(mouse_list, session_list, data_dir, trial_type, n_tria
     return X
 
 
-def compute_roc(data_pre, data_post, nshuffles=1000):
+def compute_roc(data_pre, data_post, nshuffles=1000, n_jobs=-1):
     '''
     Compute ROC analysis and Learning modulation index for each cell in data.
     data_pre: np array of shape (cell, trial).
     data_post: np array of shape (cell, trial).
 
     LMI are computed on days D-2, D-1 together VERSUS D+1, D+2 together.
+    nshuffles: number of shuffles for significance testing.
+    n_jobs: number of parallel jobs for shuffling (default: use all cores).
     '''
-    
     ncell = data_pre.shape[0]
-
     lmi = np.full(ncell, np.nan)
     lmi_p = np.full(ncell, np.nan)
 
+    def shuffle_auc(y, X, ishuffle):
+        y_shuffle = shuffle(y, random_state=ishuffle)
+        fpr, tpr, _ = roc_curve(y_shuffle, X)
+        return auc(fpr, tpr)
+
     for icell in range(ncell):
         print(f'ROC computation: {icell+1}/{ncell} cells', end='\r')
-        
         X_pre = data_pre[icell]
         X_post = data_post[icell]
         X = np.r_[X_pre, X_post]
         y = np.r_[[0 for _ in range(X_pre.shape[0])], [1 for _ in range(X_post.shape[0])]]
-        
+
         fpr, tpr, _ = roc_curve(y, X)
         roc_auc = auc(fpr, tpr)
         lmi[icell] = (roc_auc - 0.5) * 2
-        
-        # Test significativity of LMI values with shuffles.
+
+        # Parallelize shuffles
         if nshuffles:
-            roc_auc_shuffle = np.zeros(nshuffles)
-            for ishuffle in range(nshuffles):
-                y_shuffle = shuffle(y, random_state=ishuffle)
-                fpr, tpr, _ = roc_curve(y_shuffle, X)
-                roc_auc_shuffle[ishuffle] = auc(fpr, tpr)
+            roc_auc_shuffle = Parallel(n_jobs=n_jobs)(
+                delayed(shuffle_auc)(y, X, ishuffle) for ishuffle in range(nshuffles)
+            )
             lmi_p[icell] = percentileofscore(roc_auc_shuffle, roc_auc) / 100
         else:
             lmi_p[icell] = np.nan

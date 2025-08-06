@@ -32,6 +32,8 @@ import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *
+from sklearn.linear_model import LinearRegression
+from sklearn.utils import resample
 
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
             rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
@@ -553,6 +555,8 @@ sns.despine()
 # Save figure.
 svg_file = f'pre_post_psth_amplitude_{variance}_days_selected_{days_selected}_allcells.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
 
 fig, axes = plt.subplots(2, 4, figsize=(12, 5), sharex=False, sharey=True)
 
@@ -1991,7 +1995,6 @@ for mouse in mice:
 # Train a single classifier per mouse and plot average cross-validated accuracy
 # Convoluted function because I test mean equalization without leaks to test sets.
 
-
 def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, return_weights=False, equalize=False, debug=False, n_jobs=20):
     accuracies = []
     chance_accuracies = []
@@ -2007,12 +2010,11 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
         y = labels
 
         y_enc = label_encoder.transform(y)
-        clf = SVC(kernel='linear', probability=False, random_state=seed)
+        clf = LogisticRegression(max_iter=5000, random_state=seed)
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=seed)
         fold_scores = []
         all_true = []
         all_pred = []
-        fold_weights = []
         for train_idx, test_idx in cv.split(X, y_enc):
             X_train, X_test = X[train_idx], X[test_idx]
             y_train, y_test = y_enc[train_idx], y_enc[test_idx]
@@ -2044,8 +2046,6 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
             fold_scores.append(np.mean(y_pred == y_test))
             all_true.extend(y_test)
             all_pred.extend(y_pred)
-            if return_weights:
-                fold_weights.append(clf.coef_.flatten())
         acc = np.mean(fold_scores)
         accuracies.append(acc)
 
@@ -2075,8 +2075,8 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
                         post_mean = np.nanmean(X_train[post_mask_train, icell])
                         X_train[pre_mask_train, icell] += ref_means[icell] - pre_mean
                         X_train[post_mask_train, icell] += ref_means[icell] - post_mean
-                        pre_mask_test = y_test == pre_label
-                        post_mask_test = y_test == post_label
+                    pre_mask_test = y_test == pre_label
+                    post_mask_test = y_test == post_label
                     for icell in range(X_test.shape[1]):
                         pre_mean = np.nanmean(X_test[pre_mask_test, icell])
                         post_mean = np.nanmean(X_test[post_mask_test, icell])
@@ -2097,9 +2097,13 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
         chance_accuracies.append(np.mean(shuffle_scores))
 
         if return_weights:
-            avg_weights = np.mean(fold_weights, axis=0) if fold_weights else np.zeros(X.shape[1])
-            weights_per_mouse.append(avg_weights)
-            
+            # Train classifier on full dataset and return weights
+            scaler_full = StandardScaler()
+            X_full = scaler_full.fit_transform(X)
+            clf_full = LogisticRegression(max_iter=5000, random_state=seed)
+            clf_full.fit(X_full, y_enc)
+            weights_per_mouse.append(clf_full.coef_.flatten())
+
     if return_weights:
         return np.array(accuracies), np.array(chance_accuracies), weights_per_mouse
     else:
@@ -2109,8 +2113,8 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
 le = LabelEncoder()
 le.fit(['pre', 'post'])
 
-accs_rew, chance_rew, weights_rew = per_mouse_cv_accuracy(vectors_rew, le, n_shuffles=100, return_weights=True, equalize=True)
-accs_nonrew, chance_nonrew, weights_nonrew = per_mouse_cv_accuracy(vectors_nonrew, le, n_shuffles=100, return_weights=True, equalize=True)
+accs_rew, chance_rew, weights_rew = per_mouse_cv_accuracy(vectors_rew, le, n_shuffles=1, return_weights=True, equalize=False)
+accs_nonrew, chance_nonrew, weights_nonrew = per_mouse_cv_accuracy(vectors_nonrew, le, n_shuffles=1, return_weights=True, equalize=False)
 
 for w in weights_rew:
     plt.plot(w, label='R+')
@@ -2162,88 +2166,100 @@ pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(output_
 
 # Relationship between classifier weights and learning modualtion index.
 # ----------------------------------------------------------------------
-
 lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
 lmi_df = pd.read_csv(lmi_df)
 
-# Associate classifier weights with cells and plot relationship across mice
+# Merge classifier weights and LMI for each mouse
+weights_all = []
+lmi_all = []
+mouse_ids = []
 
-# For each mouse, get the classifier weights and the corresponding cell LMI
-all_weights = []
-all_lmi = []
-all_mouse = []
-
-for i, (mouse, weights) in enumerate(zip(mice_rew + mice_nonrew, weights_rew + weights_nonrew)):
-    # Get the vector object for this mouse (to get cell order)
+for i, mouse in enumerate(mice_rew + mice_nonrew):
+    # Get classifier weights for this mouse
     if mouse in mice_rew:
-        idx = mice_rew.index(mouse)
-        d = vectors_rew[idx]
+        w = weights_rew[mice_rew.index(mouse)]
     else:
-        idx = mice_nonrew.index(mouse)
-        d = vectors_nonrew[idx]
-    # Get cell IDs in the same order as weights
+        w = weights_nonrew[mice_nonrew.index(mouse)]
+    # Get cell IDs
+    d = vectors_rew[mice_rew.index(mouse)] if mouse in mice_rew else vectors_nonrew[mice_nonrew.index(mouse)]
     cell_ids = d['roi'].values if 'roi' in d.coords else d['cell'].values
-    # Get LMI for these cells
+    # Get LMI for this mouse
     lmi_mouse = lmi_df[(lmi_df['mouse_id'] == mouse) & (lmi_df['roi'].isin(cell_ids))]
-    # Ensure order matches
     lmi_mouse = lmi_mouse.set_index('roi').reindex(cell_ids)
-    lmi_values = lmi_mouse['lmi'].values
-    # Store
-    all_weights.append(weights)
-    all_lmi.append(lmi_values)
-    all_mouse.extend([mouse] * len(weights))
+    lmi_vals = lmi_mouse['lmi'].values
+    # Only keep cells with non-nan LMI and weights
+    mask = ~np.isnan(lmi_vals) & ~np.isnan(w)
+    weights_all.append(w[mask])
+    lmi_all.append(lmi_vals[mask])
+    mouse_ids.extend([mouse] * np.sum(mask))
+    # Flatten lists
+    weights_flat = np.concatenate(weights_all)
+    lmi_flat = np.concatenate(lmi_all)
+    mouse_ids_flat = np.array(mouse_ids)
 
-# Flatten arrays
-all_weights_flat = np.concatenate(all_weights)
-all_lmi_flat = np.concatenate(all_lmi)
-all_mouse_flat = np.array(all_mouse)
-# Plot relationship using seaborn
-plt.figure(figsize=(6, 5))
-abs_lmi = np.abs(all_lmi_flat)
-abs_weights = np.abs(all_weights_flat)
+# Plot scatter and regression for each mouse
+plt.figure(figsize=(4, 4))
 
-# Create a DataFrame for seaborn
-df = pd.DataFrame({
-    'abs_lmi': abs_lmi,
-    'abs_weight': abs_weights,
-    'mouse': all_mouse_flat
-})
+for i, mouse in enumerate(np.unique(mouse_ids_flat)):
+    mask = mouse_ids_flat == mouse
+    sns.scatterplot(x=lmi_flat[mask], y=weights_flat[mask], alpha=0.5)
+    # # Regression line for each mouse
+    # if np.sum(mask) > 1:
+    #     reg = LinearRegression().fit(lmi_flat[mask].reshape(-1, 1), weights_flat[mask])
+    #     x_vals = np.linspace(np.nanmin(lmi_flat[mask]), np.nanmax(lmi_flat[mask]), 100)
+    #     plt.plot(x_vals, reg.predict(x_vals.reshape(-1, 1)), color='grey', alpha=0.5)
 
-# Interpolate a curve for each mouse
+# Main regression line for all mice
+reg_all = LinearRegression().fit(lmi_flat.reshape(-1, 1), weights_flat)
+x_vals = np.linspace(np.nanmin(lmi_flat), np.nanmax(lmi_flat), 100)
+y_pred = reg_all.predict(x_vals.reshape(-1, 1))
+plt.plot(x_vals, y_pred, color='#2d2d2d', linewidth=2)
 
-mice_unique = np.unique(df['mouse'])
-lmi_grid = np.linspace(0, np.nanmax(abs_lmi), 100)
-interp_weights = []
+# Bootstrap confidence interval for regression line
+n_boot = 1000
+y_boot = np.zeros((n_boot, len(x_vals)))
+for i in range(n_boot):
+    Xb, yb = resample(lmi_flat, weights_flat)
+    regb = LinearRegression().fit(Xb.reshape(-1, 1), yb)
+    y_boot[i] = regb.predict(x_vals.reshape(-1, 1))
+ci_low = np.percentile(y_boot, 2.5, axis=0)
+ci_high = np.percentile(y_boot, 97.5, axis=0)
+plt.fill_between(x_vals, ci_low, ci_high, color='black', alpha=0.2, label='95% CI')
 
-for mouse in mice_unique:
-    sub = df[df['mouse'] == mouse].dropna()
-    if len(sub) < 2:
-        continue
-    # Sort by abs_lmi
-    sub = sub.sort_values('abs_lmi')
-    # Interpolate
-    interp = np.interp(lmi_grid, sub['abs_lmi'], sub['abs_weight'])
-    interp_weights.append(interp)
-
-interp_weights = np.array(interp_weights)
-mean_curve = np.nanmean(interp_weights, axis=0)
-sem_curve = np.nanstd(interp_weights, axis=0) / np.sqrt(interp_weights.shape[0])
-
-plt.plot(lmi_grid, mean_curve, color='C0')
-plt.fill_between(lmi_grid, mean_curve - sem_curve, mean_curve + sem_curve, color='C0', alpha=0.3)
-plt.xlabel('Absolute Learning Modulation Index (|LMI|)')
-plt.ylabel('Absolute Classifier Weight (|weight|)')
-plt.title('Mean interpolated |weight| vs |LMI| across mice')
-
-
-# Compute and print Spearman correlation
-rho, pval = spearmanr(all_lmi_flat, all_weights_flat)
-print(f"Spearman correlation: rho={rho:.3f}, p={pval:.3g}")
+plt.xlabel('Learning Modulation Index (LMI)')
+plt.ylabel('Classifier Weight')
+plt.title('Classifier Weight vs LMI')
+plt.tight_layout()
+plt.ylim(-2.5, 2)
+sns.despine()
 
 # Save plot
-plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi.svg'), format='svg', dpi=300)
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi_by_mouse.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi_by_mouse.png'), format='png', dpi=300)
 
 
+# Fit linear regression
+reg = LinearRegression()
+reg.fit(X, y)
+r2 = reg.score(X, y)
+print(f"Linear regression R^2: {r2:.3f}")
+
+# Bootstrapped confidence interval for R^2
+n_boot = 1000
+r2_boot = []
+for _ in range(n_boot):
+    Xb, yb = resample(X, y)
+    regb = LinearRegression().fit(Xb, yb)
+    r2_boot.append(regb.score(Xb, yb))
+r2_ci = np.percentile(r2_boot, [2.5, 97.5])
+print(f"Bootstrapped R^2 95% CI: [{r2_ci[0]:.3f}, {r2_ci[1]:.3f}]")
+
+# Save plot
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi_by_group.svg'), format='svg', dpi=300)
 
 # Accuracy as a function of percent most modulated cells removed.
 # ---------------------------------------------------------------
@@ -2364,3 +2380,92 @@ curve_df = pd.DataFrame({
     'reward_group': ['R+'] * len(percentiles) + ['R-'] * len(percentiles)
 })
 curve_df.to_csv(os.path.join(output_dir, 'accuracy_vs_percent_modulated_cells.csv'), index=False)
+
+
+
+# Stimulus encoding across days for cells with high LMI.
+# #######################################################
+
+# Load LMI and ROC on baseline vs stimulus results.
+roc_df = os.path.join(io.processed_dir, 'roc_stimvsbaseline_results.csv')
+roc_df = pd.read_csv(roc_df)
+lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
+lmi_df = pd.read_csv(lmi_df)
+# Add reward_group column to roc_df using get_mouse_reward_group_from_db
+
+roc_df = io.add_reward_col_to_df(roc_df)
+
+# Select significant LMI.
+# selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025), ['mouse_id', 'roi']]
+
+# PLot the proportion of significant cells encoding stimulus across days.
+
+selected_cells = lmi_df.loc[(lmi_df['lmi_p'] >= 0.975), ['mouse_id', 'roi']]
+roc_df_pos = roc_df.merge(selected_cells, on=['mouse_id', 'roi'])
+roc_df_pos.loc[(roc_df_pos['roc_p'] <= 0.025) | (roc_df_pos['roc_p'] >= 0.975), 'significant'] = True
+roc_df_pos['significant'] = roc_df_pos['significant'].fillna(False)
+# Plot proportion of significant cells encoding stimulus for positive LMI
+prop_roc_pos = roc_df_pos.groupby(['mouse_id', 'day', 'reward_group'], as_index=False)['significant'].mean()
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
+# Rewarded group (R+)
+sns.barplot(x='day', y='significant', data=prop_roc_pos[prop_roc_pos['reward_group'] == 'R+'],
+            estimator=np.mean, color=reward_palette[1], ax=axes[0])
+axes[0].set_title('R+ (Positive LMI)')
+axes[0].set_ylim(0, 1)
+axes[0].set_xlabel('Day')
+axes[0].set_ylabel('Proportion Significant')
+
+# Non-rewarded group (R-)
+sns.barplot(x='day', y='significant', data=prop_roc_pos[prop_roc_pos['reward_group'] == 'R-'],
+            estimator=np.mean, color=reward_palette[0], ax=axes[1])
+axes[1].set_title('R- (Positive LMI)')
+axes[1].set_ylim(0, 1)
+axes[1].set_xlabel('Day')
+axes[1].set_ylabel('Proportion Significant')
+sns.despine()
+# Save figure
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = 'proportion_significant_cells_encoding_stimulus_positive_lmi.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save data
+prop_roc_pos.to_csv(os.path.join(output_dir, 'proportion_significant_cells_encoding_stimulus_positive_lmi.csv'), index=False)
+
+# Now for negative LMI.
+selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025), ['mouse_id', 'roi']]
+roc_df_neg = roc_df.merge(selected_cells, on=['mouse_id', 'roi'])
+roc_df_neg.loc[(roc_df_neg['roc_p'] <= 0.025) | (roc_df_neg['roc_p'] >= 0.975), 'significant'] = True
+roc_df_neg['significant'] = roc_df_neg['significant'].fillna(False)
+
+# Proportion of significant cells encoding stimulus for negative LMI
+prop_roc_neg = roc_df_neg.groupby(['mouse_id', 'day', 'reward_group'], as_index=False)['significant'].mean()
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
+
+# Rewarded group (R+)
+sns.barplot(x='day', y='significant', data=prop_roc_neg[prop_roc_neg['reward_group'] == 'R+'],
+            estimator=np.mean, color=reward_palette[1], ax=axes[0])
+axes[0].set_title('R+ (Negative LMI)')
+axes[0].set_ylim(0, 1)
+axes[0].set_xlabel('Day')
+axes[0].set_ylabel('Proportion Significant')
+
+# Non-rewarded group (R-)
+sns.barplot(x='day', y='significant', data=prop_roc_neg[prop_roc_neg['reward_group'] == 'R-'],
+            estimator=np.mean, color=reward_palette[0], ax=axes[1])
+axes[1].set_title('R- (Negative LMI)')
+axes[1].set_ylim(0, 1)
+axes[1].set_xlabel('Day')
+axes[1].set_ylabel('Proportion Significant')
+sns.despine()
+
+# Save figure
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+svg_file = 'proportion_significant_cells_encoding_stimulus_negative_lmi.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save data
+prop_roc_neg.to_csv(os.path.join(output_dir, 'proportion_significant_cells_encoding_stimulus_negative_lmi.csv'), index=False)
+
+

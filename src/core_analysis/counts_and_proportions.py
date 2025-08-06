@@ -22,8 +22,7 @@ sys.path.append(r'/home/aprenard/repos/fast-learning')
 import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
-from src.core_analysis.behavior import compute_performance, plot_single_session
-from statannotations.Annotator import Annotator
+from scipy.stats import ks_2samp
 
 
 def filter_data_by_cell_count(data, min_cells):
@@ -595,3 +594,51 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 lmi_prop.to_csv(os.path.join(output_dir, 'prop_lmi.csv'), index=False)
 lmi_prop_ct.to_csv(os.path.join(output_dir, 'prop_lmi_ct.csv'), index=False)
  
+ 
+# LMI distribution across mice: average curve and confidence interval (variance).
+# Use common bin edges for all three plots
+bin_edges = np.histogram_bin_edges(lmi_df['lmi'], bins=30)
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+cell_types = [None, 'wS2', 'wM1']
+titles = ['All cells', 'wS2p', 'wM1p']
+
+for i, cell_type in enumerate(cell_types):
+    if cell_type:
+        data = lmi_df[lmi_df.cell_type == cell_type]
+    else:
+        data = lmi_df
+
+    for rg, color in zip(['R-', 'R+'], reward_palette):
+        sns.histplot(
+            data[data.reward_group == rg]['lmi'],
+            bins=bin_edges,
+            kde=True,
+            ax=axes[i],
+            color=color,
+            label=rg,
+            stat='density',
+            alpha=0.5
+        )
+    axes[i].set_title(titles[i])
+    axes[i].set_xlabel('LMI')
+    axes[i].legend()
+
+sns.despine()
+plt.tight_layout()
+output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/cell_proportions/'
+plt.savefig(os.path.join(output_dir, 'lmi_histograms.svg'), format='svg', dpi=300)
+# Statistical test: Kolmogorov-Smirnov test for LMI distributions
+
+ks_results = []
+for cell_type in cell_types:
+    if cell_type:
+        data = lmi_df[lmi_df.cell_type == cell_type]
+    else:
+        data = lmi_df
+    lmi_r_minus = data[data.reward_group == 'R-']['lmi']
+    lmi_r_plus = data[data.reward_group == 'R+']['lmi']
+    stat, p = ks_2samp(lmi_r_minus, lmi_r_plus)
+    ks_results.append({'cell_type': cell_type if cell_type else 'all', 'stat': stat, 'p_value': p})
+
+pd.DataFrame(ks_results).to_csv(os.path.join(output_dir, 'lmi_distribution_ks.csv'), index=False)

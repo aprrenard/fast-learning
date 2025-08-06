@@ -21,8 +21,9 @@ import src.utils.utils_imaging as imaging_utils
 from analysis.psth_analysis import (make_events_aligned_array_6d,
                                    make_events_aligned_array_3d)
 from nwb_wrappers import nwb_reader_functions as nwb_read
-from src.core_analysis.behavior import make_behavior_table
+from src.utils.utils_behavior import *
 from src.utils.utils_imaging import compute_roc
+from joblib import Parallel, delayed
 
 
 def test_response(data, trial_selection, response_win, baseline_win, method='mannwhitney'):
@@ -419,3 +420,77 @@ else:
 # np.isnan(data_mapping).sum()
 # data_mapping[0].mean('time')
 
+
+
+# =============================================================================
+# Baseline VS stim for mapping trials.
+# =============================================================================
+
+# This perfornms ROC analysis on each cell with mapping trials, testing
+# the difference between baseline and stimulation periods.
+# The rational is to assess whether cells with high LMI values would
+# develop a response after learning or whether they already had a response
+# a strong response before learning.
+
+
+# Parameters.
+append_results = False
+response_win = (0, 0.300)
+baseline_win = (-300, 0)
+nshuffles = 100
+
+# Get directories and files.
+db_path = io.solve_common_paths('db')
+nwb_path = io.solve_common_paths('nwb')
+processed_data_folder = io.solve_common_paths('processed_data')
+result_file = os.path.join(processed_data_folder, 'roc_stimvsbaseline_results.csv')
+
+# Get mice list.
+days = ['-2', '-1', '0', '+1', '+2']
+_, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
+                                                exclude_cols=['exclude', 'two_p_exclude'],
+                                                experimenters=['AR', 'GF', 'MI'],
+                                                day=days,
+                                                two_p_imaging='yes',)
+
+# Load results if already computed.
+if not os.path.exists(result_file):
+    df_results = pd.DataFrame(columns=['mouse_id', 'roi', 'cell_type', 'day', 'roc', 'roc_p'])
+else:
+    df_results = pd.read_csv(result_file)
+if not append_results:
+    df_results = pd.DataFrame(columns=['mouse_id', 'roi', 'cell_type', 'day', 'roc', 'roc_p'])
+
+df = []
+for mouse_id in mice_list:
+    if df_results.loc[df_results.mouse_id==mouse_id].shape[0] > 0:
+        print(f'Mouse {mouse_id} already done. Skipping.')
+        continue
+    print(f'Processing {mouse_id}')
+    data_mapping = xr.open_dataarray(os.path.join(processed_data_folder, 'mice', mouse_id, 'tensor_xarray_mapping_data.nc'))
+    
+    # ROC analysis of baseline vs stim for each day
+    for day in [-2, -1, 0, 1, 2]:
+        data_day = data_mapping.sel(trial=data_mapping.coords['day'] == day)
+        response = data_day.sel(time=slice(*response_win)).mean(dim='time')
+        baseline = data_day.sel(time=slice(*baseline_win)).mean(dim='time')
+        roc, roc_p = compute_roc(baseline, response, nshuffles=nshuffles, n_jobs=20)
+        df.append(pd.DataFrame({
+            'mouse_id': data_mapping.attrs.get('mouse_id', mouse_id),
+            'roi': data_mapping.roi.values,
+            'cell_type': data_mapping.cell_type.values,
+            'day': day,
+            'roc': roc,
+            'roc_p': roc_p
+        }))
+if len(df)>0:
+    df = pd.concat(df)
+    df = df.reset_index(drop=True)
+    df_results = pd.concat([df_results, df])
+    df_results.to_csv(result_file)
+else:
+    print('No new data to process.')
+
+# data_mapping.shape
+# np.isnan(data_mapping).sum()
+# data_mapping[0].mean('time')
