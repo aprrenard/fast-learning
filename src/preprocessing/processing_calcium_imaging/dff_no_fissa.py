@@ -221,31 +221,3 @@ for suite2p_folder in suite2p_folders:
 #     np.save(os.path.join(save_folder, 'stat'), stat)
 
 #     print(f'Data saved.')
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-dff = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/dff.npy"
-dff = np.load(dff)
-
-Fraw = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F_raw.npy"
-Fraw = np.load(Fraw)
-
-Fneu = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F_neu.npy"
-Fneu = np.load(Fneu)
-
-F0raw = "/mnt/lsens-analysis/Morgane_Storey/data/AS026/AS026_20250728_161930/suite2p/plane0/F0_raw.npy"
-F0raw = np.load(F0raw)
-
-for icell in range(2,15):
-
-icell = 4
-t0 = 1000
-t1 = 1500
-fig, axes = plt.subplots(1,2, figsize=(15,5))
-axes[0].plot(Fraw[icell, t0:t1], label='F_raw')
-axes[0].plot(Fneu[icell, t0:t1], label='F_neu')
-axes[0].plot(F0raw[icell, t0:t1], label='F0_raw')
-axes[0].legend()
-
-axes[1].plot(dff[icell, t0:t1], label='dff')
