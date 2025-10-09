@@ -72,7 +72,7 @@ table = pd.read_csv(path)
 
 
 # Load data.
-#  ----------
+# ----------
 
 dfs = []
 for mouse in mice:
@@ -99,6 +99,7 @@ for mouse in mice:
     
     # Average time bin.
     xarray = xarray.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
     # # Select positive LMI cells.
     # lmi_pos = lmi_df.loc[(lmi_df.mouse_id==mouse) & (lmi_df.lmi_p>=0.095), 'roi']
     # xa_pos = xarray.sel(cell=xarray['roi'].isin(lmi_pos))
@@ -132,107 +133,163 @@ for mouse in mice:
 dfs = pd.concat(dfs)
 
 
+# # Select specific group of cells.
+# # -------------------------------
 
-# Plot behavior and LMI across day 0.
-# -----------------------------------
+# roc_df = os.path.join(io.processed_dir, 'roc_stimvsbaseline_results.csv')
+# roc_df = pd.read_csv(roc_df)
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=2)
+# # Create a dataframe with columns 'mouse_id' and 'roi' for ROIs significant at day 0 but not at day -2 or -1
 
-mice_gp = mice_groups['good_day0']  # Select mice group for plotting.
+# # Find ROIs significant at day 0 (roc_p >= 0.95)
+# day0_sig = roc_df[(roc_df['day'] == 0) & (roc_df['roc_p'] >= 0.95)][['mouse_id', 'roi']]
+
+# # Find ROIs significant at day -2 or -1 (roc_p <= 0.05)
+# neg_sig = roc_df[(roc_df['day'].isin([-2, -1])) & (roc_df['roc_p'] >= 0.95)][['mouse_id', 'roi']]
+
+# # Merge to find ROIs in day0_sig but not in neg_sig for each mouse
+# merged = pd.merge(
+#     day0_sig,
+#     neg_sig,
+#     on=['mouse_id', 'roi'],
+#     how='left',
+#     indicator=True
+# )
+# day0_only_df = merged[merged['_merge'] == 'left_only'][['mouse_id', 'roi']].reset_index(drop=True)
+
+# dfs = dfs.merge(day0_sig, on=['mouse_id', 'roi'], how='inner')
+
+
+
+# Plot behavior and activity during day 0.
+# ----------------------------------------
+
+
+def preprocess_activity_and_behavior(df, table, mice_gp, cluster_id, realigned_to_learning, rolling_window=10):
+    """
+    Preprocess activity and behavior data for plotting.
+    Returns:
+        data: activity dataframe (smoothed, filtered by cluster and mice)
+        data_behav: behavior dataframe (filtered by mice and optionally realigned)
+    """
+    
+    # Select mice group.
+    data = df.loc[df['mouse_id'].isin(mice_gp)]
+    # Select roi in cluster_id.
+    if cluster_id is not None:
+        data = data[data['cluster_id'] == cluster_id]
+    data = data.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w', 'cell_type', 'roi'])[['activity']].agg('mean').reset_index()
+    data = data.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w'])[['activity']].agg('mean').reset_index()
+    # Smooth activity with a rolling window.
+    data['activity_smoothed'] = data.groupby(['mouse_id', 'lmi', 'reward_group'])['activity'].transform(
+        lambda x: x.rolling(rolling_window, center=True).mean()
+    )
+
+    data_behav = table.loc[table['mouse_id'].isin(mice_gp) & (table['day'] == 0)].copy()
+    if realigned_to_learning:
+        # Reindex trial_w with learning trial for each session.
+        data_behav['trial_w'] = data_behav['trial_w'] - data_behav['learning_trial']
+        # Select trials around learning trial.
+        data_behav = data_behav.loc[(data_behav['trial_w'] >= -30) & (data_behav['trial_w'] <= 60)]
+
+    # Cut data to 100 trials.
+    if not realigned_to_learning:
+        data_behav = data_behav.loc[data_behav['trial_w'] <= 60]
+        data = data.loc[data['trial_w'] <= 60]
+
+    return data, data_behav
+
+
+
+def plot_gradual_learning(data, data_behav, reward_palette, stim_palette, realigned_to_learning, mice_gp_label, output_dir, cluster_id=None):
+    """
+    Plot gradual learning: behavioral performance and activity for LMI positive/negative cells.
+    """
+    sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=2)
+    
+    fig, axes = plt.subplots(2, 2, dpi=300, figsize=(15, 15))
+
+    # Plot behavioral performance and chance
+    for i, group in enumerate(['R+', 'R-']):
+        sns.lineplot(
+            data=data_behav.loc[data_behav.reward_group == group],
+            x='trial_w', y='learning_curve_w',
+            color=reward_palette[1 if group == 'R+' else 0],
+            ax=axes[0, i]
+        )
+        sns.lineplot(
+            data=data_behav.loc[data_behav.reward_group == group],
+            x='trial_w', y='learning_curve_chance',
+            color=stim_palette[2],
+            ax=axes[0, i]
+        )
+
+    # Plot activity for LMI positive and negative cells
+    for i, group in enumerate(['R+', 'R-']):
+        sns.lineplot(
+            data=data.loc[(data.reward_group == group)],
+            x='trial_w', y='activity_smoothed',
+            color=reward_palette[1 if group == 'R+' else 0],
+            ax=axes[1, i]
+        )
+
+    axes[0, 0].set_title('R+')
+    axes[0, 1].set_title('R-')
+
+
+    axes[0, 0].set_ylabel('Day 0 performance')
+    for ax in axes.flatten()[2:]:
+        ax.set_ylabel('Activity (dF/F0)')
+    for ax in axes.flatten()[:4]:
+        ax.set_xlabel('')
+    for ax in axes.flatten()[4:]:
+        ax.set_xlabel('Whisker trials')
+
+    axes[0, 0].set_ylim(0, 1)
+    axes[0, 1].set_ylim(0, 1)
+    for ax in axes.flatten()[2:]:
+        ax.set_ylim(0, 0.12)
+    sns.despine()
+
+    # Save plot
+    if cluster_id is not None:
+        cluster_str = f"_cluster{cluster_id}"
+    else:
+        cluster_str = "_allcells"
+    svg_file = (
+        f'gradual_change{cluster_str}_realigned_{mice_gp_label}.svg'
+        if realigned_to_learning else
+        f'gradual_change{cluster_str}_{mice_gp_label}.svg'
+    )
+    plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
+
+# Load clustering results.
+clustering_df = "/mnt/lsens-analysis/Anthony_Renard/data_processed/clustering/cluster_id_day0_learning_nclust_3.csv"
+clustering_df = io.adjust_path_to_host(clustering_df)
+clust_df = pd.read_csv(clustering_df)
+dfs = dfs.merge(clust_df[['mouse_id', 'roi', 'cluster_id']], on=['mouse_id', 'roi'], how='inner')
+
+# # drop columns
+# dfs = dfs.drop(columns=['cluster_id_x', 'cluster_id_y'])
+
+# mice_gp = mice_groups['good_day0']  # Select mice group for plotting.
 # mice_gp = mice_groups['meh_day0'] + mice_groups['bad_day0']  # Select mice group for plotting.
-# mice_gp = mice
-mice_gp_label = 'goodmice'
+mice_gp = mice
+mice_gp_label = 'allmice'
+# mice_gp_label = 'goodmice'
 # mice_gp_label = 'badmice'
-
-data = dfs.loc[dfs['mouse_id'].isin(mice_gp)]
-data = data.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w', 'cell_type', 'roi'])[['activity']].agg('mean').reset_index()
-data = data.groupby(['mouse_id', 'lmi', 'reward_group', 'trial_w'])[['activity']].agg('mean').reset_index()
-# Smooth activity with a rolling window.
-rolling_window = 10  # Define the size of the rolling window.
-data['activity_smoothed'] = data.groupby(['mouse_id', 'lmi', 'reward_group'])['activity'].transform(lambda x: x.rolling(rolling_window, center=True).mean())
-
-
-data_behav = table.loc[table['mouse_id'].isin(mice_gp) & (table['day']==0)].copy()
-if realigned_to_learning:
-    # Reindex trial_w with learning trial for eahc session.
-    data_behav['trial_w'] = data_behav['trial_w'] - data_behav['learning_trial']
-    # Select trials around learning trial.
-    data_behav = data_behav.loc[(data_behav['trial_w']>=-30) & (data_behav['trial_w']<=60)]
-
-# Cut data to 100 trials.
-if not realigned_to_learning:
-    data_behav = data_behav.loc[data_behav['trial_w']<100]
-    data = data.loc[data['trial_w']<100]
-
-
-fig, axes = plt.subplots(3,2, dpi=300, figsize=(15, 15))
-
-sns.lineplot(data=data_behav.loc[data_behav.reward_group=='R+'],
-             x='trial_w', y='learning_curve_w',
-             color=reward_palette[1],
-             ax=axes[0,0])
-sns.lineplot(data=data_behav.loc[data_behav.reward_group=='R-'],
-             x='trial_w', y='learning_curve_w',
-             color=reward_palette[0],
-             ax=axes[0,1])
-
-sns.lineplot(data=data_behav.loc[data_behav.reward_group=='R+'],
-             x='trial_w', y='learning_curve_chance',
-             color=stim_palette[2],
-             ax=axes[0,0])
-sns.lineplot(data=data_behav.loc[data_behav.reward_group=='R-'],
-             x='trial_w', y='learning_curve_chance',
-             color=stim_palette[2],
-             ax=axes[0,1])
-
-sns.lineplot(data=data.loc[(data.lmi=='positive') & (data.reward_group=='R+')],
-             x='trial_w', y='activity_smoothed',
-              color=reward_palette[1],
-             ax=axes[1,0])
-sns.lineplot(data=data.loc[(data.lmi=='positive') & (data.reward_group=='R-')],
-                x='trial_w', y='activity_smoothed',
-                 color=reward_palette[0],
-                ax=axes[1,1])
-
-sns.lineplot(data=data.loc[(data.lmi=='negative') & (data.reward_group=='R+')],
-             x='trial_w', y='activity_smoothed',
-              color=reward_palette[1],
-             ax=axes[2,0])
-sns.lineplot(data=data.loc[(data.lmi=='negative') & (data.reward_group=='R-')],
-                x='trial_w', y='activity_smoothed',
-                 color=reward_palette[0],
-                ax=axes[2,1])
-axes[0,0].set_title('R+')
-axes[0,1].set_title('R-')
-axes[1,0].set_title('LMI positive')
-axes[2,0].set_title('LMI negative')
-axes[1,1].set_title('LMI positive')
-axes[2,1].set_title('LMI negative')
-
-axes[0,0].set_ylabel('DAy 0 performance')
-axes[0,1].set_ylabel('Day 0 performance')
-for ax in axes.flatten()[2:]:
-    ax.set_ylabel('Activity (dF/F0)')
-for ax in axes.flatten()[:4]:
-    ax.set_xlabel('')
-for ax in axes.flatten()[4:]:
-    ax.set_xlabel('Whisker trials')
-
-axes[0,0].set_ylim(0,1)
-axes[0,1].set_ylim(0,1)
-for ax in axes.flatten()[2:]:
-    ax.set_ylim(0, 0.12)
-sns.despine()
-
-
-# Save plot
+cluster_id=2
+realigned_to_learning = False
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/gradual_learning'
-if realigned_to_learning:
-    svg_file = f'gradual_change_allcells_realigned_{mice_gp_label}.svg'
-else:
-    svg_file = f'gradual_change_allcells_{mice_gp_label}.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-# sns.relplot(data=data, x='trial_w', y='activity', col='lmi', row='reward_group', hue='cell_type', kind='line', palette=cell_types_palette, height=3, aspect=0.8)
+
+data, data_behav = preprocess_activity_and_behavior(
+    dfs, table, mice_gp, cluster_id, realigned_to_learning, rolling_window=10)
+plot_gradual_learning(data, data_behav, reward_palette, stim_palette, realigned_to_learning, mice_gp_label, output_dir, cluster_id=cluster_id)
+
+
+
 
 
 # correlation_results = []
@@ -541,8 +598,9 @@ baseline_win = (0, .5)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days = [0]
 days_str = ['0']
-early_trials = range(0, 5)
+early_trials = range(0, 20)
 late_trials = range(30, 100)  # Last trials of the session.
+variance = "mice"
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',
@@ -591,33 +649,102 @@ for mouse_id in mice:
 
 psth = pd.concat(psth)
 
-variance = 'mice'  # 'mice' or 'cells'
-if variance == "mice":
-    min_cells = 3
-    data = imaging_utils.filter_data_by_cell_count(psth, min_cells)
-    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
-    data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
-    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+
+# Select specific group of cells.
+# -------------------------------
+
+# roc_df = os.path.join(io.processed_dir, 'roc_stimvsbaseline_results.csv')
+# roc_df = pd.read_csv(roc_df)
+
+# # Create a dataframe with columns 'mouse_id' and 'roi' for ROIs significant at day 0 but not at day -2 or -1
+
+# # Find ROIs significant at day 0 (roc_p >= 0.95)
+# day0_sig = roc_df[(roc_df['day'] == 0) & (roc_df['roc_p'] >= 0.95)][['mouse_id', 'roi']]
+
+# # Find ROIs significant at day -2 or -1 (roc_p <= 0.05)
+# neg_sig = roc_df[(roc_df['day'].isin([-2, -1])) & (roc_df['roc_p'] >= 0.95)][['mouse_id', 'roi']]
+
+# # Merge to find ROIs in day0_sig but not in neg_sig for each mouse
+# merged = pd.merge(
+#     day0_sig,
+#     neg_sig,
+#     on=['mouse_id', 'roi'],
+#     how='left',
+#     indicator=True
+# )
+# day0_only_df = merged[merged['_merge'] == 'left_only'][['mouse_id', 'roi']].reset_index(drop=True)
+
+# psth_copy = psth.merge(day0_only_df, on=['mouse_id', 'roi'], how='inner')
+
+
+# Alternatively, select clusters of interest.
+clustering_df = "/mnt/lsens-analysis/Anthony_Renard/data_processed/clustering/cluster_id_day0_learning_nclust_3.csv"
+clustering_df = io.adjust_path_to_host(clustering_df)
+clust_df = pd.read_csv(clustering_df)
+
+# Select LMI
+
+lmi_df = pd.read_csv(os.path.join(io.processed_dir, 'lmi_results.csv'))
+# Select significant LMI cells (positive and negative)
+lmi_sig = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975), ['mouse_id', 'roi']]
+psth = psth.merge(lmi_sig, on=['mouse_id', 'roi'], how='inner')
+
+
+
+def process_psth_data(psth_df, variance, min_cells=3, win_bin=(0, 0.180), cluster_id=None, select_lmi=False, lmi='both'):
+    """
+    Process PSTH data for early vs late trials, supporting both 'mice' and 'cell' variance.
+    Returns: data, data_bin, data_proj, data_bin_proj (all with activity in percent dF/F0)
+    """
     
-    data_proj = imaging_utils.filter_data_by_cell_count(psth, min_cells)
-    data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
-    data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-    data_bin_proj = data_proj.loc[(data_proj.time>=win_bin[0]) & (data_proj.time<=win_bin[1])]
-    data_bin_proj = data_bin_proj.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-else:
-    data = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-    data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
-    data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+    if cluster_id is not None:
+        # Filter psth_df to include only ROIs in the specified cluster_id
+        psth_df = psth_df.merge(clust_df[['mouse_id', 'roi', 'cluster_id']], on=['mouse_id', 'roi'], how='inner')
+        psth_df_copy = psth_df.loc[psth_df['cluster_id'].isin([cluster_id])]  # Select clusters of interest.
+    else:
+        psth_df_copy = psth_df.copy()
     
-    data_proj = psth.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-    data_bin_proj = data_proj.loc[(data_proj.time>=win_bin[0]) & (data_proj.time<=win_bin[1])]
-    data_bin_proj = data_bin_proj.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
-# Convert data to percent dF/F0.
-data['activity'] = data['activity'] * 100
-data_bin['activity'] = data_bin['activity'] * 100
-data_proj['activity'] = data_proj['activity'] * 100
-data_bin_proj['activity'] = data_bin_proj['activity'] * 100
+    if select_lmi:
+        if lmi == 'positive':
+            lmi_sel = lmi_df.loc[lmi_df['lmi_p'] >= 0.95, ['mouse_id', 'roi']]
+        elif lmi == 'negative':
+            lmi_sel = lmi_df.loc[lmi_df['lmi_p'] <= 0.05, ['mouse_id', 'roi']]
+        elif lmi == 'both':
+            lmi_sel = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975), ['mouse_id', 'roi']]
+        psth_df_copy = psth_df_copy.merge(lmi_sel, on=['mouse_id', 'roi'], how='inner')
+
+    
+    if variance == "mice":
+        # Filter by minimum cell count per mouse
+        data = imaging_utils.filter_data_by_cell_count(psth_df_copy, min_cells)
+        # Aggregate by ROI, then by mouse (mean across ROIs)
+        data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
+        data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+        data_bin = data.loc[(data.time >= win_bin[0]) & (data.time <= win_bin[1])]
+        data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+
+        # Projector neurons (with cell_type)
+        data_proj = imaging_utils.filter_data_by_cell_count(psth_df_copy, min_cells)
+        data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
+        data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+        data_bin_proj = data_proj.loc[(data_proj.time >= win_bin[0]) & (data_proj.time <= win_bin[1])]
+        data_bin_proj = data_bin_proj.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+    else:
+        # No filtering, keep per-ROI
+        data = psth_df_copy.groupby(['mouse_id', 'day', 'reward_group', 'time', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+        data_bin = data.loc[(data.time >= win_bin[0]) & (data.time <= win_bin[1])]
+        data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+
+        data_proj = psth_df_copy.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+        data_bin_proj = data_proj.loc[(data_proj.time >= win_bin[0]) & (data_proj.time <= win_bin[1])]
+        data_bin_proj = data_bin_proj.groupby(['mouse_id', 'day', 'reward_group', 'cell_type', 'roi', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
+
+    # Convert to percent dF/F0
+    for df in [data, data_bin, data_proj, data_bin_proj]:
+        df['activity'] = df['activity'] * 100
+
+    return data, data_bin, data_proj, data_bin_proj
+
 
 
 # # Select subgroup of mice.
@@ -631,31 +758,71 @@ data_bin_proj['activity'] = data_bin_proj['activity'] * 100
 # Plot for psth all cells.
 # ------------------------
 
+def plot_psth_early_vs_late(data, early_trials, late_trials, reward_palette, output_dir, variance, cluster_id, select_lmi=False, lmi='both'):
+    """
+    Plot PSTH for early vs late trials for all cells, split by reward group.
+    """
+    fig, axes = plt.subplots(2, figsize=(3, 8), sharey=True)
 
-
-fig, axes = plt.subplots(2, figsize=(3, 8), sharey=True)
-
-# Whisker stim.
-sns.lineplot(data=data.loc[data.reward_group=='R+'], x='time', y='activity',
+    # Whisker stim.
+    for idx, group in enumerate(['R+', 'R-']):
+        d = data.loc[data.reward_group == group]
+        sns.lineplot(
+            data=d, x='time', y='activity',
             errorbar='ci', style='epoch', style_order=['late', 'early'],
-            color=reward_palette[1], estimator='mean', legend=False, ax=axes[0])
-sns.lineplot(data=data.loc[data.reward_group=='R-'], x='time', y='activity',
-            errorbar='ci', style='epoch', style_order=['late', 'early'],
-            color=reward_palette[0], estimator='mean', legend=False, ax=axes[1])
-axes[0].axvline(0, color='#FF9600', linestyle='--')
-axes[1].axvline(0, color='#FF9600', linestyle='--')
+            color=reward_palette[1 if group == 'R+' else 0],
+            estimator='mean', legend=False, ax=axes[idx]
+        )
+        axes[idx].axvline(0, color='#FF9600', linestyle='--')
+        axes[idx].set_ylabel(group)
 
-axes[0].set_title(f'All cells - early vs late trials {early_trials}-{late_trials}')
-axes[0].set_ylabel('R+')
-axes[1].set_ylabel('R-')
-plt.ylim(-1, 15)
-sns.despine()
+    axes[0].set_title(f'All cells - early vs late trials {early_trials}-{late_trials}')
+    plt.ylim(-1, 35)
+    sns.despine()
 
-# Save figure for all cells.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'psth_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+    # Save figure for all cells.
+    output_dir = io.adjust_path_to_host(output_dir)
+    if cluster_id is not None:
+        cluster_str = f'_cluster{cluster_id}'
+    else:
+        cluster_str = ''
+        
+    if select_lmi:
+        lmi_str = f'_lmi{lmi}'
+    else:
+        lmi_str = ''
+    svg_file = f'psth_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}{cluster_str}{lmi_str}.svg'
+    plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+    plt.show()
+
+
+# PLot and save for each cluster
+for cl_id in [None, 0, 1, 2]:
+    data, data_bin, data_proj, data_bin_proj = process_psth_data(psth, variance, min_cells=3, win_bin=win_bin, cluster_id=cl_id)
+    plot_psth_early_vs_late(
+        data=data,
+        early_trials=early_trials,
+        late_trials=late_trials,
+    reward_palette=reward_palette,
+    output_dir='/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/',
+    variance=variance,
+    cluster_id=cl_id
+)
+
+for lmi_type in ['positive', 'negative']:
+    data, data_bin, data_proj, data_bin_proj = process_psth_data(psth, variance, min_cells=3, win_bin=win_bin, cluster_id=cl_id, select_lmi=True, lmi=lmi_type)
+    plot_psth_early_vs_late(
+        data=data,
+        early_trials=early_trials,
+        late_trials=late_trials,
+    reward_palette=reward_palette,
+    output_dir='/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/',
+    variance=variance,
+    cluster_id=None,
+    select_lmi=True, lmi=lmi_type
+    )
+
+
 
 
 # Plot for projectors.
@@ -689,113 +856,100 @@ svg_file = f'psth_day0_earlyvslate_projectors_on_{variance}_{early_trials}_{late
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
-# Bar plot and stats.
-# -------------------
-fig, axes = plt.subplots(2, 3, figsize=(9, 8), sharey=True)
+# Bar plot and stats for early vs late, for both all cells and projectors.
+# ------------------------------------------------------------------------
 
-# All cells
-sns.barplot(
-    data=data_bin.loc[data_bin.reward_group == 'R+'],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[1], estimator='mean', ax=axes[0, 0]
-)
-sns.barplot(
-    data=data_bin.loc[data_bin.reward_group == 'R-'],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[0], estimator='mean', ax=axes[1, 0]
-)
-axes[0, 0].set_title('All cells')
-axes[0, 0].set_ylabel('R+')
-axes[1, 0].set_ylabel('R-')
-
-# wS2 projectors
-sns.barplot(
-    data=data_bin_proj.loc[(data_bin_proj.reward_group == 'R+') & (data_bin_proj.cell_type == 'wS2')],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[1], estimator='mean', ax=axes[0, 1]
-)
-sns.barplot(
-    data=data_bin_proj.loc[(data_bin_proj.reward_group == 'R-') & (data_bin_proj.cell_type == 'wS2')],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[0], estimator='mean', ax=axes[1, 1]
-)
-axes[0, 1].set_title('wS2 projectors')
-
-# wM1 projectors
-sns.barplot(
-    data=data_bin_proj.loc[(data_bin_proj.reward_group == 'R+') & (data_bin_proj.cell_type == 'wM1')],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[1], estimator='mean', ax=axes[0, 2]
-)
-sns.barplot(
-    data=data_bin_proj.loc[(data_bin_proj.reward_group == 'R-') & (data_bin_proj.cell_type == 'wM1')],
-    x='epoch', y='activity',
-    errorbar='ci', order=['early', 'late'],
-    color=reward_palette[0], estimator='mean', ax=axes[1, 2]
-)
-axes[0, 2].set_title('wM1 projectors')
-
-for ax in axes.flat:
-    ax.set_xlabel('')
-
-plt.ylim(0, 12)
-sns.despine()
-plt.tight_layout()
-
-# Save figure for all cells and projectors.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_all_wS2_wM1.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
-
-
-# Stats.
-# Prepare data for stats and export
-
-stats_results = []
-
-# 1. All cells (ignore cell_type)
-barplot_data = data_bin.groupby(['mouse_id', 'reward_group', 'epoch'])['activity'].mean().reset_index()
-for group in barplot_data['reward_group'].unique():
-    d = barplot_data[barplot_data['reward_group'] == group]
-    # Average across cell types for each mouse and epoch
-    d_all = d.groupby(['mouse_id', 'epoch'])['activity'].mean().reset_index()
-    early = d_all[d_all['epoch'] == 'early'].set_index('mouse_id')['activity']
-    late = d_all[d_all['epoch'] == 'late'].set_index('mouse_id')['activity']
-    common = early.index.intersection(late.index)
-    if len(common) > 0:
-        stat, p = wilcoxon(early.loc[common], late.loc[common])
+def plot_and_save_barplot_early_vs_late(data_bin, data_bin_proj, variance, early_trials, late_trials, reward_palette, io, output_dir, cluster_id=None):
+    """
+    Plot and save barplots for early vs late trials for all cells and projectors.
+    Also computes and saves Wilcoxon stats and exports data to CSV.
+    Generates two figures: one for all cells, one for projectors.
+    """
+    output_dir = io.adjust_path_to_host(output_dir)
+    if cluster_id is not None:
+        cluster_str = f'_cluster{cluster_id}'
+        cluster_title = f" (cluster {cluster_id})"
     else:
-        stat, p = np.nan, np.nan
-    stats_results.append({'reward_group': group, 'cell_type': 'all', 'wilcoxon_stat': stat, 'p_value': p})
+        cluster_str = ''
+        cluster_title = ''
+    # --- Figure 1: All cells, split by reward group ---
+    fig1, axes1 = plt.subplots(1, 2, figsize=(8, 6), sharey=True)
+    for idx, group in enumerate(['R+', 'R-']):
+        sns.barplot(
+            data=data_bin[data_bin['reward_group'] == group],
+            x='epoch', y='activity',
+            errorbar='ci', order=['early', 'late'],
+            color=reward_palette[1 if group == 'R+' else 0],
+            estimator='mean', ax=axes1[idx]
+        )
+        axes1[idx].set_title(f'All cells{cluster_title}\n{group}\nEarly: {early_trials}, Late: {late_trials}')
+        axes1[idx].set_ylabel('Activity (% dF/F0)')
+        axes1[idx].set_xlabel('')
+    plt.ylim(0, 12)
+    sns.despine()
+    plt.tight_layout()
+    plt.show()
+    svg_file1 = f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_allcells{cluster_str}.svg'
+    plt.savefig(os.path.join(output_dir, svg_file1), format='svg', dpi=300)
 
-# 2. wS2 and 3. wM1
-barplot_data = data_bin_proj.groupby(['mouse_id', 'reward_group', 'epoch', 'cell_type'])['activity'].mean().reset_index()
-for cell_type in ['wS2', 'wM1']:
+    # --- Figure 2: Projectors (wS2 and wM1), split by reward group ---
+    fig2, axes2 = plt.subplots(2, 2, figsize=(10, 10), sharey=True)
+    for row_idx, group in enumerate(['R+', 'R-']):
+        for col_idx, cell_type in enumerate(['wS2', 'wM1']):
+            sns.barplot(
+                data=data_bin_proj[(data_bin_proj['cell_type'] == cell_type) & (data_bin_proj['reward_group'] == group)],
+                x='epoch', y='activity',
+                errorbar='ci', order=['early', 'late'],
+                color=reward_palette[1 if group == 'R+' else 0],
+                estimator='mean', ax=axes2[row_idx, col_idx]
+            )
+            axes2[row_idx, col_idx].set_title(f'{cell_type} projectors{cluster_title}\n{group}\nEarly: {early_trials}, Late: {late_trials}')
+            axes2[row_idx, col_idx].set_ylabel('Activity (% dF/F0)')
+            axes2[row_idx, col_idx].set_xlabel('')
+    plt.ylim(0, 16)
+    sns.despine()
+    plt.tight_layout()
+    plt.show()
+    svg_file2 = f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_projectors{cluster_str}.svg'
+    plt.savefig(os.path.join(output_dir, svg_file2), format='svg', dpi=300)
+
+    # Stats.
+    stats_results = []
+
+    # 1. All cells (ignore cell_type)
+    barplot_data = data_bin.groupby(['mouse_id', 'reward_group', 'epoch'])['activity'].mean().reset_index()
     for group in barplot_data['reward_group'].unique():
-        d = barplot_data[(barplot_data['reward_group'] == group) & (barplot_data['cell_type'] == cell_type)]
-        early = d[d['epoch'] == 'early'].set_index('mouse_id')['activity']
-        late = d[d['epoch'] == 'late'].set_index('mouse_id')['activity']
+        d = barplot_data[barplot_data['reward_group'] == group]
+        d_all = d.groupby(['mouse_id', 'epoch'])['activity'].mean().reset_index()
+        early = d_all[d_all['epoch'] == 'early'].set_index('mouse_id')['activity']
+        late = d_all[d_all['epoch'] == 'late'].set_index('mouse_id')['activity']
         common = early.index.intersection(late.index)
         if len(common) > 0:
             stat, p = wilcoxon(early.loc[common], late.loc[common])
         else:
             stat, p = np.nan, np.nan
-        stats_results.append({'reward_group': group, 'cell_type': cell_type, 'wilcoxon_stat': stat, 'p_value': p})
+        stats_results.append({'reward_group': group, 'cell_type': 'all', 'wilcoxon_stat': stat, 'p_value': p})
 
-stats_df = pd.DataFrame(stats_results)
+    # 2. wS2 and 3. wM1
+    barplot_data_proj = data_bin_proj.groupby(['mouse_id', 'reward_group', 'epoch', 'cell_type'])['activity'].mean().reset_index()
+    for cell_type in ['wS2', 'wM1']:
+        for group in barplot_data_proj['reward_group'].unique():
+            d = barplot_data_proj[(barplot_data_proj['reward_group'] == group) & (barplot_data_proj['cell_type'] == cell_type)]
+            early = d[d['epoch'] == 'early'].set_index('mouse_id')['activity']
+            late = d[d['epoch'] == 'late'].set_index('mouse_id')['activity']
+            common = early.index.intersection(late.index)
+            if len(common) > 0:
+                stat, p = wilcoxon(early.loc[common], late.loc[common])
+            else:
+                stat, p = np.nan, np.nan
+            stats_results.append({'reward_group': group, 'cell_type': cell_type, 'wilcoxon_stat': stat, 'p_value': p})
 
-# Save barplot data and stats to CSV
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/psth/early_vs_late/'
-output_dir = io.adjust_path_to_host(output_dir)
-barplot_data.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_data.csv'), index=False)
-stats_df.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_stats.csv'), index=False)
+    stats_df = pd.DataFrame(stats_results)
+    print(stats_df)
 
+    # Save barplot data and stats to CSV
+    barplot_data.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_data{cluster_str}.csv'), index=False)
+    stats_df.to_csv(os.path.join(output_dir, f'barplot_day0_earlyvslate_on_{variance}_{early_trials}_{late_trials}_stats{cluster_str}.csv'), index=False)
 
 
 
@@ -1218,4 +1372,114 @@ sns.despine()
 plt.tight_layout()
 plt.show()
 
+
+# ##############################
+# Reinforcement during learning.
+# ##############################
+
+# Test the idea that a successful trial reinforces the association i.e.
+# increase performance on the subsequent trial.
+
+# Performance at whisker trial n-1 vs n+1 depending on performance at trial n.
+
+# Load behavior table for all imaging mice, day 0
+behavior_path = io.adjust_path_to_host(
+    '/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv'
+)
+behavior_df = pd.read_csv(behavior_path)
+behavior_df = behavior_df[behavior_df['day'] == 0]
+# Only keep whisker trials
+behavior_df = behavior_df[behavior_df['whisker_stim'] == 1]
+
+
+# For each mouse, compute performance at trial n-1 and n+1, grouped by outcome at trial n
+reinforcement_results = []
+for mouse_id in behavior_df['mouse_id'].unique():
+    mouse_trials = behavior_df[behavior_df['mouse_id'] == mouse_id].sort_values('trial_w')
+    # Only keep trials with valid neighbors
+    for idx in range(1, len(mouse_trials) - 1):
+        trial_n_minus_1 = mouse_trials.iloc[idx - 1]
+        trial_n = mouse_trials.iloc[idx]
+        trial_n_plus_1 = mouse_trials.iloc[idx + 1]
+        reinforcement_results.append({
+            'mouse_id': mouse_id,
+            'reward_group': trial_n['reward_group'],
+            'trial_n': trial_n['trial_w'],
+            'outcome_n': trial_n['outcome_w'],
+            'outcome_n_minus_1': trial_n_minus_1['learning_curve_w'],
+            'outcome_n_plus_1': trial_n_plus_1['learning_curve_w'],
+        })
+reinforcement_df = pd.DataFrame(reinforcement_results)
+
+# Group by outcome at trial n (hit=1, miss=0), compare perf at n-1 and n+1
+summary = (
+    reinforcement_df
+    .groupby(['reward_group', 'outcome_n', 'mouse_id'])
+    .agg({'outcome_n_minus_1': 'mean', 'outcome_n_plus_1': 'mean'})
+    .reset_index()
+)
+data = summary.loc[summary.reward_group=='R+']
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+sns.barplot(data=data, x='outcome_n', y='outcome_n_minus_1', ax=axes[0])
+sns.barplot(data=data, x='outcome_n', y='outcome_n_plus_1', ax=axes[1])
+
+
+axes[0].set_xticklabels(['Miss', 'Hit'])
+axes[1].set_xticklabels(['Miss', 'Hit'])
+
+
+# Same the first days of auditory pretraining.
+# ############################################
+
+
+# Load behavior table for all imaging mice, day 0
+behavior_path = io.adjust_path_to_host(
+    '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_pretraining_cut.csv'
+)
+behavior_df = pd.read_csv(behavior_path)
+
+
+# Reindex 'day' for each mouse to create a 'pretraining_day' column starting from 0
+behavior_df['pretraining_day'] = behavior_df.groupby('mouse_id')['day'].transform(lambda x: x.rank(method='dense').astype(int) - 1)
+# Only keep whisker trials
+behavior_df = behavior_df[behavior_df['auditory_stim'] == 1]
+# Keep first three days.
+behavior_df = behavior_df[behavior_df['pretraining_day'] < 3]
+behavior_df = behavior_df.sort_values(['mouse_id', 'pretraining_day', 'trial_a'])
+# Reindex 'trial_a' from 0 to n across the three days for each mouse
+behavior_df['trial_a_reindexed'] = behavior_df.groupby('mouse_id').cumcount()
+
+
+
+
+# For each mouse, compute performance at trial n-1 and n+1, grouped by outcome at trial n
+reinforcement_results = []
+for mouse_id in behavior_df['mouse_id'].unique():
+    mouse_trials = behavior_df[behavior_df['mouse_id'] == mouse_id].sort_values('trial_a_reindexed')
+    # Only keep trials with valid neighbors
+    for idx in range(1, len(mouse_trials) - 1):
+        trial_n_minus_1 = mouse_trials.iloc[idx - 1]
+        trial_n = mouse_trials.iloc[idx]
+        trial_n_plus_1 = mouse_trials.iloc[idx + 1]
+        reinforcement_results.append({
+            'mouse_id': mouse_id,
+            'reward_group': trial_n['reward_group'],
+            'trial_n': trial_n['trial_a_reindexed'],
+            'outcome_n': trial_n['outcome_a'],
+            'outcome_n_minus_1': trial_n_minus_1['outcome_a'],
+            'outcome_n_plus_1': trial_n_plus_1['outcome_a'],
+        })
+reinforcement_df = pd.DataFrame(reinforcement_results)
+
+# Group by outcome at trial n (hit=1, miss=0), compare perf at n-1 and n+1
+summary = (
+    reinforcement_df
+    .groupby(['reward_group', 'outcome_n', 'mouse_id'])
+    .agg({'outcome_n_minus_1': 'mean', 'outcome_n_plus_1': 'mean'})
+    .reset_index()
+)
+data = summary.loc[summary.reward_group=='R+']
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+sns.barplot(data=data, x='outcome_n', y='outcome_n_minus_1', ax=axes[0])
+sns.barplot(data=data, x='outcome_n', y='outcome_n_plus_1', ax=axes[1])
 

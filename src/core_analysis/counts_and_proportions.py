@@ -25,34 +25,6 @@ from src.utils.utils_plot import *
 from scipy.stats import ks_2samp
 
 
-def filter_data_by_cell_count(data, min_cells):
-    """
-    Filters the data to exclude entries where the number of distinct ROIs of a specific type
-    for a mouse is below a given threshold.
-
-    Parameters:
-    - data (pd.DataFrame): The data to filter, containing columns 'mouse_id', 'cell_type', 'roi', etc.
-    - min_cells (int): Minimum number of distinct ROIs required to keep the data.
-
-    Returns:
-    - pd.DataFrame: Filtered data.
-    """
-    # Count distinct ROIs per mouse and cell type
-    roi_counts = data.groupby(['mouse_id', 'cell_type'])['roi'].nunique().reset_index()
-    roi_counts = roi_counts.rename(columns={'roi': 'roi_count'})
-
-    # Merge ROI counts back into the data
-    data = data.merge(roi_counts, on=['mouse_id', 'cell_type'])
-
-    # Filter out entries where the ROI count is below the threshold
-    data = data[data['roi_count'] >= min_cells]
-
-    # Drop the auxiliary 'roi_count' column
-    data = data.drop(columns=['roi_count'])
-
-    return data
-
-
 # #############################################################################
 # Count the number of cells and proportion of cell types.
 # #############################################################################
@@ -585,10 +557,10 @@ for group in groups:
             'p_value': p_value
         })
 results_df = pd.DataFrame(results)
+output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/cell_proportions/'
 results_df.to_csv(os.path.join(output_dir, 'prop_lmi_mannwhitney_results.csv'), index=False)
 
 # Save figure and data.
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/cell_proportions/'
 svg_file = f'prop_lmi.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 lmi_prop.to_csv(os.path.join(output_dir, 'prop_lmi.csv'), index=False)
@@ -626,7 +598,6 @@ for i, cell_type in enumerate(cell_types):
 
 sns.despine()
 plt.tight_layout()
-output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/cell_proportions/'
 plt.savefig(os.path.join(output_dir, 'lmi_histograms.svg'), format='svg', dpi=300)
 # Statistical test: Kolmogorov-Smirnov test for LMI distributions
 
@@ -642,3 +613,9 @@ for cell_type in cell_types:
     ks_results.append({'cell_type': cell_type if cell_type else 'all', 'stat': stat, 'p_value': p})
 
 pd.DataFrame(ks_results).to_csv(os.path.join(output_dir, 'lmi_distribution_ks.csv'), index=False)
+
+
+# Proportion of LMI in each cluster compared to whole population.
+# ---------------------------------------------------------------
+
+

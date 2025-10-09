@@ -21,7 +21,7 @@ mice_groups = {
     'gradual_day0': ['GF278', 'GF301', 'GF305', 'GF306', 'GF313', 'GF317', 'GF318', 'GF323', 'GF328', ],
     'step_day0': ['GF339', 'AR176', ],
     'psth_mapping_increase': ['GF305', 'GF306', 'GF308', 'GF313', 'GF318', 'GF323', 'GF334',],
-    'good_day0':['GF240', 'GF241','GF248','GF253','GF267','GF278''GF257','GF287',
+    'good_day0':['GF240', 'GF241','GF248','GF253','GF267','GF278','GF257','GF287',
                  'GF261','GF266','GF300','GF301','GF303','GF305','GF306',
                  'GF307','GF308','GF310','GF311','GF313','GF314',
                  'GF317','GF318','GF323','GF325','GF326','GF327','GF328','GF334','GF336','GF337','GF338','GF339',

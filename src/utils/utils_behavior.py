@@ -334,16 +334,18 @@ def compute_learning_curves(table):
     
     for session in session_list:
         data = table.loc[table.day==0].reset_index(drop=True)
-        if data.day[0] != 0:
-            continue
+        # if data.day[0] != 0:
+        #     continue
         print(f'Processing session {session}...')
 
         data_w = data[(data.session_id == session) & (data.whisker_stim==1)].reset_index(drop=True)
         outcomes = data_w.outcome_w.values
         p_samples_w, p_mean_w, p_low_w, p_high_w = fit_learning_curve(outcomes)
-        # data_a = data[(data.session_id == session) & (data.auditory_stim==1)].reset_index(drop=True)
-        # outcomes = data_a.outcome_a.values
-        # p_samples_a, p_mean_a, p_low_a, p_high_a = fit_learning_curve(outcomes)
+        
+        data_a = data[(data.session_id == session) & (data.auditory_stim==1)].reset_index(drop=True)
+        outcomes = data_a.outcome_a.values
+        p_samples_a, p_mean_a, p_low_a, p_high_a = fit_learning_curve(outcomes)
+        
         data_ns = data[(data.session_id == session) & (data.no_stim==1)].reset_index(drop=True)
         outcomes = data_ns.outcome_c.values
         p_samples_ns, p_mean_ns, p_low_ns, p_high_ns = fit_learning_curve(outcomes)
@@ -353,10 +355,10 @@ def compute_learning_curves(table):
             table.loc[(table.session_id==session) & (table.whisker_stim==1), 'learning_curve_w_ci_low'] = p_low_w.astype(float)
             table.loc[(table.session_id==session) & (table.whisker_stim==1), 'learning_curve_w_ci_high'] = p_high_w.astype(float)
         
-        # if p_mean_a is not None:
-        #     table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a'] = p_mean_a.astype(float)
-        #     table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a_ci_low'] = p_low_a.astype(float)
-        #     table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a_ci_high'] = p_high_a.astype(float)
+        if p_mean_a is not None:
+            table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a'] = p_mean_a.astype(float)
+            table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a_ci_low'] = p_low_a.astype(float)
+            table.loc[(table.session_id==session) & (table.auditory_stim==1), 'learning_curve_a_ci_high'] = p_high_a.astype(float)
         
         if p_mean_ns is not None:
             table.loc[(table.session_id==session) & (table.no_stim==1), 'learning_curve_ns'] = p_mean_ns.astype(float)

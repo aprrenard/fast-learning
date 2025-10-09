@@ -441,8 +441,8 @@ np.save(save_path, raster_dict)
 # Load raster data.
 # -----------------
 
-save_path = os.path.join(io.processed_dir, 'rasters', 'raster_dict_singlebin_180ms.npy')
-raster_dict = np.load(save_path, allow_pickle=True).item()
+raster_path = os.path.join(io.processed_dir, 'rasters', 'raster_dict_singlebin_180ms.npy')
+raster_dict = np.load(raster_path, allow_pickle=True).item()
 
 # # Remove mice with wrong number of trials
 # for key, item in raster_dict.items():
@@ -481,88 +481,93 @@ raster_day2 = raster[:, nmappingtrials*4 + nlearningtrials*2: nmappingtrials*4 +
 # Clustering.
 # -----------
 
-from sklearn.mixture import GaussianMixture
+# from sklearn.mixture import GaussianMixture
 
-nclusters = 3
-gmm = GaussianMixture(
-        n_components=nclusters,
-        covariance_type="full",
-        random_state=42,
-    )
+# nclusters = 3
+# gmm = GaussianMixture(
+#         n_components=nclusters,
+#         covariance_type="full",
+#         random_state=42,
+#     )
 
-X = StandardScaler().fit_transform(raster.T).T 
-X = StandardScaler().fit_transform(X)
+# # X_0 = StandardScaler().fit_transform(raster_day0.T).T 
+# # X_0 = StandardScaler().fit_transform(X_0)
 
-model = gmm.fit(X)
-clusters = gmm.predict(X)  # Predict clusters
-isort = np.argsort(clusters, kind='mergesort')  # Sort neurons by cluster
-# Sort neuron according to clusters.
-sn = raster[isort]  # Sort raster according to clusters
+# # X = StandardScaler().fit_transform(raster.T).T 
+# # X = StandardScaler().fit_transform(X)
 
-# Reclustering within each cluster based only on day 0 learning activity
-reclustered_clusters = np.zeros_like(clusters)
-cluster_offset = 0  # To keep unique cluster labels after reclustering
+# model = gmm.fit(raster_day0)
+# clusters = gmm.predict(raster_day0)  # Predict clusters
+# isort = np.argsort(clusters, kind='mergesort')  # Sort neurons by cluster
+# # Sort neuron according to clusters.
+# sn = raster[isort]  # Sort raster according to clusters
 
-for clust in np.unique(clusters):
-    idx = np.where(clusters == clust)[0]
-    if len(idx) == 0:
-        continue
-    # Extract day 0 learning activity for neurons in this cluster
-    day0_activity = raster[idx, nmappingtrials*2: nmappingtrials*2 + nlearningtrials]
-    # Remove neurons with all zeros (if any)
-    valid = ~(day0_activity == 0).all(axis=1)
-    idx_valid = idx[valid]
-    day0_activity = day0_activity[valid]
-    if day0_activity.shape[0] < 2:
-        # Not enough neurons to cluster, assign same cluster
-        reclustered_clusters[idx_valid] = cluster_offset
-        cluster_offset += 1
-        continue
-    # Standardize
-    X2 = StandardScaler().fit_transform(day0_activity.T).T 
-    X2 = StandardScaler().fit_transform(X2)
+# # # Reclustering within each cluster based only on day 0 learning activity
+# # reclustered_clusters = np.zeros_like(clusters)
+# # cluster_offset = 0  # To keep unique cluster labels after reclustering
 
-    # Reclustering: use GMM with 2 clusters (or 1 if very few neurons)
-    n_subclusters = 3
-    gmm_sub = GaussianMixture(n_components=n_subclusters, covariance_type="full", random_state=42)
-    sub_labels = gmm_sub.fit_predict(X2)
-    # Assign new cluster labels, offset to keep unique
-    for sub in range(n_subclusters):
-        reclustered_clusters[idx_valid[sub_labels == sub]] = cluster_offset
-        cluster_offset += 1
+# # for clust in np.unique(clusters):
+# #     idx = np.where(clusters == clust)[0]
+# #     if len(idx) == 0:
+# #         continue
+# #     # Extract day 0 learning activity for neurons in this cluster
+# #     day0_activity = raster[idx, nmappingtrials*2: nmappingtrials*2 + nlearningtrials]
+# #     # Remove neurons with all zeros (if any)
+# #     valid = ~(day0_activity == 0).all(axis=1)
+# #     idx_valid = idx[valid]
+# #     day0_activity = day0_activity[valid]
+# #     if day0_activity.shape[0] < 2:
+# #         # Not enough neurons to cluster, assign same cluster
+# #         reclustered_clusters[idx_valid] = cluster_offset
+# #         cluster_offset += 1
+# #         continue
+# #     # Standardize
+# #     X2 = StandardScaler().fit_transform(day0_activity.T).T 
+# #     X2 = StandardScaler().fit_transform(X2)
 
-# Now reclustered_clusters contains the new cluster assignments after day 0 reclustering
-# You may want to update isort and sn accordingly:
-isort = np.argsort(reclustered_clusters, kind='mergesort')
-sn = raster[isort]
-clusters = reclustered_clusters
+# #     # Reclustering: use GMM with 2 clusters (or 1 if very few neurons)
+# #     n_subclusters = 3
+# #     gmm_sub = GaussianMixture(n_components=n_subclusters, covariance_type="full", random_state=42)
+# #     sub_labels = gmm_sub.fit_predict(X2)
+# #     # Assign new cluster labels, offset to keep unique
+# #     for sub in range(n_subclusters):
+# #         reclustered_clusters[idx_valid[sub_labels == sub]] = cluster_offset
+# #         cluster_offset += 1
+
+# # # Now reclustered_clusters contains the new cluster assignments after day 0 reclustering
+# # # You may want to update isort and sn accordingly:
+# # isort = np.argsort(reclustered_clusters, kind='mergesort')
+# # sn = raster[isort]
+# # clusters = reclustered_clusters
 
 
 
 
 
-# Create vectors for mouse_id, reward group, and clusters.
-mouse_color_list, unique_mouse_ids, mouse_id_to_color = make_mouse_vector(raster_dict, isort)
-reward_sorted = make_reward_vector(raster_dict, isort)
-cluster_sorted, cluster_cmap = make_cluster_vector(clusters, isort)
-# Plot rastermap.
-plot_rastermap(X[isort], mouse_color_list, unique_mouse_ids, mouse_id_to_color,
-                   cluster_cmap, cluster_sorted, reward_sorted, reward_palette,
-                   nmappingtrials, nlearningtrials, vmin=0, vmax=0.4)
+# # Create vectors for mouse_id, reward group, and clusters.
+# mouse_color_list, unique_mouse_ids, mouse_id_to_color = make_mouse_vector(raster_dict, isort)
+# reward_sorted = make_reward_vector(raster_dict, isort)
+# cluster_sorted, cluster_cmap = make_cluster_vector(clusters, isort)
+# # Plot rastermap.
+# plot_rastermap(X[isort], mouse_color_list, unique_mouse_ids, mouse_id_to_color,
+#                    cluster_cmap, cluster_sorted, reward_sorted, reward_palette,
+#                    nmappingtrials, nlearningtrials, vmin=0, vmax=0.4)
 
-plot_cluster_averages(cluster_sorted, sn, cluster_cmap, nmappingtrials,
-                      nlearningtrials, mouse_color_list=mouse_color_list,
-                      unique_mouse_ids=unique_mouse_ids, mouse_id_to_color=mouse_id_to_color)
+# plot_cluster_averages(cluster_sorted, sn, cluster_cmap, nmappingtrials,
+#                       nlearningtrials, mouse_color_list=mouse_color_list,
+#                       unique_mouse_ids=unique_mouse_ids, mouse_id_to_color=mouse_id_to_color)
+
+
+
 
 
 # Run rastermap
 X = StandardScaler().fit_transform(raster.T).T 
 X = StandardScaler().fit_transform(X)
-model = Rastermap(n_clusters=5, # number of clusters to compute
+model = Rastermap(n_clusters=3, # number of clusters to compute
                   n_PCs=128, # number of PCs to use
                   locality=0., # locality in sorting to find sequences (this is a value from 0-1)
                   grid_upsample=10, # default value, 10 is good for large recordings
-                  
                 ).fit(X)
 embedding = model.embedding # neurons x 1
 isort = model.isort
@@ -624,7 +629,7 @@ plot_cluster_averages(cluster_sorted, sn, cluster_cmap, nmappingtrials,
                       mice_subset=mice_subset, ymin=ymin, ymax=ymax)
 
 # Get the rewarded mice (reward_group == 'R+')
-mice_subset = [mouse_id for mouse_id, reward_group in zip(raster_dict['mouse_id'], raster_dict['reward_group']) if reward_group == 'R-']
+mice_subset = [mouse_id for mouse_id, reward_group in zip(raster_dict['mouse_id'], raster_dict['reward_group']) if reward_group == 'R+']
 plot_rastermap(sn, mouse_color_list, unique_mouse_ids, mouse_id_to_color,
                    cluster_cmap, cluster_sorted, reward_sorted, reward_palette,
                    nmappingtrials, nlearningtrials, vmin=0, vmax=0.4, mice_subset=mice_subset)
@@ -652,6 +657,7 @@ plot_cluster_averages(cluster_sorted, sn, cluster_cmap, nmappingtrials,
 save_path = os.path.join(io.processed_dir, 'rasters', 'raster_dict_singlebin_180ms.npy')
 raster_dict = np.load(save_path, allow_pickle=True).item()
 
+# mice_gp = mice
 mice_gp = mice_groups['good_day0']
 # mice_gp = mice_groups['meh_day0'] + mice_groups['bad_day0']
 # mice_gbadmice
@@ -669,14 +675,17 @@ raster_dict = {k: [v[i] for i in range(len(v)) if raster_dict['mouse_id'][i] in 
 # raster_dict = {k: [v[i] for i in range(len(v)) if raster_dict['mouse_id'][i] in mice] for k, v in raster_dict.items()}
 
 raster = np.concatenate(raster_dict['activity'], axis=0)
+raster[np.isnan(raster)] = 1
 # raster_zscore = np.concatenate(raster_dict['activity_zscore'], axis=0)
 
-
+np.all(raster==1, axis=0).sum() # Check number of empty neurons
 
 raster_day0 = raster[:, nmappingtrials*2: nmappingtrials*2 + nlearningtrials]
 raster_day1 = raster[:, nmappingtrials*3 + nlearningtrials: nmappingtrials*3 + nlearningtrials*2]
 raster_day2 = raster[:, nmappingtrials*4 + nlearningtrials*2: nmappingtrials*4 + nlearningtrials*3]
 
+# Weird cell.
+raster_day2 = raster_day2[np.std(raster_day2, axis=1)!=0] # Check number of empty neurons
 
 
 # Run rastermap
@@ -685,7 +694,7 @@ model = Rastermap(n_clusters=n_clusters, # number of clusters to compute
                   n_PCs=64, # number of PCs to use
                   locality=0., # locality in sorting to find sequences (this is a value from 0-1)
                   grid_upsample=0, # default value, 10 is good for large recordings
-                ).fit(raster_day2)
+                ).fit(raster_day0)
 embedding = model.embedding # neurons x 1
 isort = model.isort
 clusters = model.embedding_clust
@@ -701,6 +710,30 @@ mouse_color_list, unique_mouse_ids, mouse_id_to_color = make_mouse_vector(raster
 reward_sorted = make_reward_vector(raster_dict, isort)
 cluster_sorted, cluster_cmap = make_cluster_vector(clusters, isort)
 
+# # Save clustering results.
+# # Associate each (mouse_id, roi) with a cluster_id and save as a DataFrame
+# mouse_id_vector = []
+# roi_vector = []
+# for i, mouse_id in enumerate(raster_dict['mouse_id']):
+#     rois = raster_dict['roi'][i]
+#     n_cells = rois.shape[0]
+#     mouse_id_vector.extend([mouse_id] * n_cells)
+#     roi_vector.extend(rois)
+# mouse_id_vector = np.array(mouse_id_vector)
+# roi_vector = np.array(roi_vector)
+
+# cluster_df = pd.DataFrame({
+#     'mouse_id': mouse_id_vector,
+#     'roi': roi_vector,
+#     'cluster_id': clusters
+# })
+
+# # Save to CSV
+# output_dir = '/mnt/lsens-analysis/Anthony_Renard/data_processed/clustering/'
+# output_dir = io.adjust_path_to_host(output_dir)
+# csv_path = os.path.join(output_dir, f'cluster_id_day0_learning_nclust_{nclusters}.csv')
+# cluster_df.to_csv(csv_path, index=False)
+
 
 
 # Plot rastermap.
@@ -709,14 +742,16 @@ plot_rastermap(sn, mouse_color_list, unique_mouse_ids, mouse_id_to_color,
                    nmappingtrials, nlearningtrials, figsize=(12, 10), vmin=0, vmax=0.4)
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/clustering/'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'rastermap_on_day0_ncluster_{nclusters}_badmice.svg'
+svg_file = f'rastermap_on_day0_ncluster_{nclusters}_goodmice.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 plot_cluster_averages(cluster_sorted, sn, cluster_cmap, nmappingtrials, nlearningtrials)
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/clustering/'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'cluster_averages_on_day0_ncluster_{nclusters}_badmice.svg'
+svg_file = f'cluster_averages_on_day0_ncluster_{nclusters}_goodmice.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+
 
 
 # Raster plot for each mouse.

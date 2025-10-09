@@ -27,8 +27,11 @@ from matplotlib.colors import Normalize
 from scipy.ndimage import gaussian_filter1d
 from statsmodels.stats.multitest import multipletests
 import matplotlib
+from scipy.signal import find_peaks
 import matplotlib.cm as cm
 
+sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
+            rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
 
 
 # nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
@@ -146,6 +149,27 @@ session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
 table = make_behavior_table(nwb_list, session_list, db_path, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
 # Save the table to a CSV file
 save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv'
+save_path = io.adjust_path_to_host(save_path)
+table.to_csv(save_path, index=False)
+
+# Auditory days for imaging mice.
+mice_imaging = io.select_mice_from_db(db_path, nwb_dir, experimenters=None,
+                                    exclude_cols = ['exclude',  'two_p_exclude'],
+                                    optogenetic = ['no', np.nan],
+                                    pharmacology = ['no',np.nan],
+                                    two_p_imaging = 'yes',
+                                    )
+
+session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
+    db_path, nwb_dir, experimenters=None,
+    exclude_cols = ['exclude',  'two_p_exclude'],
+    day = [f"-{i}" for i in range(8,1,-1)],
+    # day = ['whisker_on_1', 'whisker_off', 'whisker_on_2'],
+    mouse_id = mice_imaging,
+    )
+table = make_behavior_table(nwb_list, session_list, db_path, cut_session=True, stop_flag_yaml=stop_flag_yaml, trial_indices_yaml=trial_indices_yaml)
+# Save the table to a CSV file
+save_path = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_pretraining_cut.csv'
 save_path = io.adjust_path_to_host(save_path)
 table.to_csv(save_path, index=False)
 
@@ -368,51 +392,69 @@ table.to_csv(os.path.join(output_dir, 'performance_across_days_imagingmice_data.
 
 # Histogram quantifying D0.
 # -------------------------
-
-# Select data of day 0
-day_0_data = table[table['day'] == 0]
-avg_performance = day_0_data.groupby(['mouse_id', 'reward_group'])['outcome_w'].mean().reset_index()
+# Select data for days 0, +1, and +2
+days_of_interest = [0, 1, 2]
+day_data = table[table['day'].isin(days_of_interest)]
+avg_performance = day_data.groupby(['day', 'mouse_id', 'reward_group'])['outcome_w'].mean().reset_index()
 
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
               rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
-# Plot histogram to compare average performance across mice of the two reward groups
-plt.figure(figsize=(4, 6))
-sns.barplot(data=avg_performance, x='reward_group', y='outcome_w', palette=behavior_palette[2:4][::-1], width=0.3)
-sns.stripplot(data=avg_performance, x='reward_group', y='outcome_w', color='grey', jitter=False, dodge=True)
-plt.xlabel('Reward grouop')
-plt.ylabel('Lick probability')
+
+# Plot barplot for each day
+plt.figure(figsize=(8, 6))
+sns.barplot(
+    data=avg_performance,
+    x='day',
+    y='outcome_w',
+    hue='reward_group',
+    palette=behavior_palette[2:4][::-1],
+    width=0.3,
+    dodge=True
+)
+sns.swarmplot(
+    data=avg_performance,
+    x='day',
+    y='outcome_w',
+    hue='reward_group',
+    dodge=True,
+    color='grey',
+    alpha=0.6,
+)
+plt.xlabel('Day')
+plt.ylabel('Lick probability (%)')
 plt.ylim([0, 100])
+plt.legend(title='Reward group')
 sns.despine(trim=True)
 
-# Test significance with Mann-Whitney U test
-def test_significance(data, group_col, value_col, group1, group2):
-    group1_data = data[data[group_col] == group1][value_col]
-    group2_data = data[data[group_col] == group2][value_col]
-    stat, p_value = mannwhitneyu(group1_data, group2_data, alternative='two-sided')
-    return stat, p_value
-# Perform the test
-stat, p_value = test_significance(avg_performance, 'reward_group', 'outcome_w', 'R+', 'R-')
-
-# Add stars to the plot to indicate significance
-ax = plt.gca()
-if p_value < 0.001:
-    plt.text(0.5, 0.9, '***', ha='center', va='bottom', color='black', fontsize=12, transform=ax.transAxes)
-elif p_value < 0.01:
-    plt.text(0.5, 0.9, '**', ha='center', va='bottom', color='black', fontsize=12, transform=ax.transAxes)
-elif p_value < 0.05:
-    plt.text(0.5, 0.9, '*', ha='center', va='bottom', color='black', fontsize=12, transform=ax.transAxes)
+# Test significance with Mann-Whitney U test for each day
+stats = []
+for day in days_of_interest:
+    df_day = avg_performance[avg_performance['day'] == day]
+    group_R_plus = df_day[df_day['reward_group'] == 'R+']['outcome_w']
+    group_R_minus = df_day[df_day['reward_group'] == 'R-']['outcome_w']
+    stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
+    stats.append({'day': day, 'statistic': stat, 'p_value': p_value})
+    # Add stars to the plot to indicate significance
+    ax = plt.gca()
+    xpos = days_of_interest.index(day)
+    ypos = 95
+    if p_value < 0.001:
+        plt.text(xpos, ypos, '***', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.01:
+        plt.text(xpos, ypos, '**', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.05:
+        plt.text(xpos, ypos, '*', ha='center', va='bottom', color='black', fontsize=14)
 
 # Save.
 output_dir = r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior'
-plt.savefig(os.path.join(output_dir, 'performance_D0_barplot_imagingmice.svg'), dpi=300)
-avg_performance.to_csv(os.path.join(output_dir, 'performance_D0_barplot_imagingmice_data.csv'), index=False)
-with open(os.path.join(output_dir, 'performance_D0_barplot_imagingmice_stats.csv'), 'w') as f:
-    f.write(f'Statistic: {stat}, P-value: {p_value}')
+plt.savefig(os.path.join(output_dir, 'performance_D0_D1_D2_barplot_imagingmice.svg'), dpi=300)
+avg_performance.to_csv(os.path.join(output_dir, 'performance_D0_D1_D2_barplot_imagingmice_data.csv'), index=False)
+pd.DataFrame(stats).to_csv(os.path.join(output_dir, 'performance_D0_D1_D2_barplot_imagingmice_stats.csv'), index=False)
 
 
 # Plot first whisker hit for both reward group (sanity check).
 # ------------------------------------------------------------
-
+ 
 # Select data of day 0
 day_0_data = table[(table['day'] == 0) & (table.whisker_stim == 1)]
 f = lambda x: x.reset_index(drop=True).idxmax()+1
@@ -453,8 +495,6 @@ df = table_particle_test.loc[table_particle_test.reward_group=='R+']
 df['outcome_w'] = df['outcome_w'] * 100
 df = df.groupby(['mouse_id', 'behavior_type'])['outcome_w'].mean().reset_index()
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-              rc={'xtick.major.width': .8, 'xtick.minor.width': .8, 'ytick.major.width': .8, 'xtick.minor.width': .8, 'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
 plt.figure(figsize=(4, 8))
 sns.barplot(data=df, x='behavior_type', y='outcome_w', order=['whisker_on_1', 'whisker_off', 'whisker_on_2'], color='#1b9e77')
 ax = plt.gca()
@@ -519,8 +559,6 @@ table.mouse_id.unique().size
 
 # Performance over blocks.
 # ------------------------
-# Adjust seaborn context for thicker lines
-sns.set_context("paper", font_scale=2, rc={"lines.linewidth": 2.5, "axes.titlesize": 14, "axes.labelsize": 12, "xtick.labelsize": 10, "ytick.labelsize": 10})
 
 
 data = table.copy()    
@@ -545,6 +583,67 @@ plot_perf_across_blocks(data, "R+", 2, behavior_palette, nmax_trials=240, ax=axe
 output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
 output_file = os.path.join(output_dir, 'performance_over_blocks_imagingmice.svg')
 plt.savefig(output_file, format='svg', dpi=300)
+
+
+
+
+# Performance during sessions across mice with fitted learning curves.
+# --------------------------------------------------------------------
+
+
+# Load the table from the CSV file.
+table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
+table = pd.read_csv(table_file)
+
+table.columns
+
+# Performance over blocks
+fig, axes = plt.subplots(1, 5, sharey=True, figsize=(20, 4))
+for i, day in enumerate([-2, -1, 0, 1, 2]):
+    ax = axes[i]
+    for reward_group, color_w, color_a, color_ns in zip(
+        ['R-', 'R+'],
+        behavior_palette[2:4],  # whisker
+        behavior_palette[0:2],  # auditory
+        behavior_palette[4:6],  # no_stim
+    ):
+        d = table[(table.day == day) & (table.reward_group == reward_group)]
+        # Plot whisker learning curve
+        sns.lineplot(
+            data=d[d.whisker_stim == 1],
+            x='trial_w', y='learning_curve_w',
+            errorbar='ci', ax=ax, color=color_w, label=f'{reward_group} whisker', linewidth=2
+        )
+        # # Plot auditory learning curve
+        # sns.lineplot(
+        #     data=d[d.auditory_stim == 1],
+        #     x='trial_w', y='learning_curve_a',
+        #     errorbar='ci', ax=ax, color=color_a, label=f'{reward_group} auditory', linewidth=2
+        # )
+        # Plot no_stim learning curve
+        sns.lineplot(
+            data=d[d.no_stim == 1],
+            x='trial_w', y='learning_curve_ns',
+            errorbar='ci', ax=ax, color=color_ns, label=f'{reward_group} no_stim', linewidth=2
+        )
+    ax.set_title(f'Day {day}')
+    ax.set_xlabel('Whisker trial')
+axes[0].set_ylabel('Lick probability')
+sns.despine()
+
+
+# Save the figure
+output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
+output_file = os.path.join(output_dir, 'performance_over_blocks_imagingmice.svg')
+plt.savefig(output_file, format='svg', dpi=300)
+
+
+
+
+
+
+
+
 
 
 # Performance over trials aligned to first hit.
@@ -846,47 +945,66 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 # Save data.
 data.to_csv(os.path.join(output_dir, 'muscimol_learning_data.csv'), index=False)
 
+# Bar plot and stats for Day 0 (muscimol_1), Day +1 (muscimol_2), and Day +2 (muscimol_3)
+# ----------------------------------------------------------------------------------------
 
-# Bar plot and stats on Day 0.
-# ----------------------------
+days_of_interest = ['muscimol_1', 'muscimol_2', 'muscimol_3']
+day_labels = ['D0', 'D+1', 'D+2']
 
-# Filter data for Day 0 (muscimol_1) and group by area
-day_0_data = data[data['pharma_day'] == 'muscimol_1']
+day_data = data[data['pharma_day'].isin(days_of_interest)].copy()
+day_data['day_label'] = day_data['pharma_day'].map(dict(zip(days_of_interest, day_labels)))
 
-
-# Plot bar plot for whisker performance (outcome_w) with reduced bar width
-plt.figure(figsize=(4, 6))
-sns.barplot(data=day_0_data, x='area', y='outcome_w', color=stim_palette[1], width=0.3)
-sns.stripplot(data=day_0_data, x='area', y='outcome_w', color='black', jitter=False, dodge=True, alpha=0.6)
-plt.xlabel('Inactivation Area')
+plt.figure(figsize=(8, 6))
+sns.barplot(
+    data=day_data,
+    x='day_label',
+    y='outcome_w',
+    hue='area',
+    palette=[reward_palette[1]],
+    width=0.3,
+    dodge=True
+)
+sns.swarmplot(
+    data=day_data,
+    x='day_label',
+    y='outcome_w',
+    hue='area',
+    dodge=True,
+    color=stim_palette[2],
+    alpha=0.6
+)
+plt.xlabel('Day')
 plt.ylabel('Whisker Performance (%)')
 plt.ylim([0, 100])
+plt.legend(title='Area')
 sns.despine()
 
-# Perform Mann-Whitney U test to compare wS1 and fpS1 groups
-stat, p_value = mannwhitneyu(
-    day_0_data[day_0_data['area'] == 'wS1']['outcome_w'],
-    day_0_data[day_0_data['area'] == 'fpS1']['outcome_w'],
-    alternative='two-sided'
-)
-
-# Add significance stars and p-value to the plot
-ax = plt.gca()
-if p_value < 0.001:
-    plt.text(0.5, 0.9, '***', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-elif p_value < 0.01:
-    plt.text(0.5, 0.9, '**', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-elif p_value < 0.05:
-    plt.text(0.5, 0.9, '*', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-# Add p-value text
-plt.text(0.5, 0.85, f'p = {p_value:.3g}', ha='center', va='bottom', color='black', fontsize=12, transform=ax.transAxes)
+# Perform Mann-Whitney U test for each day between wS1 and fpS1
+stats = []
+for day, label in zip(days_of_interest, day_labels):
+    df_day = day_data[day_data['pharma_day'] == day]
+    group_wS1 = df_day[df_day['area'] == 'wS1']['outcome_w']
+    group_fpS1 = df_day[df_day['area'] == 'fpS1']['outcome_w']
+    stat, p_value = mannwhitneyu(group_wS1, group_fpS1, alternative='two-sided')
+    stats.append({'day': label, 'statistic': stat, 'p_value': p_value})
+    # Add significance stars to the plot
+    ax = plt.gca()
+    xpos = day_labels.index(label)
+    ypos = 95
+    if p_value < 0.001:
+        plt.text(xpos, ypos, '***', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.01:
+        plt.text(xpos, ypos, '**', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.05:
+        plt.text(xpos, ypos, '*', ha='center', va='bottom', color='black', fontsize=14)
+    # Add p-value text below stars
+    plt.text(xpos, 90, f'p={p_value:.3g}', ha='center', va='bottom', color='black', fontsize=10)
 
 # Save the results to CSV files
 output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
-plt.savefig(os.path.join(output_dir, 'muscimol_learning_day0.svg'), format='svg', dpi=300)
-day_0_data.to_csv(os.path.join(output_dir, 'muscimol_learning_day0_data.csv'), index=False)
-with open(os.path.join(output_dir, 'muscimol_learning_day0_stats.csv'), 'w') as f:
-    f.write(f'Mann-Whitney U Test: Statistic={stat}, P-value={p_value}')
+plt.savefig(os.path.join(output_dir, 'muscimol_learning_day0_day1_day2.svg'), format='svg', dpi=300)
+day_data.to_csv(os.path.join(output_dir, 'muscimol_learning_day0_day1_day2_data.csv'), index=False)
+pd.DataFrame(stats).to_csv(os.path.join(output_dir, 'muscimol_learning_day0_day1_day2_stats.csv'), index=False)
 
 
 # ###################
@@ -1181,6 +1299,7 @@ mice_imaging = io.select_mice_from_db(db_path, nwb_dir,
                                     exclude_cols = ['exclude',  'two_p_exclude'],
                                     optogenetic = ['no', np.nan],
                                     pharmacology = ['no',np.nan],
+                                    two_p_imaging = 'yes'
                                     )
 # Load the table from the CSV file.
 table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
@@ -1188,7 +1307,7 @@ table = pd.read_csv(table_file)
 
 # Fit learning curves and define learning trial.
 table = compute_learning_curves(table)
-table = compute_learning_trial(table, n_consecutive_trials=10)
+# table = compute_learning_trial(table, n_consecutive_trials=10)
 
 # Save updated table.
 save_path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
@@ -1265,3 +1384,174 @@ with PdfPages(pdf_path) as pdf:
         
         pdf.savefig()
         plt.close()
+
+
+# ############################################
+# Licking raster plot to illustrates the task.
+# ############################################
+
+# NWB files don't have the piezo lick trace, so we need to work with
+# the raw data.
+# Read raw trace, get timestamps of whisker trials from behavior table
+# and plot licking raster around whisker stimulus.
+
+
+def detect_piezo_lick_times(lick_data, ni_session_sr=5000, sigma=100, height=None, distance=None, prominence=None, width=None, do_plot=False, t_start=0, t_stop=800,):
+    """
+        Detect lick times from the lick data envelope.
+        The lick data is first filtered with a low pass filter to remove high frequency fluctuations.
+    Args:
+        sigma:
+        continuous_data_dict: Dictionary containing continuous data
+        ni_session_sr: Sampling rate of session
+        lick_threshold: Lick threshold of session
+        sigma: Standard deviation of gaussian filter used to smooth lick data
+
+    Returns:
+
+    """
+
+
+    # Z-score normalization
+    lick_data = (lick_data - np.mean(lick_data)) / np.std(lick_data)
+    # Smooth lick data with a gaussian filter
+    lick_data_smooth = gaussian_filter1d(lick_data, sigma=sigma)
+    # Find peaks in the smoothed lick data above the threshold
+    # Use more parameters for find_peaks for better control
+    peaks, _ = find_peaks(lick_data_smooth, height=height, distance=distance, prominence=prominence, width=width)
+    lick_times = peaks / ni_session_sr
+
+
+    # Debugging: optional plotting
+    if do_plot:
+        ni_session_sr = int(float(ni_session_sr))
+        plt.plot(lick_data[int(ni_session_sr*t_start):int(ni_session_sr*t_stop)], c='k', label="lick_data", lw=1)
+        plt.plot(lick_data_smooth[int(ni_session_sr*t_start):int(ni_session_sr*t_stop)], c='green', label="lick_envelope", lw=1)
+        for lick_time in lick_times:
+            if lick_time > t_start and lick_time < t_stop:
+                plt.axvline(x=ni_session_sr*lick_time - ni_session_sr*t_start, color='red', lw=1, alpha=0.6)
+        # plt.xticks(ticks=[t_start * ni_session_sr, t_stop * ni_session_sr], labels=[t_start, t_stop])
+        plt.legend(loc='upper right', frameon=False)
+        plt.show()
+
+    return lick_times
+
+
+mouse_id = 'GF305'
+
+result_file = "/mnt/lsens-data/GF305/Recordings/BehaviourFiles/GF305_29112020_103331/Results.txt"
+
+df_results = pd.read_csv(result_file, sep=r'\s+', engine='python')
+# print(df_results.columns)
+# print(df_results.tail())
+
+# Test lick detection on a single trial.
+
+
+# for i in range(50, 400):
+#     if df_results.loc[i, 'Stim/NoStim'] == 1:
+#         continue
+#     trace_file = f"/mnt/lsens-data/GF305/Recordings/BehaviourFiles/GF305_29112020_103331/LickTrace{i}.bin"
+#     lick_trace = np.fromfile(trace_file)[1::2]
+
+#     sr = 100000
+#     lick_times = detect_piezo_lick_times(
+#         lick_trace,
+#         ni_session_sr=sr,
+#         sigma=200,
+#         # height=0.1,
+#         distance=sr*0.05,
+#         prominence=1,
+#         # width=sr*0.01,
+#         width=None,
+#         do_plot=True,
+#         t_start=0,
+#         t_stop=7
+#     )
+
+# session_list, nwb_list, mice_list, db = io.select_sessions_from_db(
+#     io.db_path, io.nwb_dir, experimenters=None,
+#     exclude_cols = ['exclude',  'two_p_exclude'],
+#     day = ['0'],
+#     mouse_id = ['GF305'])
+# table = make_behavior_table(nwb_list, session_list, io.db_path, cut_session=False, stop_flag_yaml=None, trial_indices_yaml=None)
+# table.early_lick.sum()
+
+
+
+df_lick_raster = pd.DataFrame(columns=['trialnumber', 'trial_type', 'lick_times'])
+trial_counter = 1
+for _, trial in df_results.iterrows():
+    if trial['EarlyLick'] == 1:
+        continue
+    if trial['Whisker/NoWhisker'] == 1:
+        trial_type = 'whisker'
+    elif trial['Auditory/NoAuditory'] == 1:
+        trial_type = 'auditory'
+    elif trial['Stim/NoStim'] == 0:
+        trial_type = 'no_stim'
+
+    lick_file = f"/mnt/lsens-data/GF305/Recordings/BehaviourFiles/GF305_29112020_103331/LickTrace{int(trial['trialnumber'])}.bin"
+    lick_trace = np.fromfile(lick_file)[1::2]
+    lick_times = detect_piezo_lick_times(
+        lick_trace,
+        ni_session_sr=sr,
+        sigma=200,
+        prominence=1,
+        distance=sr*0.05,
+        width=None,
+        do_plot=False,
+    )
+    # Use trial_counter to avoid blanks due to early licks
+    df_lick_raster = pd.concat([
+        df_lick_raster,
+        pd.DataFrame({
+            'trialnumber': [trial_counter],
+            'trial_type': [trial_type],
+            'lick_times': [lick_times.tolist()]
+        })
+    ], ignore_index=True)
+    trial_counter += 1
+
+
+# Remove mapping trials.
+df_lick_raster = df_lick_raster[df_lick_raster.trialnumber <= 320]
+
+
+# Plot licking raster around stimulus events for all trials
+# Parameters for raster plot
+interval_start = 1.0  # seconds
+interval_stop = 6.0   # seconds
+
+# Sort trials: no_stim first, then whisker, then auditory
+trial_order = ['no_stim', 'whisker', 'auditory']
+df_lick_raster_sorted = pd.concat([
+    df_lick_raster[df_lick_raster['trial_type'] == t] for t in trial_order
+], ignore_index=True)
+
+fig = plt.figure(figsize=(3, 6))
+ax = fig.add_subplot(111)
+
+colors = {'whisker': stim_palette[1], 'auditory': stim_palette[0], 'no_stim': stim_palette[2]}
+
+for i, row in df_lick_raster_sorted.iterrows():
+    
+    trial_type = row['trial_type']
+    lick_times = np.array(row['lick_times'])
+
+    # Only plot licks within [0, 7] sec interval
+    lick_window = lick_times[(lick_times >= interval_start) & (lick_times <= interval_stop)]
+    ax.scatter(lick_window, np.full_like(lick_window, i + 0.5), color=colors.get(trial_type, 'grey'), s=4, alpha=1)
+
+
+ax.set_xlabel('Absolute lick time (s)')
+ax.set_ylabel('Trial') 
+ax.set_xlim([interval_start, interval_stop])
+# ax.set_ylim([0, 340])
+
+sns.despine()
+
+# Save plot.
+save_path = r"/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/illustrations/lick_raster"
+save_path = io.adjust_path_to_host(save_path)
+plt.savefig(os.path.join(save_path, 'lick_raster_GF305.svg'), format='svg', dpi=300)

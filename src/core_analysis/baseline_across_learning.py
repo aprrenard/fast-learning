@@ -23,6 +23,8 @@ from sklearn.model_selection import cross_val_score
 from scipy.stats import bootstrap
 from joblib import Parallel, delayed
 from sklearn.svm import SVC
+from sklearn.linear_model import LinearRegression
+from sklearn.utils import resample
 
 # sys.path.append(r'H:/anthony/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
@@ -32,8 +34,6 @@ import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *
-from sklearn.linear_model import LinearRegression
-from sklearn.utils import resample
 
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
             rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
@@ -506,8 +506,8 @@ data_plot_psth = psth[psth['day'].isin(days_selected)]
 if variance == "mice":
     # Just filter by cell count for the projection types.
     min_cells = 3
-    data_plot_avg = filter_data_by_cell_count(data_plot_avg, min_cells)
-    data_plot_psth = filter_data_by_cell_count(data_plot_psth, min_cells)
+    data_plot_avg = imaging_utils.filter_data_by_cell_count(data_plot_avg, min_cells)
+    data_plot_psth = imaging_utils.filter_data_by_cell_count(data_plot_psth, min_cells)
     # Average for all cells and projection types independently.
     data_plot_avg_all = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group'])['average_response'].agg('mean').reset_index()
     data_plot_avg_proj = data_plot_avg.groupby(['mouse_id', 'learning_period', 'reward_group', 'cell_type'])['average_response'].agg('mean').reset_index()
@@ -540,13 +540,13 @@ axes[1, 0].axvline(0, color='orange', linestyle='--')
 
 # Top-right: Response amplitude for rewarded mice
 rewarded_avg = data_plot_avg_all[data_plot_avg_all['reward_group'] == 'R+']
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
+sns.barplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
 axes[0, 1].set_title('Response Amplitude (Rewarded Mice)')
 axes[0, 1].set_ylabel('Average Response (dF/F0)')
 
 # Bottom-right: Response amplitude for non-rewarded mice
 nonrewarded_avg = data_plot_avg_all[data_plot_avg_all['reward_group'] == 'R-']
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
+sns.barplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
 axes[1, 1].set_title('Response Amplitude (Non-Rewarded Mice)')
 axes[1, 1].set_ylabel('Average Response (dF/F0)')
 
@@ -577,12 +577,12 @@ axes[1, 0].axvline(0, color='orange', linestyle='--')
 
 # S2 Response amplitude
 rewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R+') & (data_plot_avg_proj['cell_type'] == 'wS2')]
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
+sns.barplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 1])
 axes[0, 1].set_title('Response Amplitude (Rewarded Mice)')
 axes[0, 1].set_ylabel('Average Response (dF/F0)')
 
 nonrewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R-') & (data_plot_avg_proj['cell_type'] == 'wS2')]
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
+sns.barplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 1])
 axes[1, 1].set_title('Response Amplitude (Non-Rewarded Mice)')
 axes[1, 1].set_ylabel('Average Response (dF/F0)')
 
@@ -603,12 +603,12 @@ axes[1, 2].axvline(0, color='orange', linestyle='--')
 
 # M1 Response amplitude
 rewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R+') & (data_plot_avg_proj['cell_type'] == 'wM1')]
-sns.pointplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 3])
+sns.barplot(data=rewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#1b9e77', ax=axes[0, 3])
 axes[0, 3].set_title('Response Amplitude (Rewarded Mice)')
 axes[0, 3].set_ylabel('Average Response (dF/F0)')
 
 nonrewarded_avg = data_plot_avg_proj[(data_plot_avg_proj['reward_group'] == 'R-') & (data_plot_avg_proj['cell_type'] == 'wM1')]
-sns.pointplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 3])
+sns.barplot(data=nonrewarded_avg, x='learning_period', y='average_response', order=['pre','post'], color='#c959affe', ax=axes[1, 3])
 axes[1, 3].set_title('Response Amplitude (Non-Rewarded Mice)')
 axes[1, 3].set_ylabel('Average Response (dF/F0)')
 
@@ -679,7 +679,7 @@ print(mice)
 # mice = [m for m in mice if m not in excluded_mice]
 
 
-mice = ['AR179']
+# mice = ['AR179']
 # Load data.
 # ----------
 
@@ -1241,6 +1241,10 @@ file_name = 'AR180_example_traces.svg'
 plt.savefig(os.path.join(output_dir, file_name), format='svg', dpi=300)
 
 
+
+
+
+
 # ###################################################
 # Projection of whisker trials on learning dimension.
 # ###################################################
@@ -1272,7 +1276,7 @@ results = []
 if select_lmi:
     lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
     lmi_df = pd.read_csv(lmi_df)
-    selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
+    selected_cells = lmi_df.loc[(lmi_df['lmi_p'] >= 0.975)]
 
 for mouse in mice:
     print(f"Processing mouse: {mouse}")
@@ -1294,9 +1298,9 @@ for mouse in mice:
         continue
     
     # Select pre, post mapping trials and day 0 whisker trials.
-    pre = xarray.sel(trial=xarray['day'].isin([-1,]))
+    pre = xarray.sel(trial=xarray['day'].isin([-2, -1,]))
     pre = pre.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
-    post = xarray.sel(trial=xarray['day'].isin([2]))
+    post = xarray.sel(trial=xarray['day'].isin([1, 2]))
     post = post.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
 
     # Select whisker trials for Day 0
@@ -1309,23 +1313,39 @@ for mouse in mice:
         xarray = xarray.sel(cell=xarray['roi'].isin(selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']))
 
     day0 = xarray.sel(trial=(xarray['day'] == 0) & (xarray['trial_type'] == 'whisker_trial'))
-    day0 = day0[:, :145]  # Select all trials
+    day0 = day0[:, :100]  # Select all trials
 
     learning_dim = post.mean(dim='trial') - pre.mean(dim='trial')
-
-    # Project mapping trials onto the learning dimension
+    # Project mapping trials onto the learning dimension (scalar projection)
     pre_mapping_proj = np.dot(pre.values.T, learning_dim.values) / np.linalg.norm(learning_dim.values)
     post_mapping_proj = np.dot(post.values.T, learning_dim.values) / np.linalg.norm(learning_dim.values)
-    # Project whisker trials onto the learning dimension
+    # Project whisker trials onto the learning dimension (scalar projection)
     day0_mapping_proj = np.dot(day0.values.T, learning_dim.values) / np.linalg.norm(learning_dim.values)
+
+    # Compute cosine similarity between each trial and the learning dimension
+    def cosine_sim(trials, ref):
+        # trials: shape (n_cells, n_trials)
+        # ref: shape (n_cells,)
+        norm_trials = np.linalg.norm(trials, axis=0)
+        norm_ref = np.linalg.norm(ref)
+        # Avoid division by zero
+        norm_trials[norm_trials == 0] = 1e-10
+        if norm_ref == 0:
+            norm_ref = 1e-10
+        return np.dot(ref, trials) / (norm_ref * norm_trials)
+
+    pre_mapping_cosine = cosine_sim(pre.values, learning_dim.values)
+    post_mapping_cosine = cosine_sim(post.values, learning_dim.values)
+    day0_mapping_cosine = cosine_sim(day0.values, learning_dim.values)
     
     pre_index = np.arange(pre_mapping_proj.shape[0])
     post_index = np.arange(post_mapping_proj.shape[0])
     day0_index = np.arange(day0_mapping_proj.shape[0])
     
     # Store the results in a common dataframe
-    for proj, period, index in zip(
+    for proj, sim, period, index in zip(
         [pre_mapping_proj, post_mapping_proj, day0_mapping_proj],
+        [pre_mapping_cosine, post_mapping_cosine, day0_mapping_cosine],
         ['pre', 'post', 'day0'],
         [pre_index, post_index, day0_index]
     ):
@@ -1334,6 +1354,7 @@ for mouse in mice:
             'reward_group': rew_gp,
             'period': period,
             'projection': proj,
+            'cosine_similarity': sim,
             'trial_index': index,
         }))
         
@@ -1344,26 +1365,27 @@ results_df = pd.concat(results, ignore_index=True)
 results_df['block_index'] = results_df['trial_index'] // 10
 
 # Compute the mean projection for each block
-block_results = results_df.groupby(['mouse_id', 'reward_group', 'period', 'block_index'])['projection'].mean().reset_index()
+block_results = results_df.groupby(['mouse_id', 'reward_group', 'period', 'block_index'])['cosine_similarity'].mean().reset_index()
 
 # Plot projections across mice, averaged in blocks of 10
 fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharex=False, sharey=True)
 
 # Pre mapping trials
-sns.pointplot(data=block_results[block_results['period'] == 'pre'], x='block_index', y='projection', hue='reward_group',
+sns.pointplot(data=block_results[block_results['period'] == 'pre'], x='block_index', y='cosine_similarity', hue='reward_group',
                 hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[0])
 axes[0].set_title('Pre Mapping Trials')
 axes[0].set_xlabel('Block Index (10 Trials per Block)')
-axes[0].set_ylabel('Projection on Learning Dimension')
+# axes[0].set_ylabel('Projection on Learning Dimension')
+axes[0].set_ylabel('Cosine similarity with Learning Dimension')
 
 # Day 0 mapping trials
-sns.pointplot(data=block_results[block_results['period'] == 'day0'], x='block_index', y='projection', hue='reward_group',
+sns.pointplot(data=block_results[block_results['period'] == 'day0'], x='block_index', y='cosine_similarity', hue='reward_group',
                 hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[1])
 axes[1].set_title('Day 0 Mapping Trials')
 axes[1].set_xlabel('Block Index (10 Trials per Block)')
 
 # Post mapping trials
-sns.pointplot(data=block_results[block_results['period'] == 'post'], x='block_index', y='projection', hue='reward_group',
+sns.pointplot(data=block_results[block_results['period'] == 'post'], x='block_index', y='cosine_similarity', hue='reward_group',
                 hue_order=['R-', 'R+'], palette=reward_palette, estimator='mean', ax=axes[2])
 axes[2].set_title('Post Mapping Trials')
 axes[2].set_xlabel('Block Index (10 Trials per Block)')
@@ -1373,10 +1395,10 @@ sns.despine()
 # Save figure.
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/learning_dim'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'learning_dim_projection.svg'
+svg_file = 'learning_dim_projection_lmi.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 # Save results.
-results_df.to_csv(os.path.join(output_dir, 'learning_dim_projection.csv'), index=False)
+results_df.to_csv(os.path.join(output_dir, 'learning_dim_projection_lmi.csv'), index=False)
 
 
 
