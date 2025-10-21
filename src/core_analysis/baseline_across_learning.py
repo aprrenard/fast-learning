@@ -2012,6 +2012,7 @@ for mouse in mice:
         vectors_rew.append(d)
         mice_rew.append(mouse)
 
+
 # Decoding accuracy between reward groups.
 # ----------------------------------------
 # Train a single classifier per mouse and plot average cross-validated accuracy
@@ -2186,8 +2187,10 @@ if projection_type is not None:
 pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(output_dir, stat_file), index=False)
 
 
+
 # Relationship between classifier weights and learning modualtion index.
 # ----------------------------------------------------------------------
+
 lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
 lmi_df = pd.read_csv(lmi_df)
 
@@ -2283,12 +2286,14 @@ output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/d
 output_dir = io.adjust_path_to_host(output_dir)
 plt.savefig(os.path.join(output_dir, 'classifier_weights_vs_lmi_by_group.svg'), format='svg', dpi=300)
 
+
 # Accuracy as a function of percent most modulated cells removed.
 # ---------------------------------------------------------------
 
 # This is to show that without the cells modulated on average, no information
 # can be decoded. The non-modulated cells could still carry some information
 # similarly to non-place cells in the hippocampus.
+
 
 # Accuracy as a function of percent most modulated cells removed.
 # ---------------------------------------------------------------

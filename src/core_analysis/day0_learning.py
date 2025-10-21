@@ -66,7 +66,7 @@ lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 
 # learning_trials = {'GF305':138, 'GF306': 200, 'GF317': 96, 'GF323': 211, 'GF318': 208, 'GF313': 141}
 
-# Load beahviort table with learning trials.
+# Load behaviour table with learning trials.
 path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
 table = pd.read_csv(path)
 

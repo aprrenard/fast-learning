@@ -1035,6 +1035,7 @@ table.loc[table.reaction_time>=1.25] = np.nan
 
 table = table.loc[table.mouse_id.isin(mice_groups['gradual_day0'])]
 
+
 # Plot reaction time histogram together with scatter
 # plot of reaction time for whisker trials across
 # the three days with trial_w on the x-axis and reaction_time on the y-axis.
@@ -1237,46 +1238,70 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 # Save data.
 data.to_csv(os.path.join(output_dir, 'opto_learning_data.csv'), index=False)
 
+# Bar plot and stats for Day 0 (opto), Day +1 (recovery_1)
+# ----------------------------------------------------------
 
-# Bar plot and stats on Day 0.
-# ----------------------------
+days_of_interest = ['opto', 'recovery_1']
+day_labels = ['D0', 'D+1']
 
-# Filter data for Day 0 (opto) and group by area
-day_0_data = data[data['opto_day'] == 'opto']
+day_data = data[data['opto_day'].isin(days_of_interest)].copy()
+day_data['day_label'] = day_data['opto_day'].map(dict(zip(days_of_interest, day_labels)))
 
-# Plot bar plot for whisker performance (outcome_w) with reduced bar width
-plt.figure(figsize=(4, 6))
-sns.barplot(data=day_0_data, x='area', y='outcome_w', color=stim_palette[1], width=0.3, order=['wS1', 'fpS1'])
-sns.stripplot(data=day_0_data, x='area', y='outcome_w', color='black', jitter=False, dodge=True, alpha=0.6, order=['wS1', 'fpS1'])
-plt.xlabel('Inactivation Area')
+plt.figure(figsize=(8, 6))
+sns.barplot(
+    data=day_data,
+    x='day_label',
+    y='outcome_w',
+    hue='area',
+    palette=[stim_palette[1]],
+    width=0.3,
+    dodge=True,
+    order=day_labels,
+    hue_order=['wS1', 'fpS1']
+)
+sns.swarmplot(
+    data=day_data,
+    x='day_label',
+    y='outcome_w',
+    hue='area',
+    dodge=True,
+    color='black',
+    alpha=0.6,
+    order=day_labels,
+    hue_order=['wS1', 'fpS1']
+)
+plt.xlabel('Day')
 plt.ylabel('Whisker Performance (%)')
 plt.ylim([0, 100])
+plt.legend(title='Area')
 sns.despine()
 
-# Perform Mann-Whitney U test to compare wS1 and fpS1 groups
-stat, p_value = mannwhitneyu(
-    day_0_data[day_0_data['area'] == 'wS1']['outcome_w'],
-    day_0_data[day_0_data['area'] == 'fpS1']['outcome_w'],
-    alternative='two-sided'
-)
-
-# Add significance stars and p-value to the plot
-ax = plt.gca()
-if p_value < 0.001:
-    plt.text(0.5, 0.9, '***', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-elif p_value < 0.01:
-    plt.text(0.5, 0.9, '**', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-elif p_value < 0.05:
-    plt.text(0.5, 0.9, '*', ha='center', va='bottom', color='black', fontsize=20, transform=ax.transAxes)
-# Add p-value text
-plt.text(0.5, 0.85, f'p = {p_value:.3g}', ha='center', va='bottom', color='black', fontsize=12, transform=ax.transAxes)
+# Perform Mann-Whitney U test for each day between wS1 and fpS1
+stats = []
+for day, label in zip(days_of_interest, day_labels):
+    df_day = day_data[day_data['opto_day'] == day]
+    group_wS1 = df_day[df_day['area'] == 'wS1']['outcome_w']
+    group_fpS1 = df_day[df_day['area'] == 'fpS1']['outcome_w']
+    stat, p_value = mannwhitneyu(group_wS1, group_fpS1, alternative='two-sided')
+    stats.append({'day': label, 'statistic': stat, 'p_value': p_value})
+    # Add significance stars to the plot
+    ax = plt.gca()
+    xpos = day_labels.index(label)
+    ypos = 95
+    if p_value < 0.001:
+        plt.text(xpos, ypos, '***', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.01:
+        plt.text(xpos, ypos, '**', ha='center', va='bottom', color='black', fontsize=14)
+    elif p_value < 0.05:
+        plt.text(xpos, ypos, '*', ha='center', va='bottom', color='black', fontsize=14)
+    # Add p-value text below stars
+    plt.text(xpos, 90, f'p={p_value:.3g}', ha='center', va='bottom', color='black', fontsize=10)
 
 # Save the results to CSV files
 output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
-plt.savefig(os.path.join(output_dir, 'opto_learning_day0.svg'), format='svg', dpi=300)
-day_0_data.to_csv(os.path.join(output_dir, 'opto_learning_day0_data.csv'), index=False)
-with open(os.path.join(output_dir, 'opto_learning_day0_stats.csv'), 'w') as f:
-    f.write(f'Mann-Whitney U Test: Statistic={stat}, P-value={p_value}')
+plt.savefig(os.path.join(output_dir, 'opto_learning_day0_day1.svg'), format='svg', dpi=300)
+day_data.to_csv(os.path.join(output_dir, 'opto_learning_day0_day1_data.csv'), index=False)
+pd.DataFrame(stats).to_csv(os.path.join(output_dir, 'opto_learning_day0_day1_stats.csv'), index=False)
 
 
 # ##############################################
