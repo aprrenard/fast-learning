@@ -1327,18 +1327,19 @@ mice_imaging = io.select_mice_from_db(db_path, nwb_dir,
                                     two_p_imaging = 'yes'
                                     )
 # Load the table from the CSV file.
-table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
+# table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut.csv')
+table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
 table = pd.read_csv(table_file)
 
 # Fit learning curves and define learning trial.
-table = compute_learning_curves(table)
-# table = compute_learning_trial(table, n_consecutive_trials=10)
+# table = compute_learning_curves(table)
+table = compute_learning_trial(table, n_consecutive_trials=10)
 
 # Save updated table.
 save_path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
 table.to_csv(save_path, index=False)
 
-table = pd.read_csv(save_path)
+# table = pd.read_csv(save_path)
 
 
 

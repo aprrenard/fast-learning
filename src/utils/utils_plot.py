@@ -9,6 +9,7 @@ plt.rcParams['svg.fonttype'] = 'none'
 
 # Color palettes.
 reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
+reward_palette_r = sns.color_palette([ '#1b9e77', '#c959affe'])
 cell_types_palette = sns.color_palette(['#a3a3a3', '#1f77b4', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
 # s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
 s2_m1_palette = sns.color_palette(['steelblue', 'salmon'])

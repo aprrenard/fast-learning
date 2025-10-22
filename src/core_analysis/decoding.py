@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import colors
-from scipy.stats import mannwhitneyu, wilcoxon
+from scipy.stats import mannwhitneyu, wilcoxon, ttest_1samp
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
@@ -25,6 +25,9 @@ from joblib import Parallel, delayed
 from sklearn.svm import SVC
 from sklearn.linear_model import LinearRegression
 from sklearn.utils import resample
+from sklearn.linear_model import RidgeClassifier
+from sklearn.ensemble import RandomForestClassifier
+
 
 # sys.path.append(r'H:/anthony/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
@@ -37,7 +40,10 @@ from src.utils.utils_behavior import *
 from sklearn.decomposition import PCA
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.lines import Line2D
-from scipy.stats import bootstrap
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from scipy.stats import pearsonr
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import correlate
 
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
             rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
@@ -786,6 +792,7 @@ curve_df = pd.DataFrame({
 curve_df.to_csv(os.path.join(output_dir, 'accuracy_vs_percent_modulated_cells.csv'), index=False)
 
 
+#  ############################################
 # Inflexion/progressive learning during Day 0.
 # #############################################
 
@@ -826,31 +833,11 @@ mice_nonrew = []
 vectors_nonrew_day0_learning = []
 vectors_rew_day0_learning = []
 
-# Load responsive cells.
-# Responsiveness df.
-# test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
-# test_df = pd.read_csv(test_df)
-# test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
-# selected_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
-
-if select_responsive_cells:
-    test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
-    test_df = pd.read_csv(test_df)
-    test_df = test_df.loc[test_df['day'].isin(days)]
-    # Select cells as responsive if they pass the test on at least one day.
-    selected_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
-    selected_cells = selected_cells.loc[selected_cells['pval_mapping'] <= 0.05/5]
-
-if select_lmi:
-    lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
-    lmi_df = pd.read_csv(lmi_df)
-    selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
-    
 # Load behaviour table with learning trials.
 path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
 table = pd.read_csv(path)
 # Select day 0 performance for whisker trials.
-bh_df = table.loc[(table['day'] == 0) & (table['whisker_stim'] == 1), ['mouse_id', 'trial_w', 'learning_curve_w']]
+bh_df = table.loc[(table['day'] == 0) & (table['whisker_stim'] == 1), ['mouse_id', 'trial_w', 'learning_curve_w', 'learning_trial']]
 
 for mouse in mice:
     
@@ -940,21 +927,56 @@ for mouse in mice:
         vectors_rew_day0_learning.append(xarray)
     
 
-
-def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, pre_days=[-2, -1], post_days=[1, 2], window_size=10, step_size=5, seed=42):
+def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, bh_df=None,
+                                  pre_days=[-2, -1], post_days=[1, 2], window_size=10, step_size=5, 
+                                  align_to_learning=False, trials_before=50, trials_after=100, seed=42):
     """
     Analyze progressive learning during Day 0 using a sliding window approach.
     Train decoder on Day -2 vs +2 mapping trials, then apply to Day 0 learning trials.
+
+    Parameters:
+    -----------
+    vectors_mapping : list
+        List of xarrays with mapping data for each mouse
+    vectors_learning : list
+        List of xarrays with Day 0 learning data for each mouse
+    mice_list : list
+        List of mouse IDs
+    bh_df : pd.DataFrame, optional
+        Behavioral dataframe with 'learning_trial' column for alignment
+    pre_days : list
+        Days to use as "pre-learning" for training (default: [-2, -1])
+    post_days : list
+        Days to use as "post-learning" for training (default: [1, 2])
+    window_size : int
+        Number of trials in each sliding window
+    step_size : int
+        Step size for sliding window
+    align_to_learning : bool
+        If True, align trials to learning onset (trial 0 = learning_trial)
+    trials_before : int
+        Number of trials before learning onset to include (only if align_to_learning=True)
+    trials_after : int
+        Number of trials after learning onset to include (only if align_to_learning=True)
+    seed : int
+        Random seed for classifier
+
+    Returns:
+    --------
+    pd.DataFrame with window results including trial indices (absolute and relative to learning)
     """
     results = []
-    
+
     for i, (d_mapping, d_learning, mouse) in enumerate(zip(vectors_mapping, vectors_learning, mice_list)):
         print(d_mapping.shape, d_learning.shape)
         day_per_trial = d_mapping['day'].values
-        
-        # Get Day -2 and +2 trials for training from mapping data
+
+        # Get Day -2/-1 and +1/+2 trials for training from mapping data
         train_mask = np.isin(day_per_trial, pre_days + post_days)
-            
+        if np.sum(train_mask) < 4:
+            print(f"Not enough training trials for {mouse}, skipping.")
+            continue
+
         X_train = d_mapping.values[:, train_mask].T
         y_train = np.array([0 if day in pre_days else 1 for day in day_per_trial[train_mask]])
 
@@ -962,165 +984,586 @@ def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, 
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         clf = LogisticRegression(max_iter=5000, random_state=seed)
-        # clf = SVC(kernel='linear', random_state=seed)
         clf.fit(X_train_scaled, y_train)
-        
+
+        # Sanity check: Verify sign convention is correct (decision_function sign)
+        pre_mask = np.isin(day_per_trial, pre_days)
+        post_mask = np.isin(day_per_trial, post_days)
+        if np.sum(pre_mask) > 0 and np.sum(post_mask) > 0:
+            X_pre = scaler.transform(d_mapping.values[:, pre_mask].T)
+            X_post = scaler.transform(d_mapping.values[:, post_mask].T)
+            mean_dec_pre = np.mean(clf.decision_function(X_pre))
+            mean_dec_post = np.mean(clf.decision_function(X_post))
+        else:
+            mean_dec_pre, mean_dec_post = 0.0, 0.0
+
+        if mean_dec_pre > mean_dec_post:
+            print(f"WARNING: {mouse} has flipped decision values! Pre={mean_dec_pre:.3f}, Post={mean_dec_post:.3f}")
+            print(f"  Flipping sign of decision values for plotting consistency.")
+            sign_flip = -1
+        else:
+            sign_flip = 1
+            print(f"{mouse}: Decision values oriented. Pre={mean_dec_pre:.3f}, Post={mean_dec_post:.3f}")
+
+        # Get learning trial for this mouse if aligning
+        learning_trial_idx = None
+        if align_to_learning and bh_df is not None:
+            mouse_bh = bh_df[bh_df['mouse_id'] == mouse]
+            if not mouse_bh.empty and 'learning_trial' in mouse_bh.columns:
+                # Get the learning_trial value (should be same for all rows of this mouse)
+                learning_trial_val = mouse_bh['learning_trial'].iloc[0]
+                if not np.isnan(learning_trial_val):
+                    learning_trial_idx = int(learning_trial_val)
+                    print(f"{mouse}: Learning onset at trial_w = {learning_trial_idx}")
+                else:
+                    print(f"{mouse}: No learning trial defined, using absolute indexing")
+            else:
+                print(f"{mouse}: No behavioral data found, using absolute indexing")
+
         # Get Day 0 learning trials
         n_learning_trials = d_learning.sizes['trial']
-            
+
+        # Determine trial range to analyze
+        if align_to_learning and learning_trial_idx is not None:
+            # Align to learning onset: trial 0 = learning_trial
+            trial_start = max(0, learning_trial_idx - trials_before)
+            trial_end = min(n_learning_trials, learning_trial_idx + trials_after)
+            trial_offset = learning_trial_idx  # For converting to relative indices
+        else:
+            # Use absolute trial indices
+            trial_start = 0
+            trial_end = n_learning_trials
+            trial_offset = 0
+
         # Sliding window analysis on learning trials
         window_results = []
-        for start_idx in range(0, n_learning_trials - window_size + 1, step_size):
+        for start_idx in range(trial_start, max(trial_start, trial_end - window_size + 1), step_size):
             end_idx = start_idx + window_size
-            
+            if end_idx > trial_end:
+                break
+
             # Get window data from learning trials
             X_window = d_learning.values[:, start_idx:end_idx].T
+            if X_window.shape[0] == 0:
+                continue
             X_window_scaled = scaler.transform(X_window)
-            
-            # Get decision values (distance to hyperplane)
+
+            # Decision values (distance to hyperplane)
             decision_values = clf.decision_function(X_window_scaled)
-            mean_decision_value = np.mean(decision_values)
-            
-            # Get prediction probabilities
-            # proba = clf.predict_proba(X_window_scaled)
-            # mean_proba_post = np.mean(proba[:, 1])  # Probability of being "post"
+            mean_decision_value = np.mean(decision_values) * sign_flip
+
+            # Probability of being "post"
+            if hasattr(clf, "predict_proba"):
+                # Use predicted labels to get the proportion of trials classified as "post"
+                # (we trained with labels 0=pre, 1=post), not the classifier's confidence.
+                preds = clf.predict(X_window_scaled)
+                mean_proba_post = np.mean(preds == 1)
+            else:
+                # If classifier has no predict_proba (e.g., some SVMs), approximate with sigmoid on decision
+                dv = decision_values * sign_flip
+                mean_proba_post = np.mean(1 / (1 + np.exp(-dv)))
+
+            # Store both absolute and aligned trial indices
+            trial_center_abs = start_idx + window_size // 2
+            trial_center_aligned = trial_center_abs - trial_offset  # Relative to learning onset
             
             window_results.append({
                 'window_start': start_idx,
                 'window_center': start_idx + window_size // 2,
                 'window_end': end_idx,
                 'trial_start': start_idx,
-                'trial_center': start_idx + window_size // 2,
+                'trial_center': trial_center_abs,
+                'trial_center_aligned': trial_center_aligned,
                 'trial_end': end_idx,
                 'mean_decision_value': mean_decision_value,
+                'mean_proba_post': mean_proba_post,
                 'mouse_idx': i,
                 'mouse_id': mouse
             })
-            
-        results.extend(window_results)
-    
-    return pd.DataFrame(results)
 
+        results.extend(window_results)
+
+    return pd.DataFrame(results)
 
 # Run analysis for both groups
 window_size = 10
 step_size = 1
 
-mice_good = [m for m in mice_rew if m in mice_groups['good_day0']]
-mice_good_mask = np.isin(mice_rew, mice_good)
-vectors_good_mice = [vectors_rew_mapping[i] for i in range(len(vectors_rew_mapping)) if mice_good_mask[i]]
-vectors_learning_good_mice = [vectors_rew_day0_learning[i] for i in range(len(vectors_rew_day0_learning)) if mice_good_mask[i]]
+# Set alignment parameters
+align_to_learning = True  # Set to True to align to individual learning onset
+trials_before = 50  # Number of trials before learning onset to include
+trials_after = 100  # Number of trials after learning onset to include
 
-mice_bad = [m for m in mice_rew if m in mice_groups['bad_day0']+mice_groups['meh_day0']]
-mice_bad_mask = np.isin(mice_rew, mice_bad)
-vectors_bad_mice = [vectors_rew_mapping[i] for i in range(len(vectors_rew_mapping)) if mice_bad_mask[i]]
-vectors_learning_bad_mice = [vectors_rew_day0_learning[i] for i in range(len(vectors_rew_day0_learning)) if mice_bad_mask[i]]
+# If mice_groups exist, try to plot good/bad subsets, otherwise plot empty panels
+try:
+    mice_good = [m for m in mice_rew if m in mice_groups.get('good_day0', [])]
+    mice_bad = [m for m in mice_rew if m in (mice_groups.get('bad_day0', []) + mice_groups.get('meh_day0', []))]
+except Exception:
+    mice_good, mice_bad = [], []
 
-results_rew = progressive_learning_analysis(vectors_rew_mapping, vectors_rew_day0_learning, mice_rew, window_size=window_size, step_size=step_size)
-results_nonrew = progressive_learning_analysis(vectors_nonrew_mapping, vectors_nonrew_day0_learning, mice_nonrew, window_size=window_size, step_size=step_size)
-results_good = progressive_learning_analysis(vectors_good_mice, vectors_learning_good_mice, mice_good, window_size=window_size, step_size=step_size)
-results_bad = progressive_learning_analysis(vectors_bad_mice, vectors_learning_bad_mice, mice_bad, window_size=window_size, step_size=step_size)
-
+# Build results for R+ and R- (and optionally good/bad subsets)
+results_rew = progressive_learning_analysis(
+    vectors_rew_mapping, vectors_rew_day0_learning, mice_rew, 
+    bh_df=bh_df, window_size=window_size, step_size=step_size,
+    align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
+results_nonrew = progressive_learning_analysis(
+    vectors_nonrew_mapping, vectors_nonrew_day0_learning, mice_nonrew,
+    bh_df=bh_df, window_size=window_size, step_size=step_size,
+    align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
+results_good = progressive_learning_analysis(
+    [vectors_rew_mapping[i] for i, m in enumerate(mice_rew) if m in mice_good],
+    [vectors_rew_day0_learning[i] for i, m in enumerate(mice_rew) if m in mice_good],
+    mice_good,
+    bh_df=bh_df, window_size=window_size, step_size=step_size,
+    align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
+results_bad = progressive_learning_analysis(
+    [vectors_rew_mapping[i] for i, m in enumerate(mice_rew) if m in mice_bad],
+    [vectors_rew_day0_learning[i] for i, m in enumerate(mice_rew) if m in mice_bad],
+    mice_bad,
+    bh_df=bh_df, window_size=window_size, step_size=step_size,
+    align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
 results_rew['reward_group'] = 'R+'
 results_nonrew['reward_group'] = 'R-'
-results_good['group'] = 'good'
-results_bad['group'] = 'bad'
 results_combined = pd.concat([results_rew, results_nonrew], ignore_index=True)
 
 cut_n_trials = 100
 
-def plot_behavior(ax, data, color, title, cut_n_trials=cut_n_trials):
-    sns.lineplot(data=data, x='trial_w', y='learning_curve_w', color=color, errorbar='ci', ax=ax)
-    ax.set_xlabel('Trial within Day 0')
+def plot_behavior(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
+    if data is None or data.empty:
+        ax.set_title(title + " (no data)")
+        ax.set_xlim(-cut_n_trials//2 if align_to_learning else 0, cut_n_trials//2 if align_to_learning else cut_n_trials)
+        ax.set_ylim(0, 1)
+        return
+    
+    if align_to_learning and 'learning_trial' in data.columns:
+        # Create aligned trial index
+        data_plot = data.copy()
+        data_plot['trial_w_aligned'] = data_plot.groupby('mouse_id').apply(
+            lambda x: x['trial_w'] - x['learning_trial'].iloc[0] if not pd.isna(x['learning_trial'].iloc[0]) else x['trial_w']
+        ).reset_index(level=0, drop=True)
+        x_col = 'trial_w_aligned'
+        xlabel = 'Trial relative to learning onset'
+    else:
+        data_plot = data
+        x_col = 'trial_w'
+        xlabel = 'Trial within Day 0'
+    
+    sns.lineplot(data=data_plot, x=x_col, y='learning_curve_w', color=color, errorbar='ci', ax=ax)
+    if align_to_learning:
+        ax.axvline(x=0, color='red', linestyle='--', alpha=0.5, label='Learning onset')
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Learning curve (w)')
     ax.set_title(title)
     ax.set_ylim(0, 1)
-    ax.axhline(y=0.5, color='black', linestyle='--', alpha=0.3)
     if cut_n_trials is not None:
-        ax.set_xlim(0, cut_n_trials)
+        if align_to_learning:
+            ax.set_xlim(-cut_n_trials//2, cut_n_trials//2)
+        else:
+            ax.set_xlim(0, cut_n_trials)
 
-def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials):
-    sns.lineplot(data=data, x='trial_center', y='mean_decision_value', estimator=np.mean, errorbar='ci', color=color, ax=ax)
+def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
+    if data is None or data.empty:
+        ax.set_title(title + " (no data)")
+        ax.set_xlim(-cut_n_trials//2 if align_to_learning else 0, cut_n_trials//2 if align_to_learning else cut_n_trials)
+        return
+    
+    if align_to_learning and 'trial_center_aligned' in data.columns:
+        x_col = 'trial_center_aligned'
+        xlabel = 'Trial relative to learning onset'
+    else:
+        x_col = 'trial_center'
+        xlabel = 'Trial within Day 0'
+    
+    sns.lineplot(data=data, x=x_col, y='mean_decision_value', estimator=np.mean, errorbar='ci', color=color, ax=ax)
     ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-    ax.set_xlabel('Trial within Day 0')
+    if align_to_learning:
+        ax.axvline(x=0, color='red', linestyle='--', alpha=0.5, label='Learning onset')
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Mean decision value')
     ax.set_title(title)
-    ax.set_ylim(-3, 5)
+    ax.set_ylim(-3, 6)
     if cut_n_trials is not None:
-        ax.set_xlim(0, cut_n_trials)
+        if align_to_learning:
+            ax.set_xlim(-cut_n_trials//2, cut_n_trials//2)
+        else:
+            ax.set_xlim(0, cut_n_trials)
 
-plt.figure(figsize=(16, 10))
+def plot_proba(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
+    if data is None or data.empty:
+        ax.set_title(title + " (no data)")
+        ax.set_xlim(-cut_n_trials//2 if align_to_learning else 0, cut_n_trials//2 if align_to_learning else cut_n_trials)
+        ax.set_ylim(0, 1)
+        return
+    
+    if align_to_learning and 'trial_center_aligned' in data.columns:
+        x_col = 'trial_center_aligned'
+        xlabel = 'Trial relative to learning onset'
+    else:
+        x_col = 'trial_center'
+        xlabel = 'Trial within Day 0'
+    
+    sns.lineplot(data=data, x=x_col, y='mean_proba_post', estimator=np.mean, errorbar='ci', color=color, ax=ax)
+    ax.axhline(y=0.5, color='black', alpha=0.5, linestyle='--')
+    if align_to_learning:
+        ax.axvline(x=0, color='red', linestyle='--', alpha=0.5, label='Learning onset')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('P(post)')
+    ax.set_title(title)
+    ax.set_ylim(0, 1)
+    if cut_n_trials is not None:
+        if align_to_learning:
+            ax.set_xlim(-cut_n_trials//2, cut_n_trials//2)
+        else:
+            ax.set_xlim(0, cut_n_trials)
 
-# Top row: Behavioral learning curves
-ax1 = plt.subplot(2, 4, 1)
+# Create a 3-row x 4-col figure:
+plt.figure(figsize=(16, 12))
+
+# Top row: Behavioral learning curves (4 panels)
+ax1 = plt.subplot(3, 4, 1)
 data_rew = bh_df.loc[bh_df['mouse_id'].isin(mice_rew)]
-plot_behavior(ax1, data_rew, reward_palette[1], 'R+ mice behavior')
+plot_behavior(ax1, data_rew, reward_palette[1], 'R+ mice behavior', align_to_learning=align_to_learning)
 
-ax2 = plt.subplot(2, 4, 2)
+ax2 = plt.subplot(3, 4, 2)
 data_nonrew = bh_df.loc[bh_df['mouse_id'].isin(mice_nonrew)]
-plot_behavior(ax2, data_nonrew, reward_palette[0], 'R- mice behavior')
+plot_behavior(ax2, data_nonrew, reward_palette[0], 'R- mice behavior', align_to_learning=align_to_learning)
 
-ax3 = plt.subplot(2, 4, 3)
+ax3 = plt.subplot(3, 4, 3)
 data_good = bh_df.loc[bh_df['mouse_id'].isin(mice_good)]
-plot_behavior(ax3, data_good, reward_palette[1], 'Good day0 mice behavior')
+plot_behavior(ax3, data_good, reward_palette[1], 'Good day0 mice behavior', align_to_learning=align_to_learning)
 
-ax4 = plt.subplot(2, 4, 4)
+ax4 = plt.subplot(3, 4, 4)
 data_bad = bh_df.loc[bh_df['mouse_id'].isin(mice_bad)]
-plot_behavior(ax4, data_bad, reward_palette[1], 'Bad day0 mice behavior')
+plot_behavior(ax4, data_bad, reward_palette[1], 'Bad day0 mice behavior', align_to_learning=align_to_learning)
 
-# Bottom row: Decision values
-ax5 = plt.subplot(2, 4, 5)
-plot_decision(ax5, results_rew, reward_palette[1], 'R+ mice')
+# Middle row: Decision values (4 panels)
+ax5 = plt.subplot(3, 4, 5)
+plot_decision(ax5, results_rew, reward_palette[1], 'R+ mean decision value', align_to_learning=align_to_learning)
 
-ax6 = plt.subplot(2, 4, 6)
-plot_decision(ax6, results_nonrew, reward_palette[0], 'R- mice')
+ax6 = plt.subplot(3, 4, 6)
+plot_decision(ax6, results_nonrew, reward_palette[0], 'R- mean decision value', align_to_learning=align_to_learning)
 
-ax7 = plt.subplot(2, 4, 7)
-plot_decision(ax7, results_good, reward_palette[1], 'Good day0 mice')
+ax7 = plt.subplot(3, 4, 7)
+plot_decision(ax7, results_good, reward_palette[1], 'Good day0 mean decision value', align_to_learning=align_to_learning)
 
-ax8 = plt.subplot(2, 4, 8)
-plot_decision(ax8, results_bad, reward_palette[1], 'Bad day0 mice')
+ax8 = plt.subplot(3, 4, 8)
+plot_decision(ax8, results_bad, reward_palette[1], 'Bad day0 mean decision value', align_to_learning=align_to_learning)
+
+# Bottom row: Probability P(post) (4 panels) - separated from decision values
+ax9 = plt.subplot(3, 4, 9)
+plot_proba(ax9, results_rew, reward_palette[1], 'R+ P(post)', align_to_learning=align_to_learning)
+
+ax10 = plt.subplot(3, 4, 10)
+plot_proba(ax10, results_nonrew, reward_palette[0], 'R- P(post)', align_to_learning=align_to_learning)
+
+ax11 = plt.subplot(3, 4, 11)
+plot_proba(ax11, results_good, reward_palette[1], 'Good day0 P(post)', align_to_learning=align_to_learning)
+
+ax12 = plt.subplot(3, 4, 12)
+plot_proba(ax12, results_bad, reward_palette[1], 'Bad day0 P(post)', align_to_learning=align_to_learning)
 
 plt.tight_layout()
 sns.despine()
 
 # Save figure
-plt.savefig(os.path.join(output_dir, 'progressive_learning_day0.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'progressive_learning_day0.png'), format='png', dpi=300)
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/gradual_learning'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'decoder_decision_value_day0_learning_with_alignment_to_learning.svg'), format='svg', dpi=300)
 
 
+# Correlation between behavioral performance and decision value during Day 0 learning
+# ----------------------------------------------------------------------------------
 
+# For each mouse, correlate the behavioral learning curve with the decision value curve
+# during Day 0. Test if the population-level correlation is significantly different from zero
+# using one-sample tests (Wilcoxon and t-test).
 
-# Statistical analysis: Test for trend using linear regression
-print("\nStatistical analysis of progressive learning:")
+mice = results_combined['mouse_id'].unique()
+# mice = [m for m in mice if m in mice_groups['good_day0']]
+
+corr_real = []
+reward_groups = []
+
+for mouse in mice:
+    # Get reward group for this mouse
+    group = results_combined.loc[results_combined['mouse_id'] == mouse, 'reward_group'].iloc[0]
+    reward_groups.append(group)
+    # Get decision values for this mouse
+    dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
+    # Get behavioral curve for this mouse
+    bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
+    
+    # Align trials appropriately
+    if align_to_learning:
+        # Use aligned trial indices (trial_center_aligned for decision, trial_w - learning_trial for behavior)
+        learning_trial = bh_mouse['learning_trial'].iloc[0] if 'learning_trial' in bh_mouse.columns else 0
+        # Align behavior trials to learning onset
+        bh_mouse_aligned = bh_mouse.copy()
+        bh_mouse_aligned['trial_w_aligned'] = bh_mouse_aligned['trial_w'] - learning_trial
+        # Match on aligned indices
+        common_trials_aligned = np.intersect1d(
+            dec_mouse['trial_center_aligned'].dropna(), 
+            bh_mouse_aligned['trial_w_aligned']
+        )
+        if len(common_trials_aligned) < 10:
+            corr_real.append(np.nan)
+            continue
+        dec_vals = dec_mouse.set_index('trial_center_aligned').loc[common_trials_aligned]['mean_decision_value'].values
+        perf_vals = bh_mouse_aligned.set_index('trial_w_aligned').loc[common_trials_aligned]['learning_curve_w'].values
+    else:
+        # Use absolute trial indices (trial_start for decision, trial_w for behavior)
+        common_trials = np.intersect1d(dec_mouse['trial_start'], bh_mouse['trial_w'])
+        if len(common_trials) < 10:
+            corr_real.append(np.nan)
+            continue
+        dec_vals = dec_mouse.set_index('trial_start').loc[common_trials]['mean_decision_value'].values
+        perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
+
+    # Compute Pearson correlation
+    corr = pearsonr(perf_vals, dec_vals)[0]
+    corr_real.append(corr)
+
+# Prepare DataFrame for analysis
+df_corr = pd.DataFrame({
+    'mouse_id': mice,
+    'reward_group': reward_groups,
+    'real_corr': corr_real
+})
+
+# Plot correlation results using seaborn
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+for i, group in enumerate(['R+', 'R-']):
+    ax = axes[i]
+    sub = df_corr[df_corr['reward_group'] == group].copy()
+    correlations = sub['real_corr'].dropna().values
+
+    if len(correlations) == 0:
+        continue
+
+    # Prepare DataFrame for seaborn
+    df_plot = pd.DataFrame({
+        'correlation': correlations,
+        'group': [group] * len(correlations)
+    })
+
+    # Violin/strip plot for individual data points
+    sns.swarmplot(data=df_plot, y='correlation', color='grey', ax=ax,edgecolor=None)
+
+    # Plot mean and CI using seaborn pointplot
+    sns.pointplot(data=df_plot, y='correlation', color=reward_palette_r[i], ax=ax, errorbar='ci',)
+
+    # Add horizontal line at 0
+    ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.7)
+
+    ax.set_ylim(-1, 1)
+    ax.set_ylabel('Correlation\n(Decision value vs Performance)', fontsize=11)
+    ax.set_title(f'{group}', fontsize=12, fontweight='bold')
+    ax.set_xticks([])
+    ax.set_xlabel('')
+    sns.despine(ax=ax)
+
+plt.tight_layout()
+
+# Statistical tests
+
 for group in ['R+', 'R-']:
-    group_data = results_combined[results_combined['reward_group'] == group]
-    if len(group_data) > 0:
-        # Linear regression on decision values
-        X_reg = group_data['trial_center'].values.reshape(-1, 1)
-        y_reg_decision = group_data['mean_decision_value'].values
-        y_reg_proba = group_data['mean_proba_post'].values
-        
-        reg_decision = LinearRegression().fit(X_reg, y_reg_decision)
-        reg_proba = LinearRegression().fit(X_reg, y_reg_proba)
-        
-        # Calculate correlation coefficients
-        r_decision, p_decision = spearmanr(group_data['trial_center'], group_data['mean_decision_value'])
-        r_proba, p_proba = spearmanr(group_data['trial_center'], group_data['mean_proba_post'])
-        
-        print(f"{group} group:")
-        print(f"  Decision values - slope: {reg_decision.coef_[0]:.4f}, R²: {reg_decision.score(X_reg, y_reg_decision):.3f}")
-        print(f"  Decision values - Spearman r: {r_decision:.3f}, p: {p_decision:.4f}")
-        print(f"  Probability - slope: {reg_proba.coef_[0]:.4f}, R²: {reg_proba.score(X_reg, y_reg_proba):.3f}")
-        print(f"  Probability - Spearman r: {r_proba:.3f}, p: {p_proba:.4f}")
+    sub = df_corr[df_corr['reward_group'] == group]
+    correlations = sub['real_corr'].dropna().values
+    
+    if len(correlations) == 0:
+        print(f"\n{group} Group: No data available")
+        continue
 
-# Save results
-results_combined.to_csv(os.path.join(output_dir, 'progressive_learning_day0_data.csv'), index=False)
+    
+    # Test if mean correlation is significantly different from 0 (one-sample test)
+    if len(correlations) >= 3:
+        # Wilcoxon signed-rank test (non-parametric, preferred for small N)
+        stat_w, p_wilcoxon = wilcoxon(correlations, alternative='greater')
+
+        
+        print(f"  ---")
+        print(f"  One-sample Wilcoxon test (H0: median ≤ 0): p = {p_wilcoxon:.4f}")
+
+        
+        # Interpretation
+        if p_wilcoxon < 0.05:
+            print(f"  ✓ Significant positive correlation (p < 0.05)")
+        else:
+            print(f"  ✗ Not significant (p ≥ 0.05)")
+    else:
+        print(f"  Insufficient data for statistical test (N < 3)")
+
+
+plt.savefig(os.path.join(output_dir, 'correlation_behavior_decision_day0.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'correlation_behavior_decision_day0.pdf'), format='pdf', dpi=300)
+
+
+
+# Cross-correlation analysis
+# --------------------------
+
+def crosscorr_peak_aligned(results_combined, bh_df, mice_list, min_trials=10):
+    crosscorr_curves = []
+    peak_lags = []
+    mice_xcorr = []
+
+    for mouse in mice_list:
+        # Get decision values and behavioral curve for this mouse
+        dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
+        bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
+        # Align by trial index (trial_center for decision, trial_w for behavior)
+        common_trials = np.intersect1d(dec_mouse['trial_center'], bh_mouse['trial_w'])
+        if len(common_trials) < min_trials:
+            continue
+        dec_vals = dec_mouse.set_index('trial_center').loc[common_trials]['mean_decision_value'].values
+        perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
+        # Remove nan
+        mask = ~np.isnan(dec_vals) & ~np.isnan(perf_vals)
+        if np.sum(mask) < min_trials:
+            continue
+        dec_vals = dec_vals[mask]
+        perf_vals = perf_vals[mask]
+        # Subtract mean for cross-correlation
+        dec_vals -= np.nanmean(dec_vals)
+        perf_vals -= np.nanmean(perf_vals)
+        # Compute cross-correlation (full mode)
+        xcorr = correlate(dec_vals, perf_vals, mode='full', method='auto')
+        lags = np.arange(-len(perf_vals)+1, len(dec_vals))
+        # Normalize
+        xcorr /= (np.std(dec_vals) * np.std(perf_vals) * len(dec_vals))
+        # Find peak
+        peak_idx = np.argmax(xcorr)
+        peak_lag = lags[peak_idx]
+        # Center curve at peak
+        center_idx = np.where(lags == 0)[0][0]
+        shift = peak_idx - center_idx
+        # Store curve and lag
+        crosscorr_curves.append(np.roll(xcorr, -shift))
+        peak_lags.append(peak_lag)
+        mice_xcorr.append(mouse)
+
+    # Pad curves to same length
+    if not crosscorr_curves:
+        return None, None, None, None
+    max_len = max(len(c) for c in crosscorr_curves)
+    xcorr_mat = np.full((len(crosscorr_curves), max_len), np.nan)
+    for i, c in enumerate(crosscorr_curves):
+        pad_left = (max_len - len(c)) // 2
+        pad_right = max_len - len(c) - pad_left
+        xcorr_mat[i, pad_left:pad_left+len(c)] = c
+
+    mean_xcorr = np.nanmean(xcorr_mat, axis=0)
+    sem_xcorr = np.nanstd(xcorr_mat, axis=0) / np.sqrt(np.sum(~np.isnan(xcorr_mat), axis=0))
+    lags_common = np.arange(-max_len//2+1, max_len//2+1)
+    return mean_xcorr, sem_xcorr, lags_common, mice_xcorr
+
+# Separate mice by reward group
+mice_rplus = results_combined[results_combined['reward_group'] == 'R+']['mouse_id'].unique()
+mice_rminus = results_combined[results_combined['reward_group'] == 'R-']['mouse_id'].unique()
+
+mean_xcorr_rplus, sem_xcorr_rplus, lags_common_rplus, mice_xcorr_rplus = crosscorr_peak_aligned(
+    results_combined, bh_df, mice_rplus)
+mean_xcorr_rminus, sem_xcorr_rminus, lags_common_rminus, mice_xcorr_rminus = crosscorr_peak_aligned(
+    results_combined, bh_df, mice_rminus)
+
+plt.figure(figsize=(7, 4))
+if mean_xcorr_rplus is not None:
+    plt.plot(lags_common_rplus, mean_xcorr_rplus, color=reward_palette[1], label='R+ mean cross-corr (centered)')
+    plt.fill_between(lags_common_rplus, mean_xcorr_rplus - sem_xcorr_rplus, mean_xcorr_rplus + sem_xcorr_rplus, color=reward_palette[1], alpha=0.3)
+if mean_xcorr_rminus is not None:
+    plt.plot(lags_common_rminus, mean_xcorr_rminus, color=reward_palette[0], label='R- mean cross-corr (centered)')
+    plt.fill_between(lags_common_rminus, mean_xcorr_rminus - sem_xcorr_rminus, mean_xcorr_rminus + sem_xcorr_rminus, color=reward_palette[0], alpha=0.3)
+plt.axvline(0, color='red', linestyle='--', label='Peak aligned')
+plt.xlabel('Lag (trials)')
+plt.ylabel('Cross-correlation')
+plt.title('Cross-correlation (decision vs behavior)\nAligned at peak for each mouse')
+plt.legend()
+sns.despine()
+plt.tight_layout()
+
+# Plot distributions of lags to peak for both groups
+plt.figure(figsize=(6, 4))
+all_peak_lags = []
+all_groups = []
+
+# Compute peak lags for R+ and R- mice
+def get_peak_lags(results_combined, bh_df, mice_list, min_trials=10):
+    peak_lags = []
+    for mouse in mice_list:
+        dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
+        bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
+        common_trials = np.intersect1d(dec_mouse['trial_center'], bh_mouse['trial_w'])
+        if len(common_trials) < min_trials:
+            continue
+        dec_vals = dec_mouse.set_index('trial_center').loc[common_trials]['mean_decision_value'].values
+        perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
+        dec_vals_smooth = gaussian_filter1d(dec_vals, sigma=2)
+        perf_vals_smooth = gaussian_filter1d(perf_vals, sigma=2)
+        mask = ~np.isnan(dec_vals_smooth) & ~np.isnan(perf_vals_smooth)
+        if np.sum(mask) < min_trials:
+            continue
+        dec_vals_smooth = dec_vals_smooth[mask]
+        perf_vals_smooth = perf_vals_smooth[mask]
+        dec_vals_smooth -= np.nanmean(dec_vals_smooth)
+        perf_vals_smooth -= np.nanmean(perf_vals_smooth)
+        xcorr = correlate(dec_vals_smooth, perf_vals_smooth, mode='full', method='auto')
+        lags = np.arange(-len(perf_vals_smooth)+1, len(dec_vals_smooth))
+        xcorr /= (np.std(dec_vals_smooth) * np.std(perf_vals_smooth) * len(dec_vals_smooth))
+        peak_idx = np.argmax(xcorr)
+        peak_lag = lags[peak_idx]
+        peak_lags.append(peak_lag)
+    return peak_lags
+
+peak_lags_rplus = get_peak_lags(results_combined, bh_df, mice_rplus)
+peak_lags_rminus = get_peak_lags(results_combined, bh_df, mice_rminus)
+
+# Prepare DataFrame for plotting
+df_lags = pd.DataFrame({
+    'peak_lag': np.concatenate([peak_lags_rplus, peak_lags_rminus]),
+    'reward_group': ['R+'] * len(peak_lags_rplus) + ['R-'] * len(peak_lags_rminus)
+})
+
+sns.violinplot(data=df_lags, x='reward_group', y='peak_lag', palette=reward_palette[::-1], inner=None)
+sns.stripplot(data=df_lags, x='reward_group', y='peak_lag', color='black', alpha=0.7)
+plt.axhline(0, color='red', linestyle='--', label='Zero lag')
+plt.ylabel('Lag to peak (trials)')
+plt.title('Distribution of lags to peak cross-correlation')
+plt.tight_layout()
+sns.despine()
+
+# Save lag distribution plot
+plt.savefig(os.path.join(output_dir, 'crosscorr_peak_lag_distribution.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'crosscorr_peak_lag_distribution.png'), format='png', dpi=300)
+
+plt.savefig(os.path.join(output_dir, 'crosscorr_decision_behavior_peak_aligned.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'crosscorr_decision_behavior_peak_aligned.png'), format='png', dpi=300)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Additional analysis: Trial-by-trial classification for individual mice
 def single_trial_classification_day0(vectors_mapping, vectors_learning, mice_list, seed=42):
     """
     Classify each individual trial in Day 0 learning using decoder trained on Day -2 vs +2 mapping.
+    
+    Sign convention: pre-learning (label 0) → negative decision values
+                     post-learning (label 1) → positive decision values
     """
     trial_results = []
     
@@ -1140,6 +1583,20 @@ def single_trial_classification_day0(vectors_mapping, vectors_learning, mice_lis
         clf = LogisticRegression(max_iter=5000, random_state=seed)
         clf.fit(X_train_scaled, y_train)
         
+        # Sanity check: Verify sign convention
+        pre_mask = day_per_trial == -2
+        post_mask = day_per_trial == 2
+        X_pre = scaler.transform(d_mapping.values[:, pre_mask].T)
+        X_post = scaler.transform(d_mapping.values[:, post_mask].T)
+        mean_dec_pre = np.mean(clf.decision_function(X_pre))
+        mean_dec_post = np.mean(clf.decision_function(X_post))
+        
+        if mean_dec_pre > mean_dec_post:
+            print(f"WARNING: {mouse} has flipped decision values! Pre={mean_dec_pre:.3f}, Post={mean_dec_post:.3f}")
+            sign_flip = -1
+        else:
+            sign_flip = 1
+        
         # Test on Day 0 learning trials
         n_learning_trials = d_learning.sizes['trial']
         
@@ -1147,7 +1604,7 @@ def single_trial_classification_day0(vectors_mapping, vectors_learning, mice_lis
             X_trial = d_learning.values[:, j:j+1].T
             X_trial_scaled = scaler.transform(X_trial)
             
-            decision_value = clf.decision_function(X_trial_scaled)[0]
+            decision_value = clf.decision_function(X_trial_scaled)[0] * sign_flip  # Apply sign correction
             proba_post = clf.predict_proba(X_trial_scaled)[0, 1]
             prediction = clf.predict(X_trial_scaled)[0]
             
