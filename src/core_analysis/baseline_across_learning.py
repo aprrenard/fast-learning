@@ -659,7 +659,7 @@ data_plot_avg_proj.to_csv(os.path.join(output_dir, f'pre_post_psth_amplitude_{va
 # Parameters.
 
 sampling_rate = 30
-win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win = (0, 0.180)  # from stimulus onset to 300 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
 # win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
@@ -703,8 +703,8 @@ for mouse in mice:
         print(f'Not enough mapping trials for {mouse}.')
         continue
     
-    # Select first n_map_trials mapping trials for each day.
-    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(0, n_map_trials)))
+    # Select last n_map_trials mapping trials for each day.
+    d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
     print(d.shape)
     
     d = d.sel(time=slice(win[0], win[1])).mean(dim='time')
@@ -730,7 +730,9 @@ cm = np.corrcoef(data_rew.values.T)
 cm_nodiag = cm.copy()
 np.fill_diagonal(cm_nodiag, np.nan)
 vmax = np.nanpercentile(cm_nodiag, 98)
-vmin = np.nanpercentile(cm_nodiag, 6)
+# vmin = np.nanpercentile(cm_nodiag, 6)
+# vmax = np.nanmax(cm_nodiag)
+vmin = 0
 
 plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
 edges = np.cumsum([n_map_trials for _ in range(5)])
@@ -741,20 +743,21 @@ plt.xticks(edges - 0.5, edges)
 plt.yticks(edges - 0.5, edges)
 cbar = plt.colorbar()
 cbar.set_label('Correlation')
-plt.tight_layout()
 
 # Save the correlation matrix as an SVG file
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'AR179_example.svg'
+svg_file = 'global_popoulation_mapping_rew.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 cm = np.corrcoef(data_nonrew.values.T)
 cm_nodiag = cm.copy()
 np.fill_diagonal(cm_nodiag, np.nan)
-vmax = np.nanpercentile(cm_nodiag, 98)
-vmin = np.nanpercentile(cm_nodiag, 6)
+vmax = np.nanpercentile(cm_nodiag, 99)
+# vmin = np.nanpercentile(cm_nodiag, 6)
+# vmax = np.nanmax(cm_nodiag)
+# vmin = 0
 
 plt.imshow(cm, cmap='viridis', vmax=vmax, vmin=vmin)
 edges = np.cumsum([n_map_trials for _ in range(5)])
@@ -768,135 +771,114 @@ cbar.set_label('Correlation')
 plt.tight_layout()
 
 # Save the correlation matrix as an SVG file
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'AR179_example.svg'
+svg_file = 'global_popoulation_mapping_nonrew.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
-
 # #############################################################################
-# Population vectors for individual mice.
+# Population vectors and correlation matrices for individual mice.
 # #############################################################################
 
-# Parameters.
 sampling_rate = 30
-win = (0, 0.180)  # from stimulus onset to 300 ms after.
+win = (0, 0.180)  # from stimulus onset to 180 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
-# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
-days_str = ['-2', '-1', '0', '+1', '+2']
 days = [-2, -1, 0, 1, 2]
 n_map_trials = 40
-substract_baseline = True
-average_inside_days = False
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
 
-
-
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/psth'
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
 output_dir = io.adjust_path_to_host(output_dir)
-pdf_file = 'pop_vectors_individual_mice_180ms.pdf'
+pdf_file = 'pop_vectors_and_corrmat_individual_mice_180ms.pdf'
 
 with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
     for mouse in mice:
         print(mouse)
-
-        # Vectors during learning.
         processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-        win = (0, 0.300)
         reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse)
 
         file_name = 'tensor_xarray_mapping_data.nc'
-        xarr_learning = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-        xarr_learning = xarr_learning - np.nanmean(xarr_learning.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-
-        # Select days.
-        xarr_learning = xarr_learning.sel(trial=xarr_learning['day'].isin([-2,-1,0,1,2]))
-        # xarr_learning = xarr_learning.sel(trial=xarr_learning['whisker_stim']==1)
-        xarr_learning = xarr_learning.sel(time=slice(win[0], win[1])).mean(dim='time')
-
-        vectors_mapping = xarr_learning.values
-        # Count number of whisker trials for each of the 5 days
-        whisker_trial_counts = []
-        for day in [-2, -1, 0, 1, 2]:
-            count = int(np.sum(xarr_learning['day'].values == day))
-            whisker_trial_counts.append(count)
-
-        edges = np.cumsum(whisker_trial_counts)
-
-
-        for i in edges[:-1] - 0.5:
-            plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
-        plt.xticks(edges - 0.5, edges)
-
-        # Vectors during learning.
-        processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-        win = (0, 0.300)
-        file_name = 'tensor_xarray_learning_data.nc'
-        xarr_mapping = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name)
-        xarr_mapping = xarr_mapping - np.nanmean(xarr_mapping.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-
-        # Select whisker stim.
-        xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['whisker_stim']==1)
-        # Select days.
-        xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['day'].isin([0]))
-        # xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['whisker_stim']==1)
+        xarr_mapping = imaging_utils.load_mouse_xarray(mouse, processed_dir, file_name, substracted=True)
+        xarr_mapping = xarr_mapping.sel(trial=xarr_mapping['day'].isin(days))
+        # Select the last n_map_trials mapping trials for each day
+        xarr_mapping = xarr_mapping.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
         xarr_mapping = xarr_mapping.sel(time=slice(win[0], win[1])).mean(dim='time')
-        vectors_learning = xarr_mapping.values
+
+        # Population vector plot
+        vectors_mapping = xarr_mapping.values
+        whisker_trial_counts = [vectors_mapping.shape[1] // len(days)] * len(days)
+        edges = np.cumsum(whisker_trial_counts)
         
-        
-        # Concatenate mapping and learning vectors, placing learning vectors after day -1 and before day 0
-        # mapping order: [-2, -1, 0, 1, 2]
-        # learning order: [0]
-        # So, order: mapping(-2), mapping(-1), learning(0), mapping(0), mapping(1), mapping(2)
-        vectors_concat = np.concatenate([
-            vectors_mapping[:, xarr_learning['day'].values == -2],
-            vectors_mapping[:, xarr_learning['day'].values == -1],
-            vectors_learning,
-            vectors_mapping[:, xarr_learning['day'].values == 0],
-            vectors_mapping[:, xarr_learning['day'].values == 1],
-            vectors_mapping[:, xarr_learning['day'].values == 2]
-        ], axis=1)
-        
-        vmax = np.percentile(vectors_mapping, 98)
-        vmin = np.percentile(vectors_mapping, 2)
-        
-        f = plt.figure(figsize=(10, 6))
-        im = plt.imshow(vectors_concat, cmap='viridis', vmin=vmin, vmax=vmax)
+        # Exclude diagonal for vmax calculation
+        arr = vectors_mapping
+        arr_nodiag = arr.copy()
+        min_dim = min(arr_nodiag.shape[0], arr_nodiag.shape[1])
+        for i in range(min_dim):
+            arr_nodiag[i, i] = np.nan
+        vmax = np.nanpercentile(arr_nodiag, 98)
+        vmin = 0
+        plt.figure(figsize=(10, 6))
+        im = plt.imshow(vectors_mapping, cmap='viridis', vmin=vmin, vmax=vmax)
         cbar = plt.colorbar(im)
         cbar.set_label('Activity')
-
-        whisker_trial_counts = whisker_trial_counts[:2] + [vectors_learning.shape[1]] + whisker_trial_counts[2:]
-        edges = np.cumsum(whisker_trial_counts)
         for i in edges[:-1] - 0.5:
             plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
         plt.xticks(edges - 0.5, edges)
         plt.xlabel('Trials')
         plt.ylabel('Cells')
-        plt.title(f'{mouse} - {reward_group}')
+        plt.title(f'{mouse} - {reward_group} - Population Vectors')
         plt.tight_layout()
-        # Save the figure to the PDF
         pdf.savefig(dpi=300)
-        print(f"Saved figure for mouse {mouse} to PDF.")
+        plt.close()
+        
+        # Correlation matrix plot
+        # Compute correlation matrix across trials
+        corrmat = np.corrcoef(vectors_mapping.T)
+        plt.figure(figsize=(8, 7))
+        # Use same vmin and vmax as population vector plot
+        im = sns.heatmap(corrmat, cmap='viridis', vmin=vmin, vmax=vmax, cbar_kws={'label': 'Correlation'})
+        # Draw lines to separate days
+        for edge in edges[:-1]:
+            plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=.5)
+            plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=.5)
+        plt.title(f'{mouse} - {reward_group} - Correlation Matrix')
+        plt.xlabel('Trial')
+        plt.ylabel('Trial')
+        plt.tight_layout()
+        pdf.savefig(dpi=300)
+        plt.close()
+        print(f"Saved population vector and correlation matrix for mouse {mouse} to PDF.")
 
 
 # #########################################
-# Correlation matrices average across mice.
+# Trial-by-trial correlation matrices averaged across mice.
 # #########################################
 
-# Similar to the previous section, but compute a correlation matrix for
-# each mouse and then average across mice.
+# Compute a 200x200 similarity matrix (5 days × 40 trials) for each mouse,
+# then average across mice to quantify network reorganization across learning.
+#
+# SOLUTIONS TO DAY-TO-DAY DRIFT ISSUE:
+# 1. Z-scoring within each day (set zscore=True):
+#    - Removes day-specific baseline shifts (e.g., recording drift)
+#    - Preserves trial-to-trial variability within each day
+#    - Makes pre-training days (-2, -1) properly cluster together
+#
+# 2. Alternative similarity metrics (set similarity_metric):
+#    - 'pearson': Standard Pearson correlation (default)
+#    - 'cosine': Cosine similarity (less sensitive to magnitude)
+#    - 'spearman': Rank correlation (robust to monotonic transforms)
+
 
 sampling_rate = 30
-win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win = (0, 0.180)  # from stimulus onset to 180 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
-# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
 days_str = ['-2', '-1', '0', '+1', '+2']
@@ -906,7 +888,8 @@ substract_baseline = True
 select_responsive_cells = False
 select_lmi = False
 zscore = False
-projection_type = 'wS2'  # 'wS2', 'wM1' or None
+projection_type = 'wM1'  # 'wS2', 'wM1' or None
+n_min_proj = 5
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
@@ -917,14 +900,10 @@ print(mice)
 # Load data.
 vectors_rew = []
 vectors_nonrew = []
+mice_rew = []
+mice_nonrew = []
 
 # Load responsive cells.
-# Responsiveness df.
-# test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
-# test_df = pd.read_csv(test_df)
-# test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
-# selected_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
-
 if select_responsive_cells:
     test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
     test_df = pd.read_csv(test_df)
@@ -938,13 +917,12 @@ if select_lmi:
     lmi_df = pd.read_csv(lmi_df)
     selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
 
-
+# Load and prepare data for each mouse.
 for mouse in mice:
     print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
-    xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=substract_baseline)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
     # Select days.
@@ -954,15 +932,15 @@ for mouse in mice:
     if select_responsive_cells or select_lmi:
         selected_cells_for_mouse = selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']
         xarray = xarray.sel(cell=xarray['roi'].isin(selected_cells_for_mouse))
+    
     # Option to select a specific projection type or all cells
     if projection_type is not None:
         xarray = xarray.sel(cell=xarray['cell_type'] == projection_type)
-        if xarray.sizes['cell'] == 0:
+        if xarray.sizes['cell'] < n_min_proj:
             print(f"No cells of type {projection_type} for mouse {mouse}.")
             continue
         
     # Check that each day has at least n_map_trials mapping trials
-    # and select the first n_map_trials mapping trials for each day.
     n_trials = xarray[0, :, 0].groupby('day').count(dim='trial').values
     if np.any(n_trials < n_map_trials):
         print(f'Not enough mapping trials for {mouse}.')
@@ -971,236 +949,351 @@ for mouse in mice:
     # Select last n_map_trials mapping trials for each day.
     d = xarray.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))    
     d = d.sel(time=slice(win[0], win[1])).mean(dim='time')
-    # Z-score
+    
+    # Normalize to remove day-specific baseline shifts
+    # This addresses recording drift across days while preserving within-day structure
     if zscore:
-        d = (d - d.mean(dim='trial')) / d.std(dim='trial')
-
+        # Option 1: Z-score within each day (recommended to fix day-to-day drift)
+        # This removes mean and scales variance independently for each day
+        d_normalized = d.copy()
+        for day in days:
+            day_mask = d['day'] == day
+            day_data = d.sel(trial=day_mask)
+            # Z-score across trials within this day, for each cell
+            day_mean = day_data.mean(dim='trial')
+            day_std = day_data.std(dim='trial')
+            # Avoid division by zero
+            day_std = day_std.where(day_std > 0, 1)
+            d_normalized.loc[dict(trial=day_mask)] = ((day_data - day_mean) / day_std).values
+        d = d_normalized
+    
     if rew_gp == 'R-':
         vectors_nonrew.append(d)
+        mice_nonrew.append(mouse)
     elif rew_gp == 'R+':
         vectors_rew.append(d)
+        mice_rew.append(mouse)
 
-# # Compute correlation matrices for each mouse and average across mice.
-# def compute_average_correlation(vectors):
-#     correlation_matrices = []
-#     for vector in vectors:
-#         cm = np.corrcoef(vector.values.T)
-#         np.fill_diagonal(cm, np.nan)  # Exclude diagonal
-#         correlation_matrices.append(cm)
-#     return np.nanmean(correlation_matrices, axis=0)
+print(f"Loaded {len(vectors_rew)} R+ mice and {len(vectors_nonrew)} R- mice")
 
-# avg_corr_rew = compute_average_correlation(vectors_rew)
-# avg_corr_nonrew = compute_average_correlation(vectors_nonrew)
-# # Plot average correlation matrix for rewarded group using sns heatmap.
-# plt.figure(figsize=(6, 5))
-# sns.heatmap(avg_corr_rew, annot=False, cmap='viridis', cbar_kws={'label': 'Correlation'})
-# edges = np.cumsum([n_map_trials for _ in range(len(days))])
-# for edge in edges[:-1]:
-#     plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-#     plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-# plt.xticks(edges - n_map_trials / 2, days)
-# plt.yticks(edges - n_map_trials / 2, days)
-# plt.title('Average Correlation Matrix (Rewarded Group)')
-# plt.xlabel('Day')
-# plt.ylabel('Day')
-# plt.show()
 
-# # Plot average correlation matrix for non-rewarded group using sns heatmap.
-# plt.figure(figsize=(6, 5))
-# sns.heatmap(avg_corr_nonrew, annot=False, cmap='viridis', cbar_kws={'label': 'Correlation'})
-# for edge in edges[:-1]:
-#     plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-#     plt.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-# plt.xticks(edges - n_map_trials / 2, days)
-# plt.yticks(edges - n_map_trials / 2, days)
-# plt.title('Average Correlation Matrix (Non-Rewarded Group)')
-# plt.xlabel('Day')
-# plt.ylabel('Day')
-# plt.show()
+# Compute trial-by-trial correlation matrices for each mouse and average.
+# -----------------------------------------------------------------------
 
-# Compute average correlation for each pair of days for each mouse and return a 5x5 matrix averaged across mice.
-def compute_daywise_average_correlation(vectors, days):
-    daywise_correlation_matrices = []
-    correlation_change_indices = []
-    normalized_indices = []
-    for vector in vectors:
-        day_corr_matrix = np.zeros((len(days), len(days)))
-        for i, day1 in enumerate(days):
-            for j, day2 in enumerate(days):
-                # Select data for the two days.
-                day1_data = vector.sel(trial=vector['day'] == day1)
-                day2_data = vector.sel(trial=vector['day'] == day2)
+def compute_correlation_matrix(vector):
+    """Compute Pearson correlation matrix for a single mouse (200x200)."""
+    cm = np.corrcoef(vector.values.T)
+    np.fill_diagonal(cm, np.nan)  # Exclude diagonal
+    return cm
 
-                # Compute correlation between days.
-                corr = np.corrcoef(day1_data.values.T, day2_data.values.T)
+def compute_cosine_similarity_matrix(vector):
+    """
+    Compute cosine similarity matrix for a single mouse (200x200).
+    Cosine similarity is less sensitive to magnitude differences than correlation.
+    """
+    from sklearn.metrics.pairwise import cosine_similarity
+    cm = cosine_similarity(vector.values.T)
+    np.fill_diagonal(cm, np.nan)  # Exclude diagonal
+    return cm
 
-                # If day1 is the same as day2, exclude the diagonal.
-                if day1 == day2:
-                    np.fill_diagonal(corr, np.nan)
+def compute_spearman_correlation_matrix(vector):
+    """
+    Compute Spearman rank correlation matrix for a single mouse (200x200).
+    Robust to monotonic transformations and outliers.
+    """
+    from scipy.stats import spearmanr
+    cm, _ = spearmanr(vector.values.T, axis=1)
+    np.fill_diagonal(cm, np.nan)  # Exclude diagonal
+    return cm
 
-                # Compute average correlation between the two days.
-                avg_corr = np.nanmean(corr)
-                day_corr_matrix[i, j] = avg_corr
+# Choose similarity metric
+# Options: 'pearson', 'cosine', 'spearman'
+similarity_metric = 'spearman'
 
-        daywise_correlation_matrices.append(day_corr_matrix)
+if similarity_metric == 'pearson':
+    compute_similarity_matrix = compute_correlation_matrix
+elif similarity_metric == 'cosine':
+    compute_similarity_matrix = compute_cosine_similarity_matrix
+elif similarity_metric == 'spearman':
+    compute_similarity_matrix = compute_spearman_correlation_matrix
+else:
+    raise ValueError(f"Unknown similarity metric: {similarity_metric}")
 
-        # Compute correlation change index and normalized index
-        days_pre = [0, 1]  # Indices for pretraining days
-        days_post = [2, 3, 4]  # Indices for posttraining days
+print(f"Using similarity metric: {similarity_metric}")
 
-        corr_within_pre = day_corr_matrix[np.ix_(days_pre, days_pre)]
-        avg_corr_within_pre = np.nanmean(corr_within_pre)
+# Compute similarity matrices for all mice
+corr_matrices_rew = []
+corr_matrices_nonrew = []
 
-        corr_within_post = day_corr_matrix[np.ix_(days_post, days_post)]
-        avg_corr_within_post = np.nanmean(corr_within_post)
+for vector in vectors_rew:
+    corr_matrices_rew.append(compute_similarity_matrix(vector))
 
-        corr_between = day_corr_matrix[np.ix_(days_pre, days_post)]
-        avg_corr_between = np.nanmean(corr_between)
+for vector in vectors_nonrew:
+    corr_matrices_nonrew.append(compute_similarity_matrix(vector))
 
-        index = (avg_corr_within_pre + avg_corr_within_post) / 2 - avg_corr_between
-        normalized_index = (avg_corr_within_pre + avg_corr_within_post - 2 * avg_corr_between) / (
-            avg_corr_within_pre + avg_corr_within_post + 2 * avg_corr_between
-        )
+# Average across mice
+avg_corr_rew = np.nanmean(corr_matrices_rew, axis=0)
+avg_corr_nonrew = np.nanmean(corr_matrices_nonrew, axis=0)
 
-        correlation_change_indices.append(index)
-        normalized_indices.append(normalized_index)
+# Set consistent color scale
+vmax_rew = np.nanpercentile(avg_corr_rew, 99)
+vmin = 0
 
-    # Average across mice.
-    avg_correlation_matrix = np.nanmean(daywise_correlation_matrices, axis=0)
+# Use select_lmi to indicate cell selection in filenames
+celltype_str = 'lmi_cells' if select_lmi else 'all_cells'
 
-    return avg_correlation_matrix, correlation_change_indices, normalized_indices
+# Plot average correlation matrices
+fig = plt.figure(figsize=(16, 6))
+gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.25)
 
-# Compute daywise average correlation for rewarded and non-rewarded groups
-daywise_avg_corr_rew, cci_rew, nci_rew = compute_daywise_average_correlation(vectors_rew, days)
-daywise_avg_corr_nonrew, cci_nonrew, nci_nonrew = compute_daywise_average_correlation(vectors_nonrew, days)
+ax0 = fig.add_subplot(gs[0, 0])
+ax1 = fig.add_subplot(gs[0, 1])
+ax_cbar = fig.add_subplot(gs[0, 2])
 
-# vmax and vmin for consistent color scaling across both matrices
-# vmax = np.nanmax(daywise_avg_corr_rew)
-# vmin = np.nanmin(daywise_avg_corr_nonrew)
-vmax = 0.44
-vmin = 0.1
+# R+ group
+im0 = ax0.imshow(avg_corr_rew, cmap='viridis', vmax=vmax_rew, vmin=vmin, aspect='auto')
+edges = np.cumsum([n_map_trials for _ in range(len(days))])
+for edge in edges[:-1] - 0.5:
+    ax0.axvline(x=edge, color='white', linestyle='-', linewidth=1.5)
+    ax0.axhline(y=edge, color='white', linestyle='-', linewidth=1.5)
+ax0.set_xticks(edges - n_map_trials / 2)
+ax0.set_xticklabels(days)
+ax0.set_yticks(edges - n_map_trials / 2)
+ax0.set_yticklabels(days)
+ax0.set_xlabel('Day')
+ax0.set_ylabel('Day')
+ax0.set_title(f'R+ Group (N={len(vectors_rew)} mice)')
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
+# R- group
+im1 = ax1.imshow(avg_corr_nonrew, cmap='viridis', vmax=vmax_rew, vmin=vmin, aspect='auto')
+for edge in edges[:-1] - 0.5:
+    ax1.axvline(x=edge, color='white', linestyle='-', linewidth=1.5)
+    ax1.axhline(y=edge, color='white', linestyle='-', linewidth=1.5)
+ax1.set_xticks(edges - n_map_trials / 2)
+ax1.set_xticklabels(days)
+ax1.set_yticks(edges - n_map_trials / 2)
+ax1.set_yticklabels(days)
+ax1.set_xlabel('Day')
+ax1.set_title(f'R- Group (N={len(vectors_nonrew)} mice)')
 
-# Plot daywise average correlation matrix for rewarded group
-sns.heatmap(daywise_avg_corr_rew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[0])
-axes[0].set_title('Daywise Average Correlation (Rewarded Group)')
-axes[0].set_xlabel('Day')
-axes[0].set_ylabel('Day')
-
-# Plot daywise average correlation matrix for non-rewarded group
-sns.heatmap(daywise_avg_corr_nonrew, annot=True, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[1])
-axes[1].set_title('Daywise Average Correlation (Non-Rewarded Group)')
-axes[1].set_xlabel('Day')
+# Add colorbar on third axis
+metric_label = {'pearson': 'Pearson Correlation', 
+                'cosine': 'Cosine Similarity', 
+                'spearman': 'Spearman Correlation'}[similarity_metric]
+cbar = fig.colorbar(im1, cax=ax_cbar, label=metric_label)
 plt.tight_layout()
 
-
-# Save plot.
+# Save figure
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
 output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'daywise_average_correlation_ctype_{projection_type}.svg'
+zscore_str = '_zscore' if zscore else ''
+svg_file = f'trialwise_{similarity_metric}_matrices_ctype_{projection_type}_{celltype_str}{zscore_str}.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, svg_file.replace('.svg', '.png')), format='png', dpi=300)
 
 
-# Combine CCI (Correlation Change Index) for rewarded and non-rewarded groups into a single DataFrame
-cci_df = pd.DataFrame({
-    'reward_group': ['R+'] * len(cci_rew) + ['R-'] * len(cci_nonrew),
-    'cci': cci_rew + cci_nonrew
-})
+# Quantification: Network Reorganization Metrics
+# -----------------------------------------------
 
-# Plot the CCI for each mouse, grouped by reward group
-plt.figure(figsize=(3, 5))
-sns.stripplot(data=cci_df, x='reward_group', y='cci', hue='reward_group', palette=reward_palette[::-1],
-              order=['R+', 'R-'], alpha=0.5, jitter=True)
-sns.pointplot(data=cci_df, x='reward_group', y='cci', hue='reward_group', palette=reward_palette[::-1],
-              order=['R+', 'R-'], estimator='mean')
-plt.title('Correlation Change Index')
-plt.ylabel('CCI')
-plt.xlabel('Reward Group')
-plt.ylim(0, 0.1)
+def compute_network_metrics(corr_matrices, days, n_map_trials):
+    """
+    Compute metrics to quantify network reorganization.
+    
+    Returns per-mouse:
+    - within_pre: average correlation within pre-training days
+    - within_post: average correlation within post-training days
+    - between_pre_post: average correlation between pre and post days
+    - stability_index: (within_pre + within_post) / 2 - between_pre_post
+    """
+    
+    results = []
+    
+    for cm in corr_matrices:
+        # Define trial indices for each period
+        # Days: -2, -1, 0, 1, 2
+        # Pre: days -2, -1 (indices 0-79)
+        # Post: days 1, 2 (indices 120-199)
+        
+        pre_idx = np.arange(0, 2 * n_map_trials)  # Days -2, -1
+        post_idx = np.arange(3 * n_map_trials, 5 * n_map_trials)  # Days 1, 2
+        
+        # Within-pre correlations
+        pre_corr = cm[np.ix_(pre_idx, pre_idx)]
+        within_pre = np.nanmean(pre_corr)
+        
+        # Within-post correlations
+        post_corr = cm[np.ix_(post_idx, post_idx)]
+        within_post = np.nanmean(post_corr)
+        
+        # Between pre-post correlations
+        between_corr = cm[np.ix_(pre_idx, post_idx)]
+        between_pre_post = np.nanmean(between_corr)
+        
+        # Reorganization index: higher means more reorganization (less similarity pre/post)
+        reorganization_index = (within_pre + within_post) / 2 - between_pre_post
+        
+        results.append({
+            'within_pre': within_pre,
+            'within_post': within_post,
+            'between_pre_post': between_pre_post,
+            'reorganization_index': reorganization_index,
+        })
+    
+    return pd.DataFrame(results)
+
+# Compute metrics for both groups
+metrics_rew = compute_network_metrics(corr_matrices_rew, days, n_map_trials)
+metrics_rew['reward_group'] = 'R+'
+metrics_rew['mouse_id'] = mice_rew
+
+metrics_nonrew = compute_network_metrics(corr_matrices_nonrew, days, n_map_trials)
+metrics_nonrew['reward_group'] = 'R-'
+metrics_nonrew['mouse_id'] = mice_nonrew
+
+metrics_combined = pd.concat([metrics_rew, metrics_nonrew], ignore_index=True)
+
+# Print summary statistics
+print("\n" + "="*60)
+print("NETWORK REORGANIZATION METRICS")
+print("="*60)
+for group in ['R+', 'R-']:
+    data = metrics_combined[metrics_combined['reward_group'] == group]
+    print(f"\n{group} Group (N={len(data)}):")
+    print(f"  Within-pre correlation:     {data['within_pre'].mean():.3f} ± {data['within_pre'].std():.3f}")
+    print(f"  Within-post correlation:    {data['within_post'].mean():.3f} ± {data['within_post'].std():.3f}")
+    print(f"  Between pre-post:           {data['between_pre_post'].mean():.3f} ± {data['between_pre_post'].std():.3f}")
+    print(f"  Reorganization index:       {data['reorganization_index'].mean():.3f} ± {data['reorganization_index'].std():.3f}")
+
+# Statistical comparison between groups
+print("\n" + "-"*60)
+print("STATISTICAL COMPARISONS (Mann-Whitney U test)")
+print("-"*60)
+
+stats_dict = {}
+for metric in ['within_pre', 'within_post', 'between_pre_post', 'reorganization_index']:
+    r_plus = metrics_rew[metric].dropna()
+    r_minus = metrics_nonrew[metric].dropna()
+    stat, p_value = mannwhitneyu(r_plus, r_minus, alternative='two-sided')
+    stats_dict[metric] = p_value
+    print(f"{metric:25s}: U={stat:.1f}, p={p_value:.4f} {'***' if p_value < 0.001 else '**' if p_value < 0.01 else '*' if p_value < 0.05 else 'n.s.'}")
+
+# Visualization of metrics
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Panel 1: Within vs Between correlations
+metrics_long = metrics_combined.melt(
+    id_vars=['mouse_id', 'reward_group'],
+    value_vars=['within_pre', 'within_post', 'between_pre_post'],
+    var_name='metric', value_name='correlation'
+)
+sns.swarmplot(data=metrics_long, x='metric', y='correlation', hue='reward_group',
+              palette=reward_palette[::-1], dodge=True, alpha=0.5, ax=axes[0], size=4)
+sns.pointplot(data=metrics_long, x='metric', y='correlation', hue='reward_group',
+              palette=reward_palette[::-1], ax=axes[0], linestyles='none', 
+              errorbar='ci', dodge=True)
+axes[0].set_xlabel('')
+axes[0].set_ylabel('Average Correlation')
+axes[0].set_title('Within vs Between Epoch Correlations')
+axes[0].legend(title='Group')
+axes[0].set_xticklabels(['Within Pre', 'Within Post', 'Between\nPre-Post'])
+axes[0].set_ylim(0, None)
+
+# Add p-values for panel 1
+metric_order = ['within_pre', 'within_post', 'between_pre_post']
+for i, metric in enumerate(metric_order):
+    p_val = stats_dict[metric]
+    y_max = metrics_long[metrics_long['metric'] == metric]['correlation'].max()
+    y_pos = y_max * 1.05
+    
+    # Format p-value text
+    if p_val < 0.001:
+        p_text = 'p<0.001'
+    elif p_val < 0.01:
+        p_text = f'p={p_val:.3f}'
+    else:
+        p_text = f'p={p_val:.2f}'
+
+    axes[0].text(i, y_pos*0.98, p_text, ha='center', va='bottom', fontsize=9)
+
+# Panel 2: Reorganization Index
+sns.swarmplot(data=metrics_combined, x='reward_group', y='reorganization_index', hue='reward_group',
+              order=['R+', 'R-'], palette=reward_palette[::-1], alpha=0.5, ax=axes[1], size=4)
+sns.pointplot(data=metrics_combined, x='reward_group', y='reorganization_index', hue='reward_group',
+              order=['R+', 'R-'], palette=reward_palette[::-1], ax=axes[1], linestyles='none',
+              errorbar='ci')
+axes[1].set_xlabel('Reward Group')
+axes[1].set_ylabel('Reorganization Index')
+axes[1].set_title('Network Reorganization\n(Higher = More Reorganization)')
+axes[1].legend().set_visible(False)
+axes[1].set_ylim(0, None)
+
+# Add p-value for panel 2
+p_val = stats_dict['reorganization_index']
+y_max = metrics_combined['reorganization_index'].max()
+y_pos = y_max * 1.05
+
+if p_val < 0.001:
+    p_text = 'p<0.001'
+elif p_val < 0.01:
+    p_text = f'p={p_val:.3f}'
+else:
+    p_text = f'p={p_val:.2f}'
+
+# Draw line connecting the two groups and add p-value
+x_coords = [0, 1]
+axes[1].text(0.5, y_pos * .98, p_text, ha='center', va='bottom', fontsize=9)
+
 sns.despine()
+plt.tight_layout()
 
-# Save plot.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = f'daywise_average_correlation_cci_ctype_{projection_type}.svg'
+# Save figure
+zscore_str = '_zscore' if zscore else ''
+svg_file = f'network_reorganization_metrics_{similarity_metric}_ctype_{projection_type}_{celltype_str}{zscore_str}.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, svg_file.replace('.svg', '.png')), format='png', dpi=300)
 
-# Perform statistical comparison between the two groups (R+ and R-) for CCI
+# Save data
+metrics_combined.to_csv(os.path.join(output_dir, f'network_reorganization_metrics_{similarity_metric}_ctype_{projection_type}_{celltype_str}{zscore_str}.csv'), index=False)
 
-# Mann-Whitney U test for CCI
-r_plus_cci = cci_df[cci_df['reward_group'] == 'R+']['cci']
-r_minus_cci = cci_df[cci_df['reward_group'] == 'R-']['cci']
-# Remove NaN values from the data
-r_plus_cci = r_plus_cci.dropna()
-r_minus_cci = r_minus_cci.dropna()
-stat, p_value = mannwhitneyu(r_plus_cci, r_minus_cci, alternative='two-sided')
-
-# Save stats to a CSV file
-stats_output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/mapping'
-stats_output_dir = io.adjust_path_to_host(stats_output_dir)
-cci_stats_file = f'cci_stats_ctype_{projection_type}.csv'
-pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(stats_output_dir, cci_stats_file), index=False)
-
-# Save cci data.
-cci_df.to_csv(os.path.join(stats_output_dir, 'cci_data_ctype_{projection_type}.csv'), index=False)
-
+# Save statistical results
+stats_results = []
+for metric in ['within_pre', 'within_post', 'between_pre_post', 'reorganization_index']:
+    r_plus = metrics_rew[metric].dropna()
+    r_minus = metrics_nonrew[metric].dropna()
+    stat, p_value = mannwhitneyu(r_plus, r_minus, alternative='two-sided')
+    stats_results.append({
+        'metric': metric,
+        'U_statistic': stat,
+        'p_value': p_value
+    })
+stats_df = pd.DataFrame(stats_results)
+stats_df.to_csv(os.path.join(output_dir, f'network_reorganization_stats_{similarity_metric}_ctype_{projection_type}_{celltype_str}{zscore_str}.csv'), index=False)
 
 
-# Illustrate pop vectors of AR127.
-# --------------------------------
+# # Illustrate pop vectors of AR127.
+# # --------------------------------
 
-# Vectors during learning.
-file_name = 'tensor_xarray_mapping_data.nc'
-folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-mouse = 'AR180'
+# # Vectors during learning.
+# file_name = 'tensor_xarray_mapping_data.nc'
+# folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+# mouse = 'AR180'
 
-xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+# xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
 
-# Select days.
-xarray = xarray.sel(trial=xarray['day'].isin([0]))
+# # Select days.
+# xarray = xarray.sel(trial=xarray['day'].isin([0]))
 
-xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
-
-
-# Plot
-vectors_rew = xarray.values
-vmax = np.percentile(vectors_rew, 98)
-vmin = np.percentile(vectors_rew, 3)
-edges = np.cumsum([50 for _ in range(5)])
-f = plt.figure(figsize=(10, 6))
-im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
-
-# Add colorbar
-cbar = plt.colorbar(im)
-cbar.set_label('Activity')
-
-for i in edges[:-1] - 0.5:
-    plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
-plt.xticks(edges - 0.5, edges)
+# xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
 
 
-file_name = 'tensor_xarray_learning_data.nc'
-folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
-mouse = 'AR180'
-xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
-xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
-# Select days
-xarray = xarray.sel(trial=xarray['day'].isin([0]))
-xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
-xarray = xarray.sel(trial=xarray['trial_type'] == 'whisker_trial')
-
-# Plot
-vectors_rew = xarray.values
+# # Plot
+# vectors_rew = xarray.values
 # vmax = np.percentile(vectors_rew, 98)
-# vmin = np.percentile(vectors_rew, 2)
-
+# vmin = np.percentile(vectors_rew, 3)
 # edges = np.cumsum([50 for _ in range(5)])
+# f = plt.figure(figsize=(10, 6))
+# im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
 
-f = plt.figure(figsize=(2, 6))
-im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
 # # Add colorbar
 # cbar = plt.colorbar(im)
 # cbar.set_label('Activity')
@@ -1209,36 +1302,64 @@ im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
 #     plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
 # plt.xticks(edges - 0.5, edges)
 
-# Save the figure
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'AR180_pop_vectors_learning_day0.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+
+# file_name = 'tensor_xarray_learning_data.nc'
+# folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+# mouse = 'AR180'
+# xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+# xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
+# # Select days
+# xarray = xarray.sel(trial=xarray['day'].isin([0]))
+# xarray = xarray.sel(time=slice(0, 0.300)).mean(dim='time')
+# xarray = xarray.sel(trial=xarray['trial_type'] == 'whisker_trial')
+
+# # Plot
+# vectors_rew = xarray.values
+# # vmax = np.percentile(vectors_rew, 98)
+# # vmin = np.percentile(vectors_rew, 2)
+
+# # edges = np.cumsum([50 for _ in range(5)])
+
+# f = plt.figure(figsize=(2, 6))
+# im = plt.imshow(vectors_rew, cmap='viridis', vmin=vmin, vmax=vmax)
+# # # Add colorbar
+# # cbar = plt.colorbar(im)
+# # cbar.set_label('Activity')
+
+# # for i in edges[:-1] - 0.5:
+# #     plt.axvline(x=i, color='white', linestyle='-', lw=0.5)
+# # plt.xticks(edges - 0.5, edges)
+
+# # Save the figure
+# output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/examples'
+# output_dir = io.adjust_path_to_host(output_dir)
+# svg_file = 'AR180_pop_vectors_learning_day0.svg'
+# plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
-# Example traces 
+# # Example traces 
 
-dff = "/mnt/lsens-analysis/Anthony_Renard/data/AR180/AR180_20241215_190049/suite2p/plane0/dff.npy"
-dff = np.load(dff)
+# dff = "/mnt/lsens-analysis/Anthony_Renard/data/AR180/AR180_20241215_190049/suite2p/plane0/dff.npy"
+# dff = np.load(dff)
 
-dff.shape
+# dff.shape
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=2)
+# sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=2)
 
-cells = [2, 4, 5, 8, 10, 11, 18, 21, 22, 25, 27, 28, 35, 36, 49, 54, 55, 67, 69, 77]
-counter = 0
-plt.figure(figsize=(16, 12))
-for icell in cells:
-    if icell == 31:
-        continue
-    plt.plot(dff[icell, 1000:15000] + counter * 3)
-    counter += 1
+# cells = [2, 4, 5, 8, 10, 11, 18, 21, 22, 25, 27, 28, 35, 36, 49, 54, 55, 67, 69, 77]
+# counter = 0
+# plt.figure(figsize=(16, 12))
+# for icell in cells:
+#     if icell == 31:
+#         continue
+#     plt.plot(dff[icell, 1000:15000] + counter * 3)
+#     counter += 1
 
-# Save plot.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/illustrations'
-file_name = 'AR180_example_traces.svg'
-plt.savefig(os.path.join(output_dir, file_name), format='svg', dpi=300)
+# # Save plot.
+# output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/illustrations'
+# file_name = 'AR180_example_traces.svg'
+# plt.savefig(os.path.join(output_dir, file_name), format='svg', dpi=300)
 
 
 
@@ -1550,336 +1671,603 @@ results_df.to_csv(os.path.join(output_dir, 'correlation_with_post_learning_vecto
 
 
 
+
+
+
+
+
+
+
+
+
+
 # ###########################################################
 # Correlation matrices including mapping and learning trials.
 # ###########################################################
+# Focus on Day 0 learning with variable session lengths handled properly
 
 sampling_rate = 30
-win = (0, 0.180)  # from stimulus onset to 300 ms after.
-win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
-# win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
+win = (0, 0.180)  # from stimulus onset to 180 ms after
 baseline_win = (-1, 0)
 baseline_win = (int(baseline_win[0] * sampling_rate), int(baseline_win[1] * sampling_rate))
-days_str = ['-2', '-1', '0', '+1', '+2']
 days = [-2, -1, 0, 1, 2]
-n_map_trials = 40
-n_learning_trials = 60
+n_map_trials = 40  # Fixed number of mapping trials per day
+n_learning_bins = 120  # Number of bins to divide learning session into for alignment
 substract_baseline = True
 select_responsive_cells = False
-select_lmi = False
-zscore = False
+select_lmi = False  # Use LMI-selected cells
+similarity_metric = 'spearman'  # 'pearson', 'spearman', or 'cosine'
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
 _, _, mice, db = io.select_sessions_from_db(io.db_path,
                                             io.nwb_dir,
                                             two_p_imaging='yes',)
-print(mice)
-# mice = ['AR127']
-# Load data.
-vectors_map_rew = []
-vectors_map_nonrew = []
-vectors_learning_rew = []
-vectors_learning_nonrew = []
-mice_rew = []
-mice_nonrew = []
+print(f"Total mice: {len(mice)}")
 
-# Load responsive cells.
-# Responsiveness df.
-# test_df = os.path.join(io.processed_dir, f'response_test_results_alldaystogether_win_180ms.csv')
-# test_df = pd.read_csv(test_df)
-# test_df = test_df.loc[test_df['mouse_id'].isin(mice)]
-# selected_cells = test_df.loc[test_df['pval_mapping'] <= 0.05]
-
-if select_responsive_cells:
-    test_df = os.path.join(io.processed_dir, f'response_test_results_win_180ms.csv')
-    test_df = pd.read_csv(test_df)
-    test_df = test_df.loc[test_df['day'].isin(days)]
-    # Select cells as responsive if they pass the test on at least one day.
-    selected_cells = test_df.groupby(['mouse_id', 'roi', 'cell_type'])['pval_mapping'].min().reset_index()
-    selected_cells = selected_cells.loc[selected_cells['pval_mapping'] <= 0.05/5]
-
+# Load cell selection criteria
 if select_lmi:
     lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
     lmi_df = pd.read_csv(lmi_df)
     selected_cells = lmi_df.loc[(lmi_df['lmi_p'] <= 0.025) | (lmi_df['lmi_p'] >= 0.975)]
 
+# Storage for per-mouse data
+mouse_data_rew = []
+mouse_data_nonrew = []
+mice_rew = []
+mice_nonrew = []
 
 for mouse in mice:
-    print(f"Processing mouse: {mouse}")
+    print(f"\nProcessing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
+    
+    # Load mapping data
     file_name = 'tensor_xarray_mapping_data.nc'
     xarray_map = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=substract_baseline)
-
-    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
-    if rew_gp == 'R-':
-        mice_nonrew.append(mouse)
-    elif rew_gp == 'R+':
-        mice_rew.append(mouse)
+    
+    # Load learning data
     file_name = 'tensor_xarray_learning_data.nc'
     xarray_learning = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=substract_baseline)
+    
+    # Get reward group
+    rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
+    
+    # Select cells
+    if select_lmi:
+        selected_cells_mouse = selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']
+        xarray_map = xarray_map.sel(cell=xarray_map['roi'].isin(selected_cells_mouse))
+        xarray_learning = xarray_learning.sel(cell=xarray_learning['roi'].isin(selected_cells_mouse))
+    
+    # Check minimum number of cells
+    if xarray_map.sizes['cell'] < 5:
+        print(f"  Skipping {mouse}: insufficient cells ({xarray_map.sizes['cell']})")
+        continue
+    
+    # Process mapping trials: pre (days -2, -1) and post (days +1, +2)
+    # Check that each day has sufficient mapping trials
+    map_pre = xarray_map.sel(trial=xarray_map['day'].isin([-2, -1]))
+    map_post = xarray_map.sel(trial=xarray_map['day'].isin([1, 2]))
+    
+    # Check trials per day
+    n_trials_pre = map_pre[0, :].groupby('day').count(dim='trial').values
+    n_trials_post = map_post[0, :].groupby('day').count(dim='trial').values
+    
+    if np.any(n_trials_pre < n_map_trials) or np.any(n_trials_post < n_map_trials):
+        print(f"  Skipping {mouse}: insufficient mapping trials (pre: {n_trials_pre}, post: {n_trials_post})")
+        continue
+    
+    # Select exactly n_map_trials from each day
+    map_pre = map_pre.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
+    map_pre = map_pre.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    map_post = map_post.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))
+    map_post = map_post.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    # Process Day 0 learning trials (whisker trials only)
+    learning_day0 = xarray_learning.sel(trial=(xarray_learning['day'] == 0) & 
+                                               (xarray_learning['trial_type'] == 'whisker_trial'))
+    learning_day0 = learning_day0.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    n_learning_trials_actual = learning_day0.sizes['trial']
+    
+    # Also get Day +1 and +2 learning trials (whisker trials only)
+    learning_day1 = xarray_learning.sel(trial=(xarray_learning['day'] == 1) & 
+                                               (xarray_learning['trial_type'] == 'whisker_trial'))
+    learning_day1 = learning_day1.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    learning_day2 = xarray_learning.sel(trial=(xarray_learning['day'] == 2) & 
+                                               (xarray_learning['trial_type'] == 'whisker_trial'))
+    learning_day2 = learning_day2.sel(time=slice(win[0], win[1])).mean(dim='time')
+    
+    n_learning_trials_day1 = learning_day1.sizes['trial']
+    n_learning_trials_day2 = learning_day2.sizes['trial']
+    
+    print(f"  Reward group: {rew_gp}, Cells: {learning_day0.sizes['cell']}, Day 0 trials: {n_learning_trials_actual}, Day +1: {n_learning_trials_day1}, Day +2: {n_learning_trials_day2}")
+    
+    if n_learning_trials_actual < 20:
+        print(f"  Skipping {mouse}: insufficient Day 0 trials ({n_learning_trials_actual})")
+        continue
+    
+    # Bin Day 0 learning trials into n_learning_bins for alignment across mice
+    bin_size = n_learning_trials_actual // n_learning_bins
+    learning_day0_binned = []
+    for i in range(n_learning_bins):
+        start_idx = i * bin_size
+        end_idx = start_idx + bin_size if i < n_learning_bins - 1 else n_learning_trials_actual
+        bin_data = learning_day0.isel(trial=slice(start_idx, end_idx)).mean(dim='trial')
+        learning_day0_binned.append(bin_data.values)
+    learning_day0_binned = np.array(learning_day0_binned).T  # Shape: (n_cells, n_learning_bins)
+    
+    # Bin Day +1 learning trials
+    if n_learning_trials_day1 >= 20:
+        bin_size = n_learning_trials_day1 // n_learning_bins
+        learning_day1_binned = []
+        for i in range(n_learning_bins):
+            start_idx = i * bin_size
+            end_idx = start_idx + bin_size if i < n_learning_bins - 1 else n_learning_trials_day1
+            bin_data = learning_day1.isel(trial=slice(start_idx, end_idx)).mean(dim='trial')
+            learning_day1_binned.append(bin_data.values)
+        learning_day1_binned = np.array(learning_day1_binned).T
+    else:
+        learning_day1_binned = None
+    
+    # Bin Day +2 learning trials
+    if n_learning_trials_day2 >= 20:
+        bin_size = n_learning_trials_day2 // n_learning_bins
+        learning_day2_binned = []
+        for i in range(n_learning_bins):
+            start_idx = i * bin_size
+            end_idx = start_idx + bin_size if i < n_learning_bins - 1 else n_learning_trials_day2
+            bin_data = learning_day2.isel(trial=slice(start_idx, end_idx)).mean(dim='trial')
+            learning_day2_binned.append(bin_data.values)
+        learning_day2_binned = np.array(learning_day2_binned).T
+    else:
+        learning_day2_binned = None
+    
+    # Store data for this mouse
+    mouse_data = {
+        'mouse_id': mouse,
+        'reward_group': rew_gp,
+        'map_pre': map_pre.values,  # (n_cells, 2*n_map_trials)
+        'map_post': map_post.values,  # (n_cells, 2*n_map_trials)
+        'learning_day0_binned': learning_day0_binned,  # (n_cells, n_learning_bins)
+        'learning_day1_binned': learning_day1_binned,  # (n_cells, n_learning_bins) or None
+        'learning_day2_binned': learning_day2_binned,  # (n_cells, n_learning_bins) or None
+        'learning_day0_raw': learning_day0.values,  # (n_cells, n_learning_trials_actual)
+        'n_learning_trials_day0': n_learning_trials_actual,
+        'n_learning_trials_day1': n_learning_trials_day1,
+        'n_learning_trials_day2': n_learning_trials_day2
+    }
+    
+    # Verify dimensions - count total bins (Day 0 + Day +1 + Day +2)
+    n_total_learning_bins = n_learning_bins  # Day 0
+    if learning_day1_binned is not None:
+        n_total_learning_bins += n_learning_bins
+    if learning_day2_binned is not None:
+        n_total_learning_bins += n_learning_bins
+    
+    expected_trials = 2 * n_map_trials + n_total_learning_bins + 2 * n_map_trials
+    actual_trials = map_pre.values.shape[1] + learning_day0_binned.shape[1]
+    if learning_day1_binned is not None:
+        actual_trials += learning_day1_binned.shape[1]
+    if learning_day2_binned is not None:
+        actual_trials += learning_day2_binned.shape[1]
+    actual_trials += map_post.values.shape[1]
+    
+    print(f"  Matrix size will be: {expected_trials} × {expected_trials} (pre: {map_pre.values.shape[1]}, learning bins: {n_total_learning_bins}, post: {map_post.values.shape[1]})")
+    
+    if actual_trials != expected_trials:
+        print(f"  WARNING: Dimension mismatch! Expected {expected_trials}, got {actual_trials}")
+        continue
+    
+    if rew_gp == 'R+':
+        mouse_data_rew.append(mouse_data)
+        mice_rew.append(mouse)
+    elif rew_gp == 'R-':
+        mouse_data_nonrew.append(mouse_data)
+        mice_nonrew.append(mouse)
 
-    
-    
-    # Select days.
-    xarray_map = xarray_map.sel(trial=xarray_map['day'].isin(days))
-    xarray_learning = xarray_learning.sel(trial=xarray_learning['day'].isin(days))
-    
-    # Select responsive cells.
-    if select_responsive_cells or select_lmi:
-        xarray_map = xarray_map.sel(cell=xarray_map['roi'].isin(selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']))
-        xarray_learning = xarray_learning.sel(cell=xarray_learning['roi'].isin(selected_cells.loc[selected_cells['mouse_id'] == mouse]['roi']))
+print(f"\nLoaded {len(mouse_data_rew)} R+ mice and {len(mouse_data_nonrew)} R- mice")
 
-    # Select last n_map_trials mapping trials for each day.
-    d_map = xarray_map.groupby('day').apply(lambda x: x.isel(trial=slice(-n_map_trials, None)))    
-    d_map = d_map.sel(time=slice(win[0], win[1])).mean(dim='time')
-    # Z-score
-    if zscore:
-        d_map = (d_map - d_map.mean(dim='trial')) / d_map.std(dim='trial')
-    if rew_gp == 'R-':
-        vectors_map_nonrew.append(d_map)
-    elif rew_gp == 'R+':
-        vectors_map_rew.append(d_map)
-    
-    # Select learning trials for each day.
-    d_learn = xarray_learning.sel(trial=xarray_learning['trial_type'] == 'whisker_trial')
-    d_learn = d_learn.groupby('day').apply(lambda x: x.isel(trial=slice(0, n_learning_trials)))    
-    d_learn = d_learn.sel(time=slice(win[0], win[1])).mean(dim='time')
-    # Z-score
-    if zscore:
-        d_learn = (d_learn - d_learn.mean(dim='trial')) / d_learn.std(dim='trial')
-    if rew_gp == 'R-':
-        vectors_learning_nonrew.append(d_learn)
-    elif rew_gp == 'R+':
-        vectors_learning_rew.append(d_learn)
 
-# Compute average correlation for each pair of days for each mouse and return an 8x8 matrix averaged across mice.
-def compute_daywise_average_correlation(map_vectors, learning_vectors):
-    daywise_correlation_matrices = []
-    for map_vector, learning_vector in zip(map_vectors, learning_vectors):
-        # Initialize an 8x8 matrix for mapping and learning days
-        day_corr_matrix = np.zeros((8, 8))
-        
-        # Combine mapping and learning vectors into a single list
-        combined_vectors = [
-            map_vector.sel(trial=map_vector['day'] == -2),
-            map_vector.sel(trial=map_vector['day'] == -1),
-            learning_vector.sel(trial=learning_vector['day'] == 0),
-            map_vector.sel(trial=map_vector['day'] == 0),
-            learning_vector.sel(trial=learning_vector['day'] == 1),
-            map_vector.sel(trial=map_vector['day'] == 1),
-            learning_vector.sel(trial=learning_vector['day'] == 2),
-            map_vector.sel(trial=map_vector['day'] == 2),
-        ]
-        
-        # Compute correlations between all pairs of days
-        for i, vect_1 in enumerate(combined_vectors):
-            for j, vect_2 in enumerate(combined_vectors):
-                # Compute correlation between the two sets of trials
-                corr = np.corrcoef(vect_1.values.T, vect_2.values.T)
-                
-                # If comparing the same day, exclude the diagonal
-                if i == j:
-                    np.fill_diagonal(corr, np.nan)
-                
-                # Compute average correlation between the two days
-                avg_corr = np.nanmean(corr)
-                day_corr_matrix[i, j] = avg_corr
-        
-        daywise_correlation_matrices.append(day_corr_matrix)
+# Functions to compute correlation matrices
+# ------------------------------------------
+
+def compute_similarity_matrix_learning(vector, method='spearman'):
+    """
+    Compute similarity matrix using specified method.
+    Same as before but adapted for learning+mapping data.
+    """
+    n_trials = vector.shape[1]
+    sim_matrix = np.full((n_trials, n_trials), np.nan)
+    
+    for i in range(n_trials):
+        for j in range(i, n_trials):  # Only compute upper triangle
+            if method == 'pearson':
+                corr = np.corrcoef(vector[:, i], vector[:, j])[0, 1]
+            elif method == 'spearman':
+                corr = spearmanr(vector[:, i], vector[:, j])[0]
+            elif method == 'cosine':
+                corr = np.dot(vector[:, i], vector[:, j]) / (np.linalg.norm(vector[:, i]) * np.linalg.norm(vector[:, j]))
+            
+            if i != j:  # Exclude diagonal
+                sim_matrix[i, j] = corr
+                sim_matrix[j, i] = corr
+    
+    return sim_matrix
+
+
+def compute_per_mouse_correlation_matrix_binned(mouse_data, similarity_metric='spearman'):
+    """
+    Compute trial-by-trial correlation matrix for one mouse using binned learning data.
+    
+    Structure: [Pre-mapping (80 trials) | Learning Day 0 (120 bins) | Learning Day +1 (120 bins) | Learning Day +2 (120 bins) | Post-mapping (80 trials)]
+    """
+    # Concatenate all data: pre_mapping + learning days + post_mapping
+    data_parts = [mouse_data['map_pre']]  # (n_cells, 80)
+    data_parts.append(mouse_data['learning_day0_binned'])  # (n_cells, 120)
+    
+    if mouse_data['learning_day1_binned'] is not None:
+        data_parts.append(mouse_data['learning_day1_binned'])  # (n_cells, 120)
+    
+    if mouse_data['learning_day2_binned'] is not None:
+        data_parts.append(mouse_data['learning_day2_binned'])  # (n_cells, 120)
+    
+    data_parts.append(mouse_data['map_post'])  # (n_cells, 80)
+    
+    combined = np.concatenate(data_parts, axis=1)
+    
+    # Compute similarity matrix
+    corr_matrix = compute_similarity_matrix_learning(combined, method=similarity_metric)
+    
+    return corr_matrix
+
+
+def average_correlation_matrices_aligned(mouse_data_list, similarity_metric='spearman'):
+    """
+    Compute per-mouse correlation matrices and average them.
+    Uses binned learning data to align across mice with different session lengths.
+    """
+    matrices = []
+    
+    for mouse_data in mouse_data_list:
+        matrix = compute_per_mouse_correlation_matrix_binned(mouse_data, similarity_metric)
+        matrices.append(matrix)
+        print(f"  {mouse_data['mouse_id']}: matrix shape {matrix.shape}")
+    
+    # Check that all matrices have the same shape
+    shapes = [m.shape for m in matrices]
+    if len(set(shapes)) > 1:
+        print(f"ERROR: Matrices have inconsistent shapes: {shapes}")
+        raise ValueError("Cannot average matrices with different shapes")
+    
+    # Convert to numpy array for averaging
+    matrices_array = np.array(matrices)
     
     # Average across mice
-    avg_correlation_matrix = np.nanmean(daywise_correlation_matrices, axis=0)
+    avg_matrix = np.nanmean(matrices_array, axis=0)
     
-    return avg_correlation_matrix
+    return avg_matrix, matrices
 
 
-# For each mouse, plot population vectors and correlation matrix.
-# ---------------------------------------------------------------
+# Compute average correlation matrices for both groups
+# -----------------------------------------------------
+
+print(f"\nComputing correlation matrices using {similarity_metric} similarity...")
+
+avg_corr_rew, matrices_rew = average_correlation_matrices_aligned(mouse_data_rew, similarity_metric)
+avg_corr_nonrew, matrices_nonrew = average_correlation_matrices_aligned(mouse_data_nonrew, similarity_metric)
+
+print(f"R+ group: {len(matrices_rew)} mice, matrix shape: {avg_corr_rew.shape}")
+print(f"R- group: {len(matrices_nonrew)} mice, matrix shape: {avg_corr_nonrew.shape}")
+
+
+# Visualize correlation matrices
+# --------------------------------
 
 output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/during_learning'
 output_dir = io.adjust_path_to_host(output_dir)
-pdf_file = 'pop_vectors_mapping_learning_justday0.pdf'
+
+# Set consistent color scale
+vmax = max(np.nanpercentile(avg_corr_rew, 99), np.nanpercentile(avg_corr_nonrew, 99))
+vmin = 0
+
+# Create figure with 3 axes: 2 for matrices, 1 for colorbar
+fig = plt.figure(figsize=(16, 6))
+gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.3)
+axes = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[0, 2])]
+
+# Plot R+ group
+im0 = axes[0].imshow(avg_corr_rew, cmap='viridis', vmin=vmin, vmax=vmax, aspect='auto')
+axes[0].set_title(f'R+ Group (N={len(mice_rew)} mice)\n{similarity_metric.capitalize()} Correlation')
+
+# Add vertical lines to separate epochs
+# Structure: [Pre-mapping (80) | Learning Day 0 (120) | Learning Day +1 (120) | Learning Day +2 (120) | Post-mapping (80)]
+# Calculate edges based on actual data structure
+n_learning_bins_per_day = n_learning_bins
+edges = [80]  # After pre-mapping
+edges.append(80 + n_learning_bins_per_day)  # After Day 0 learning
+edges.append(80 + 2 * n_learning_bins_per_day)  # After Day +1 learning
+edges.append(80 + 3 * n_learning_bins_per_day)  # After Day +2 learning
+
+for edge in edges:
+    axes[0].axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=2)
+    axes[0].axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=2)
+
+# Add labels
+tick_positions = [40, 80 + n_learning_bins_per_day//2, 
+                  80 + n_learning_bins_per_day + n_learning_bins_per_day//2,
+                  80 + 2*n_learning_bins_per_day + n_learning_bins_per_day//2,
+                  80 + 3*n_learning_bins_per_day + 40]
+tick_labels = ['Pre\nMapping', 'Day 0\nLearning', 'Day +1\nLearning', 'Day +2\nLearning', 'Post\nMapping']
+axes[0].set_xticks(tick_positions)
+axes[0].set_xticklabels(tick_labels, fontsize=9)
+axes[0].set_yticks(tick_positions)
+axes[0].set_yticklabels(tick_labels, fontsize=9)
+
+# Plot R- group
+im1 = axes[1].imshow(avg_corr_nonrew, cmap='viridis', vmin=vmin, vmax=vmax, aspect='auto')
+axes[1].set_title(f'R- Group (N={len(mice_nonrew)} mice)\n{similarity_metric.capitalize()} Correlation')
+
+# Add vertical lines
+for edge in edges:
+    axes[1].axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=2)
+    axes[1].axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=2)
+
+# Add labels
+axes[1].set_xticks(tick_positions)
+axes[1].set_xticklabels(tick_labels, fontsize=9)
+axes[1].set_yticks(tick_positions)
+axes[1].set_yticklabels(tick_labels, fontsize=9)
+
+# Add colorbar on separate axis
+fig.colorbar(im1, cax=axes[2], label=f'{similarity_metric.capitalize()} Correlation')
+
+plt.tight_layout()
+
+# Save figure
+celltype_str = 'lmi_cells' if select_lmi else 'all_cells'
+svg_file = f'correlation_matrix_learning_mapping_{similarity_metric}_{celltype_str}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(output_dir, svg_file.replace('.svg', '.png')), format='png', dpi=300, bbox_inches='tight')
+
+print(f"\nSaved correlation matrices to: {output_dir}")
+
+
+# Plot individual mouse examples in a PDF
+# ----------------------------------------
+
+pdf_file = f'per_mouse_correlation_matrices_{similarity_metric}_{celltype_str}.pdf'
 
 with PdfPages(os.path.join(output_dir, pdf_file)) as pdf:
-    # Rewarded group
-    for imouse in range(len(mice_rew)):
-        mouse = mice_rew[imouse]
-        print(f"Processing rewarded mouse: {mouse}")
-        vectors_map = vectors_map_rew[imouse]
-        vectors_learning = vectors_learning_rew[imouse]
-        combined_vectors = [
-            vectors_map.sel(trial=vectors_map['day'] == -2),
-            vectors_map.sel(trial=vectors_map['day'] == -1),
-            vectors_learning.sel(trial=vectors_learning['day'] == 0),
-            vectors_map.sel(trial=vectors_map['day'] == 0),
-            # vectors_learning.sel(trial=vectors_learning['day'] == 1),
-            vectors_map.sel(trial=vectors_map['day'] == 1),
-            # vectors_learning.sel(trial=vectors_learning['day'] == 2),
-            vectors_map.sel(trial=vectors_map['day'] == 2),
-        ]
-        combined_vectors = np.concatenate([vect.values for vect in combined_vectors], axis=1)
-        plt.figure(figsize=(10, 6),  dpi=300)
-        plt.imshow(combined_vectors, cmap='viridis', vmin=-.2, vmax=0.4)
-        # edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials])
-        edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_map_trials, n_map_trials])
-        for edge in edges[:-1]:
-            plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-        plt.title(f'Rewarded Mouse: {mouse}')
-        plt.xlabel('Trials')
-        plt.ylabel('Cells')
+    # R+ mice
+    for i, (mouse, matrix) in enumerate(zip(mice_rew, matrices_rew)):
+        fig, ax = plt.subplots(1, 1, figsize=(8, 7))
+        im = ax.imshow(matrix, cmap='viridis', vmin=vmin, vmax=vmax, aspect='auto')
+        
+        # Add epoch separators
+        for edge in edges:
+            ax.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=2)
+            ax.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=2)
+        
+        ax.set_title(f'R+ Mouse: {mouse}\nDay 0: {mouse_data_rew[i]["n_learning_trials_day0"]} trials, Day +1: {mouse_data_rew[i]["n_learning_trials_day1"]}, Day +2: {mouse_data_rew[i]["n_learning_trials_day2"]}')
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+        ax.set_yticks(tick_positions)
+        ax.set_yticklabels(tick_labels)
+        
+        plt.colorbar(im, ax=ax, label=f'{similarity_metric.capitalize()} Correlation')
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+    
+    # R- mice
+    for i, (mouse, matrix) in enumerate(zip(mice_nonrew, matrices_nonrew)):
+        fig, ax = plt.subplots(1, 1, figsize=(8, 7))
+        im = ax.imshow(matrix, cmap='viridis', vmin=vmin, vmax=vmax, aspect='auto')
+        
+        # Add epoch separators
+        for edge in edges:
+            ax.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=2)
+            ax.axhline(y=edge - 0.5, color='white', linestyle='-', linewidth=2)
+        
+        ax.set_title(f'R- Mouse: {mouse}\nDay 0: {mouse_data_nonrew[i]["n_learning_trials_day0"]} trials, Day +1: {mouse_data_nonrew[i]["n_learning_trials_day1"]}, Day +2: {mouse_data_nonrew[i]["n_learning_trials_day2"]}')
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+        ax.set_yticks(tick_positions)
+        ax.set_yticklabels(tick_labels)
+        
+        plt.colorbar(im, ax=ax, label=f'{similarity_metric.capitalize()} Correlation')
         plt.tight_layout()
         pdf.savefig()
         plt.close()
 
-    # Non-rewarded group
-    for imouse in range(len(mice_nonrew)):
-        # Use correct mouse index for non-rewarded group
-        # Find the mouse name in the original mice list if possible
-        mouse = mice_nonrew[imouse]
-        print(f"Processing non-rewarded mouse: {mouse}")
-        vectors_map = vectors_map_nonrew[imouse]
-        vectors_learning = vectors_learning_nonrew[imouse]
-        combined_vectors = [
-            vectors_map.sel(trial=vectors_map['day'] == -2),
-            vectors_map.sel(trial=vectors_map['day'] == -1),
-            vectors_learning.sel(trial=vectors_learning['day'] == 0),
-            vectors_map.sel(trial=vectors_map['day'] == 0),
-            # vectors_learning.sel(trial=vectors_learning['day'] == 1),
-            vectors_map.sel(trial=vectors_map['day'] == 1),
-            # vectors_learning.sel(trial=vectors_learning['day'] == 2),
-            vectors_map.sel(trial=vectors_map['day'] == 2),
-        ]
-        combined_vectors = np.concatenate([vect.values for vect in combined_vectors], axis=1)
-        plt.figure(figsize=(10, 6),  dpi=300)
-        plt.imshow(combined_vectors, cmap='viridis', vmin=-.2, vmax=0.4)
-        # edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials, n_learning_trials, n_map_trials])
-        edges = np.cumsum([n_map_trials, n_map_trials, n_learning_trials, n_map_trials, n_map_trials, n_map_trials])
-        for edge in edges[:-1]:
-            plt.axvline(x=edge - 0.5, color='white', linestyle='-', linewidth=0.8)
-        plt.title(f'Non-Rewarded Mouse: {mouse}')
-        plt.xlabel('Trials')
-        plt.ylabel('Cells')
-        plt.tight_layout()
-        pdf.savefig()
-        plt.close()
+print(f"Saved individual mouse matrices to: {pdf_file}")
 
 
+# Quantify learning trajectory alignment with mapping epochs
+# -----------------------------------------------------------
 
-# Compute average correlation for each pair of days for each mouse and return an 8x8 matrix averaged across mice.
-def compute_trialwise_average_correlation(map_vectors, learning_vectors):
-    trialwise_correlation_matrices = []
-    for map_vector, learning_vector in zip(map_vectors, learning_vectors):
-        
-        # Check that each day has at least n_map_trials mapping trials
-        n_trials_map = map_vector[0, :].groupby('day').count(dim='trial').values
-        if np.any(n_trials_map < n_map_trials):
-            print(f'Not enough mapping trials for this mouse.')
-            continue
-
-        # Check that each day has at least n_learning_trials learning trials
-        n_trials_learning = learning_vector[0, :].groupby('day').count(dim='trial').values
-        if np.any(n_trials_learning < n_learning_trials):
-            print(f'Not enough learning trials for this mouse.')
-            continue
-        
-        # Combine mapping and learning vectors into a single list
-        combined_vectors = [
-            map_vector.sel(trial=map_vector['day'] == -2),
-            map_vector.sel(trial=map_vector['day'] == -1),
-            learning_vector.sel(trial=learning_vector['day'] == 0),
-            map_vector.sel(trial=map_vector['day'] == 0),
-            learning_vector.sel(trial=learning_vector['day'] == 1),
-            map_vector.sel(trial=map_vector['day'] == 1),
-            learning_vector.sel(trial=learning_vector['day'] == 2),
-            map_vector.sel(trial=map_vector['day'] == 2),
-        ]
-        for i, vect in enumerate(combined_vectors):
-            print(vect.shape)
-        # Compute correlations between all pairs of trials
-        
-        combined_vectors = np.concatenate([vect.values.T for vect in combined_vectors], axis=0)
-        # Compute correlation between the two sets of trials
-        corr = np.corrcoef(combined_vectors)
-        trialwise_correlation_matrices.append(corr)
+def compute_learning_mapping_similarity(mouse_data, similarity_metric='spearman'):
+    """
+    Compute how similar each learning bin is to pre vs post mapping epochs.
+    Returns arrays of correlations for Day 0, Day +1, and Day +2.
+    """
+    # Compute average pre and post mapping vectors
+    pre_avg = mouse_data['map_pre'].mean(axis=1)  # (n_cells,)
+    post_avg = mouse_data['map_post'].mean(axis=1)  # (n_cells,)
     
-    # Average across mice
-    avg_correlation_matrix = np.nanmean(trialwise_correlation_matrices, axis=0)
+    # Process Day 0 learning bins
+    sim_to_pre = []
+    sim_to_post = []
+    day_labels = []
     
-    return avg_correlation_matrix
+    n_bins_day0 = mouse_data['learning_day0_binned'].shape[1]
+    for i in range(n_bins_day0):
+        learning_bin = mouse_data['learning_day0_binned'][:, i]
+        
+        if similarity_metric == 'pearson':
+            sim_pre = np.corrcoef(learning_bin, pre_avg)[0, 1]
+            sim_post = np.corrcoef(learning_bin, post_avg)[0, 1]
+        elif similarity_metric == 'spearman':
+            sim_pre = spearmanr(learning_bin, pre_avg)[0]
+            sim_post = spearmanr(learning_bin, post_avg)[0]
+        elif similarity_metric == 'cosine':
+            sim_pre = np.dot(learning_bin, pre_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(pre_avg))
+            sim_post = np.dot(learning_bin, post_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(post_avg))
+        
+        sim_to_pre.append(sim_pre)
+        sim_to_post.append(sim_post)
+        day_labels.append(0)
+    
+    # Process Day +1 learning bins if available
+    if mouse_data['learning_day1_binned'] is not None:
+        n_bins_day1 = mouse_data['learning_day1_binned'].shape[1]
+        for i in range(n_bins_day1):
+            learning_bin = mouse_data['learning_day1_binned'][:, i]
+            
+            if similarity_metric == 'pearson':
+                sim_pre = np.corrcoef(learning_bin, pre_avg)[0, 1]
+                sim_post = np.corrcoef(learning_bin, post_avg)[0, 1]
+            elif similarity_metric == 'spearman':
+                sim_pre = spearmanr(learning_bin, pre_avg)[0]
+                sim_post = spearmanr(learning_bin, post_avg)[0]
+            elif similarity_metric == 'cosine':
+                sim_pre = np.dot(learning_bin, pre_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(pre_avg))
+                sim_post = np.dot(learning_bin, post_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(post_avg))
+            
+            sim_to_pre.append(sim_pre)
+            sim_to_post.append(sim_post)
+            day_labels.append(1)
+    
+    # Process Day +2 learning bins if available
+    if mouse_data['learning_day2_binned'] is not None:
+        n_bins_day2 = mouse_data['learning_day2_binned'].shape[1]
+        for i in range(n_bins_day2):
+            learning_bin = mouse_data['learning_day2_binned'][:, i]
+            
+            if similarity_metric == 'pearson':
+                sim_pre = np.corrcoef(learning_bin, pre_avg)[0, 1]
+                sim_post = np.corrcoef(learning_bin, post_avg)[0, 1]
+            elif similarity_metric == 'spearman':
+                sim_pre = spearmanr(learning_bin, pre_avg)[0]
+                sim_post = spearmanr(learning_bin, post_avg)[0]
+            elif similarity_metric == 'cosine':
+                sim_pre = np.dot(learning_bin, pre_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(pre_avg))
+                sim_post = np.dot(learning_bin, post_avg) / (np.linalg.norm(learning_bin) * np.linalg.norm(post_avg))
+            
+            sim_to_pre.append(sim_pre)
+            sim_to_post.append(sim_post)
+            day_labels.append(2)
+    
+    return np.array(sim_to_pre), np.array(sim_to_post), np.array(day_labels)
 
 
+# Compute for all mice
+results_trajectory = []
 
-# Compute daywise average correlation for rewarded and non-rewarded groups
-daywise_avg_corr_rew = compute_daywise_average_correlation(vectors_map_rew, vectors_learning_rew)
-daywise_avg_corr_nonrew = compute_daywise_average_correlation(vectors_map_nonrew, vectors_learning_nonrew)
+for mouse_data in mouse_data_rew:
+    sim_pre, sim_post, day_labels = compute_learning_mapping_similarity(mouse_data, similarity_metric)
+    for i, (sp, spost, day) in enumerate(zip(sim_pre, sim_post, day_labels)):
+        results_trajectory.append({
+            'mouse_id': mouse_data['mouse_id'],
+            'reward_group': 'R+',
+            'bin': i + 1,
+            'day': day,
+            'similarity_to_pre': sp,
+            'similarity_to_post': spost,
+            'alignment_index': spost - sp  # Positive = more similar to post
+        })
 
-# Compute daywise average correlation for rewarded and non-rewarded groups
-trialwise_avg_corr_rew = compute_trialwise_average_correlation(vectors_map_rew, vectors_learning_rew)
-trialwise_avg_corr_nonrew = compute_trialwise_average_correlation(vectors_map_nonrew, vectors_learning_nonrew)
+for mouse_data in mouse_data_nonrew:
+    sim_pre, sim_post, day_labels = compute_learning_mapping_similarity(mouse_data, similarity_metric)
+    for i, (sp, spost, day) in enumerate(zip(sim_pre, sim_post, day_labels)):
+        results_trajectory.append({
+            'mouse_id': mouse_data['mouse_id'],
+            'reward_group': 'R-',
+            'bin': i + 1,
+            'day': day,
+            'similarity_to_pre': sp,
+            'similarity_to_post': spost,
+            'alignment_index': spost - sp
+        })
 
-# vmax and vmin for consistent color scaling across both matrices
-vmax = np.nanpercentile(daywise_avg_corr_rew, 98)
-vmin = np.nanpercentile(daywise_avg_corr_nonrew, 3)
-vmax = 0.8
-vmin = 0.15
+trajectory_df = pd.DataFrame(results_trajectory)
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
+# Save data
+trajectory_df.to_csv(os.path.join(output_dir, f'learning_trajectory_alignment_{similarity_metric}_{celltype_str}.csv'), index=False)
 
-# Plot daywise average correlation matrix for rewarded group
-sns.heatmap(daywise_avg_corr_rew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[0])
-axes[0].set_title('Daywise Average Correlation (Rewarded Group)')
-axes[0].set_xlabel('Day')
-axes[0].set_ylabel('Day')
+# Visualize trajectory with day boundaries
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-# Plot daywise average correlation matrix for non-rewarded group
-sns.heatmap(daywise_avg_corr_nonrew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[1])
-axes[1].set_title('Daywise Average Correlation (Non-Rewarded Group)')
-axes[1].set_xlabel('Day')
+# Panel 1: Similarity to pre-mapping
+sns.lineplot(data=trajectory_df, x='bin', y='similarity_to_pre', hue='reward_group',
+             hue_order=['R+', 'R-'], palette=reward_palette[::-1], ax=axes[0], 
+             err_style='band', linewidth=2)
+axes[0].set_xlabel('Learning Bin (Day 0 → Day +1 → Day +2)')
+axes[0].set_ylabel(f'{similarity_metric.capitalize()} Correlation')
+axes[0].set_title('Similarity to Pre-Mapping')
+axes[0].legend(title='Group')
+axes[0].grid(True, alpha=0.3)
 
-# Adjust layout
+# Add vertical lines to mark day boundaries (assuming 120 bins per day)
+axes[0].axvline(x=n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[0].axvline(x=2*n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[0].text(n_learning_bins/2, axes[0].get_ylim()[1]*0.95, 'Day 0', ha='center', fontsize=10, color='red')
+axes[0].text(n_learning_bins*1.5, axes[0].get_ylim()[1]*0.95, 'Day +1', ha='center', fontsize=10, color='red')
+axes[0].text(n_learning_bins*2.5, axes[0].get_ylim()[1]*0.95, 'Day +2', ha='center', fontsize=10, color='red')
+
+# Panel 2: Similarity to post-mapping
+sns.lineplot(data=trajectory_df, x='bin', y='similarity_to_post', hue='reward_group',
+             hue_order=['R+', 'R-'], palette=reward_palette[::-1], ax=axes[1],
+             err_style='band', linewidth=2)
+axes[1].set_xlabel('Learning Bin (Day 0 → Day +1 → Day +2)')
+axes[1].set_ylabel(f'{similarity_metric.capitalize()} Correlation')
+axes[1].set_title('Similarity to Post-Mapping')
+axes[1].legend(title='Group')
+axes[1].grid(True, alpha=0.3)
+
+# Add vertical lines
+axes[1].axvline(x=n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[1].axvline(x=2*n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[1].text(n_learning_bins/2, axes[1].get_ylim()[1]*0.95, 'Day 0', ha='center', fontsize=10, color='red')
+axes[1].text(n_learning_bins*1.5, axes[1].get_ylim()[1]*0.95, 'Day +1', ha='center', fontsize=10, color='red')
+axes[1].text(n_learning_bins*2.5, axes[1].get_ylim()[1]*0.95, 'Day +2', ha='center', fontsize=10, color='red')
+
+# Panel 3: Alignment index (post - pre)
+sns.lineplot(data=trajectory_df, x='bin', y='alignment_index', hue='reward_group',
+             hue_order=['R+', 'R-'], palette=reward_palette[::-1], ax=axes[2],
+             err_style='band', linewidth=2)
+axes[2].axhline(0, color='gray', linestyle='--', alpha=0.5)
+axes[2].set_xlabel('Learning Bin (Day 0 → Day +1 → Day +2)')
+axes[2].set_ylabel('Alignment Index\n(Post - Pre Similarity)')
+axes[2].set_title('Shift from Pre to Post Representation')
+axes[2].legend(title='Group')
+axes[2].grid(True, alpha=0.3)
+
+# Add vertical lines
+axes[2].axvline(x=n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[2].axvline(x=2*n_learning_bins, color='red', linestyle='--', alpha=0.5, linewidth=1.5)
+axes[2].text(n_learning_bins/2, axes[2].get_ylim()[1]*0.95, 'Day 0', ha='center', fontsize=10, color='red')
+axes[2].text(n_learning_bins*1.5, axes[2].get_ylim()[1]*0.95, 'Day +1', ha='center', fontsize=10, color='red')
+axes[2].text(n_learning_bins*2.5, axes[2].get_ylim()[1]*0.95, 'Day +2', ha='center', fontsize=10, color='red')
+
+sns.despine()
 plt.tight_layout()
-# plt.show()
 
-# Save plot.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/during_learning'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'average_correlation_mapping_learning.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
+# Save
+svg_file = f'learning_trajectory_{similarity_metric}_{celltype_str}.svg'
+plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(output_dir, svg_file.replace('.svg', '.png')), format='png', dpi=300, bbox_inches='tight')
+
+print(f"\nAnalysis complete!")
+print(f"Files saved to: {output_dir}")
 
 
 
-# vmax and vmin for consistent color scaling across both matrices
-vmax = np.nanpercentile(trialwise_avg_corr_rew, 99.5)
-vmin = np.nanpercentile(trialwise_avg_corr_nonrew, 4)
-vmax = 1
-vmin = 0.15
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
 
-# Plot trialwise average correlation matrix for rewarded group
-sns.heatmap(trialwise_avg_corr_rew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[0])
-axes[0].set_title('trialwise Average Correlation (Rewarded Group)')
-axes[0].set_xlabel('Day')
-axes[0].set_ylabel('Day')
 
-# Plot trialwise average correlation matrix for non-rewarded group
-sns.heatmap(trialwise_avg_corr_nonrew, annot=False, fmt=".2f", cmap='viridis', xticklabels=days, yticklabels=days, 
-            cbar_kws={'label': 'Correlation'}, vmax=vmax, vmin=vmin, ax=axes[1])
-axes[1].set_title('trialwise Average Correlation (Non-Rewarded Group)')
-axes[1].set_xlabel('Day')
 
-# Adjust layout
-plt.tight_layout()
-# plt.show()
-
-# Save plot.
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/correlation_matrices/during_learning'
-output_dir = io.adjust_path_to_host(output_dir)
-svg_file = 'average_correlation_mapping_learning.svg'
-plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 

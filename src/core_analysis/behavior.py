@@ -1306,8 +1306,7 @@ pd.DataFrame(stats).to_csv(os.path.join(output_dir, 'opto_learning_day0_day1_sta
 
 # ##############################################
 # Fit learning curves and define learning trial.
-# ##############################################
-
+# ##############################################§
 
 # Load behavior results.
 # ----------------------

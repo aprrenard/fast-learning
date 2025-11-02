@@ -53,11 +53,9 @@ sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif',
 # Decoding before and after learning.
 # ##################################################
 
-# Similar to the previous section, but compute a correlation matrix for
-# each mouse and then average across mice.
 
 sampling_rate = 30
-win = (0, 0.300)  # from stimulus onset to 300 ms after.
+win = (0, 0.180)  # from stimulus onset to 180 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
 # win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
@@ -301,8 +299,8 @@ def per_mouse_cv_accuracy(vectors, label_encoder, seed=42, n_shuffles=100, retur
 le = LabelEncoder()
 le.fit(['pre', 'post'])
 
-accs_rew, chance_rew, weights_rew = per_mouse_cv_accuracy(vectors_rew, le, n_shuffles=1, return_weights=True, equalize=True)
-accs_nonrew, chance_nonrew, weights_nonrew = per_mouse_cv_accuracy(vectors_nonrew, le, n_shuffles=1, return_weights=True, equalize=True)
+accs_rew, chance_rew, weights_rew = per_mouse_cv_accuracy(vectors_rew, le, n_shuffles=10, return_weights=True, equalize=True)
+accs_nonrew, chance_nonrew, weights_nonrew = per_mouse_cv_accuracy(vectors_nonrew, le, n_shuffles=10, return_weights=True, equalize=True)
 
 for w in weights_rew:
     plt.plot(w, label='R+')
@@ -352,227 +350,15 @@ if projection_type is not None:
 pd.DataFrame({'stat': [stat], 'p_value': [p_value]}).to_csv(os.path.join(output_dir, stat_file), index=False)
 
 
-# Decoding accuracy using a decoder trained on day -2 vs +2
-# ---------------------------------------------------------
-# For each mouse, train a classifier to distinguish activity patterns on day -2 vs +2.
-# Then, use this trained classifier to decode every pair of days (including each day against itself).
-# Plot accuracy as a matrix for each reward group.
- 
-all_days = [-2, -1, 0, 1, 2]
-day_labels = [str(d) for d in all_days]
-
-def pairwise_day_decoding_fixed_decoder_cv(vectors, days, seed=42, n_splits=10):
-    # Returns: list of accuracy matrices (n_mice x n_days x n_days)
-    acc_matrices = []
-    rng = np.random.default_rng(seed)
-    for d in vectors:
-        acc_matrix = np.full((len(days), len(days)), np.nan)
-        day_per_trial = d['day'].values
-        # For each fold
-        fold_accs = np.zeros((n_splits, len(days), len(days)))
-        # Get indices for each day
-        day_indices = {day: np.where(day_per_trial == day)[0] for day in days}
-        # For each fold
-        for k in range(n_splits):
-            # Split indices for each day
-            train_idx = []
-            test_idx = []
-            for day in days:
-                idx = day_indices[day]
-                if len(idx) < n_splits:
-                    continue  # skip if not enough trials
-                idx_shuff = rng.permutation(idx)
-                fold_size = len(idx) // n_splits
-                test_fold = idx_shuff[k*fold_size:(k+1)*fold_size] if k < n_splits-1 else idx_shuff[k*fold_size:]
-                train_fold = np.setdiff1d(idx, test_fold)
-                train_idx.append((day, train_fold))
-                test_idx.append((day, test_fold))
-            # Train decoder on -2 vs +2 (using train data only)
-            train_days = [-2, +2]
-            train_mask = np.concatenate([fold for day, fold in train_idx if day in train_days])
-            train_labels = np.concatenate([[day]*len(fold) for day, fold in train_idx if day in train_days])
-            if len(train_mask) < 2 or len(np.unique(train_labels)) < 2:
-                continue
-            X_train = d.values[:, train_mask].T
-            y_train = np.array([0 if day == -2 else 1 for day in train_labels])
-            scaler = StandardScaler()
-            X_train_proc = scaler.fit_transform(X_train)
-            clf = LogisticRegression(max_iter=5000, random_state=seed)
-            clf.fit(X_train_proc, y_train)
-            # Test decoder on all pairs of days (using test data only)
-            for i, day_i in enumerate(days):
-                for j, day_j in enumerate(days):
-                    test_mask_i = [fold for day, fold in test_idx if day == day_i]
-                    test_mask_j = [fold for day, fold in test_idx if day == day_j]
-                    if not test_mask_i or not test_mask_j:
-                        continue
-                    test_mask_i = test_mask_i[0]
-                    test_mask_j = test_mask_j[0]
-                    if len(test_mask_i) < 1 or len(test_mask_j) < 1:
-                        continue
-                    X_test = np.concatenate([d.values[:, test_mask_i].T, d.values[:, test_mask_j].T], axis=0)
-                    y_test = np.array([0] * len(test_mask_i) + [1] * len(test_mask_j))
-                    X_test_proc = scaler.transform(X_test)
-                    y_pred = clf.predict(X_test_proc)
-                    acc = np.mean(y_pred == y_test)
-                    fold_accs[k, i, j] = acc
-        # Average over folds
-        with np.errstate(invalid='ignore'):
-            acc_matrix = np.nanmean(fold_accs, axis=0)
-        acc_matrices.append(acc_matrix)
-    return np.array(acc_matrices)
-
-# Compute accuracy matrices for each group
-accs_rew_matrix = pairwise_day_decoding_fixed_decoder_cv(vectors_rew, all_days)
-accs_nonrew_matrix = pairwise_day_decoding_fixed_decoder_cv(vectors_nonrew, all_days)
-# Average across mice
-mean_accs_rew = np.nanmean(accs_rew_matrix, axis=0)
-mean_accs_nonrew = np.nanmean(accs_nonrew_matrix, axis=0)
-
-# Make matrices symmetric with filled diagonal for aesthetics
-def make_symmetric_with_diag(mat):
-    sym_mat = np.full_like(mat, np.nan)
-    iu = np.triu_indices_from(mat, k=1)
-    sym_mat[iu] = mat[iu]
-    il = np.tril_indices_from(mat, k=-1)
-    sym_mat[il] = mat.T[il]
-    diag = np.diag_indices_from(mat)
-    sym_mat[diag] = np.diag(mat)
-    return sym_mat
-
-mean_accs_rew_sym = make_symmetric_with_diag(mean_accs_rew)
-mean_accs_nonrew_sym = make_symmetric_with_diag(mean_accs_nonrew)
-
-# Plot accuracy matrices and shared colormap
-import matplotlib.gridspec as gridspec
-
-fig = plt.figure(figsize=(9, 4))
-gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 0.05])
-ax0 = fig.add_subplot(gs[0])
-ax1 = fig.add_subplot(gs[1])
-ax2 = fig.add_subplot(gs[2])
-vmax = max(np.nanmax(mean_accs_rew_sym), np.nanmax(mean_accs_nonrew_sym))
-vmin = 0.5
-
-sns.heatmap(mean_accs_rew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
-            ax=ax0, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_accs_rew_sym), cbar=False)
-ax0.set_title("R+ group: Fixed decoder (-2 vs +2) pairwise day accuracy (CV)")
-ax0.set_xlabel("Day")
-ax0.set_ylabel("Day")
-
-sns.heatmap(mean_accs_nonrew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
-            ax=ax1, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_accs_nonrew_sym), cbar=False)
-ax1.set_title("R- group: Fixed decoder (-2 vs +2) pairwise day accuracy (CV)")
-ax1.set_xlabel("Day")
-ax1.set_ylabel("Day")
-
-# Shared colorbar
-norm = colors.Normalize(vmin=vmin, vmax=vmax)
-sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
-sm.set_array([])
-fig.colorbar(sm, cax=ax2)
-
-plt.tight_layout()
-sns.despine()
-
-# Save figure
-output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
-output_dir = io.adjust_path_to_host(output_dir)
-plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix.png'), format='png', dpi=300)
-
-# Save data
-np.save(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix_Rplus.npy'), mean_accs_rew)
-np.save(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix_Rminus.npy'), mean_accs_nonrew)
-
-
-# Compute chance accuracy matrices by shuffling labels
-def pairwise_day_decoding_chance(vectors, days, n_splits=10, seed=42, n_shuffles=5):
-    acc_matrices = []
-    rng = np.random.default_rng(seed)
-    for d in vectors:
-        acc_matrix = np.full((len(days), len(days)), np.nan)
-        for i, day_i in enumerate(days):
-            for j, day_j in enumerate(days):
-                if i >= j:
-                    continue
-                day_per_trial = d['day'].values
-                mask_i = day_per_trial == day_i
-                mask_j = day_per_trial == day_j
-                if np.sum(mask_i) < 2 or np.sum(mask_j) < 2:
-                    continue
-                X = np.concatenate([d.values[:, mask_i].T, d.values[:, mask_j].T], axis=0)
-                y = np.array([day_i] * np.sum(mask_i) + [day_j] * np.sum(mask_j))
-                le_pair = LabelEncoder()
-                y_enc = le_pair.fit_transform(y)
-                scores = []
-                for _ in range(n_shuffles):
-                    y_shuff = rng.permutation(y_enc)
-                    clf = LogisticRegression(max_iter=5000, random_state=seed)
-                    cv = StratifiedKFold(n_splits=min(n_splits, len(y_enc)), shuffle=True, random_state=seed)
-                    fold_scores = []
-                    for train_idx, test_idx in cv.split(X, y_shuff):
-                        X_train, X_test = X[train_idx], X[test_idx]
-                        y_train, y_test = y_shuff[train_idx], y_shuff[test_idx]
-                        scaler = StandardScaler()
-                        X_train_proc = scaler.fit_transform(X_train)
-                        X_test_proc = scaler.transform(X_test)
-                        clf.fit(X_train_proc, y_train)
-                        y_pred = clf.predict(X_test_proc)
-                        fold_scores.append(np.mean(y_pred == y_test))
-                    scores.append(np.mean(fold_scores))
-                acc_matrix[i, j] = np.mean(scores)
-        acc_matrices.append(acc_matrix)
-    return np.array(acc_matrices)
-
-# Compute chance matrices for each group
-chance_accs_rew_matrix = pairwise_day_decoding_chance(vectors_rew, all_days, n_shuffles=100)
-chance_accs_nonrew_matrix = pairwise_day_decoding_chance(vectors_nonrew, all_days, n_shuffles=100)
-mean_chance_accs_rew = np.nanmean(chance_accs_rew_matrix, axis=0)
-mean_chance_accs_nonrew = np.nanmean(chance_accs_nonrew_matrix, axis=0)
-mean_chance_accs_rew_sym = make_symmetric_with_empty_diag(mean_chance_accs_rew)
-mean_chance_accs_nonrew_sym = make_symmetric_with_empty_diag(mean_chance_accs_nonrew)
-
-# Plot chance accuracy matrices
-fig = plt.figure(figsize=(15, 5))
-gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 0.05])
-ax0 = fig.add_subplot(gs[0])
-ax1 = fig.add_subplot(gs[1])
-ax2 = fig.add_subplot(gs[2])
-vmax = max(np.nanmax(mean_chance_accs_rew_sym), np.nanmax(mean_chance_accs_nonrew_sym))
-vmin = 0.5
-
-sns.heatmap(mean_chance_accs_rew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
-            ax=ax0, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_chance_accs_rew_sym), cbar=False)
-ax0.set_title("R+ group: Pairwise day chance accuracy")
-ax0.set_xlabel("Day")
-ax0.set_ylabel("Day")
-
-sns.heatmap(mean_chance_accs_nonrew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
-            ax=ax1, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_chance_accs_nonrew_sym), cbar=False)
-ax1.set_title("R- group: Pairwise day chance accuracy")
-ax1.set_xlabel("Day")
-ax1.set_ylabel("Day")
-
-norm = colors.Normalize(vmin=vmin, vmax=vmax)
-sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
-sm.set_array([])
-fig.colorbar(sm, cax=ax2)
-
-plt.tight_layout()
-sns.despine()
-
-# Save figure
-plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_chance_accuracy_matrix.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_chance_accuracy_matrix.png'), format='png', dpi=300)
-
-# Save data
-np.save(os.path.join(output_dir, 'pairwise_day_decoding_chance_accuracy_matrix_Rplus.npy'), mean_chance_accs_rew)
-np.save(os.path.join(output_dir, 'pairwise_day_decoding_chance_accuracy_matrix_Rminus.npy'), mean_chance_accs_nonrew)
 
 
 
-# Relationship between classifier weights and learning modualtion index.
+
+
+
+
+
+# Relationship between classifier weights and learning modulation index.
 # ----------------------------------------------------------------------
 
 lmi_df = os.path.join(io.processed_dir, f'lmi_results.csv')
@@ -792,8 +578,246 @@ curve_df = pd.DataFrame({
 curve_df.to_csv(os.path.join(output_dir, 'accuracy_vs_percent_modulated_cells.csv'), index=False)
 
 
+
+
+
+
+
+
+
+# Decoding accuracy between pair of days.
+# ---------------------------------------
+
+# The rationale is to use a classifier trained on pre vs post, excluding day 0,
+# to assess whether activity after day 0 learning already resembles post-learning activity.
+
+# For each mouse, train a classifier to distinguish activity patterns on day -2, -1 vs +1, +2.
+# Then, use this trained classifier to decode every pair of days (including each day against itself).
+# Plot accuracy as a matrix for each reward group.
+ 
+all_days = [-2, -1, 0, 1, 2]
+day_labels = [str(d) for d in all_days]
+
+def pairwise_day_decoding_fixed_decoder_cv(vectors, days, seed=42, n_splits=10):
+    # Returns: list of accuracy matrices (n_mice x n_days x n_days)
+    acc_matrices = []
+    rng = np.random.default_rng(seed)
+    for d in vectors:
+        acc_matrix = np.full((len(days), len(days)), np.nan)
+        day_per_trial = d['day'].values
+        # For each fold
+        fold_accs = np.zeros((n_splits, len(days), len(days)))
+        # Get indices for each day
+        day_indices = {day: np.where(day_per_trial == day)[0] for day in days}
+        # For each fold
+        for k in range(n_splits):
+            # Split indices for each day
+            train_idx = []
+            test_idx = []
+            for day in days:
+                idx = day_indices[day]
+                if len(idx) < n_splits:
+                    continue  # skip if not enough trials
+                idx_shuff = rng.permutation(idx)
+                fold_size = len(idx) // n_splits
+                test_fold = idx_shuff[k*fold_size:(k+1)*fold_size] if k < n_splits-1 else idx_shuff[k*fold_size:]
+                train_fold = np.setdiff1d(idx, test_fold)
+                train_idx.append((day, train_fold))
+                test_idx.append((day, test_fold))
+            # Train decoder on pre vs post
+            train_days = [-2, -1, 1,2]
+            train_mask = np.concatenate([fold for day, fold in train_idx if day in train_days])
+            train_labels = np.concatenate([[day]*len(fold) for day, fold in train_idx if day in train_days])
+            if len(train_mask) < 2 or len(np.unique(train_labels)) < 2:
+                continue
+            X_train = d.values[:, train_mask].T
+            y_train = np.array([0 if day <= -1 else 1 for day in train_labels])
+            scaler = StandardScaler()
+            X_train_proc = scaler.fit_transform(X_train)
+            clf = LogisticRegression(max_iter=5000, random_state=seed)
+            clf.fit(X_train_proc, y_train)
+            # Test decoder on all pairs of days (using test data only)
+            for i, day_i in enumerate(days):
+                for j, day_j in enumerate(days):
+                    test_mask_i = [fold for day, fold in test_idx if day == day_i]
+                    test_mask_j = [fold for day, fold in test_idx if day == day_j]
+                    if not test_mask_i or not test_mask_j:
+                        continue
+                    test_mask_i = test_mask_i[0]
+                    test_mask_j = test_mask_j[0]
+                    if len(test_mask_i) < 1 or len(test_mask_j) < 1:
+                        continue
+                    X_test = np.concatenate([d.values[:, test_mask_i].T, d.values[:, test_mask_j].T], axis=0)
+                    y_test = np.array([0] * len(test_mask_i) + [1] * len(test_mask_j))
+                    X_test_proc = scaler.transform(X_test)
+                    y_pred = clf.predict(X_test_proc)
+                    acc = np.mean(y_pred == y_test)
+                    fold_accs[k, i, j] = acc
+        # Average over folds
+        with np.errstate(invalid='ignore'):
+            acc_matrix = np.nanmean(fold_accs, axis=0)
+        acc_matrices.append(acc_matrix)
+    return np.array(acc_matrices)
+
+# Compute accuracy matrices for each group
+accs_rew_matrix = pairwise_day_decoding_fixed_decoder_cv(vectors_rew, all_days)
+accs_nonrew_matrix = pairwise_day_decoding_fixed_decoder_cv(vectors_nonrew, all_days)
+# Average across mice
+mean_accs_rew = np.nanmean(accs_rew_matrix, axis=0)
+mean_accs_nonrew = np.nanmean(accs_nonrew_matrix, axis=0)
+
+# Make matrices symmetric with filled diagonal for aesthetics
+def make_symmetric_with_diag(mat):
+    sym_mat = np.full_like(mat, np.nan)
+    iu = np.triu_indices_from(mat, k=1)
+    sym_mat[iu] = mat[iu]
+    il = np.tril_indices_from(mat, k=-1)
+    sym_mat[il] = mat.T[il]
+    diag = np.diag_indices_from(mat)
+    sym_mat[diag] = np.diag(mat)
+    return sym_mat
+
+mean_accs_rew_sym = make_symmetric_with_diag(mean_accs_rew)
+mean_accs_nonrew_sym = make_symmetric_with_diag(mean_accs_nonrew)
+
+# Plot accuracy matrices and shared colormap
+import matplotlib.gridspec as gridspec
+
+fig = plt.figure(figsize=(9, 4))
+gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 0.05])
+ax0 = fig.add_subplot(gs[0])
+ax1 = fig.add_subplot(gs[1])
+ax2 = fig.add_subplot(gs[2])
+vmax = max(np.nanmax(mean_accs_rew_sym), np.nanmax(mean_accs_nonrew_sym))
+vmin = 0.5
+
+sns.heatmap(mean_accs_rew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
+            ax=ax0, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_accs_rew_sym), cbar=False)
+ax0.set_title("R+ group: Fixed decoder (-2 vs +2) pairwise day accuracy (CV)")
+ax0.set_xlabel("Day")
+ax0.set_ylabel("Day")
+
+sns.heatmap(mean_accs_nonrew_sym, annot=True, fmt=".2f", xticklabels=day_labels, yticklabels=day_labels,
+            ax=ax1, cmap="viridis", vmin=vmin, vmax=vmax, mask=np.isnan(mean_accs_nonrew_sym), cbar=False)
+ax1.set_title("R- group: Fixed decoder (-2 vs +2) pairwise day accuracy (CV)")
+ax1.set_xlabel("Day")
+ax1.set_ylabel("Day")
+
+# Shared colorbar
+norm = colors.Normalize(vmin=vmin, vmax=vmax)
+sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
+sm.set_array([])
+fig.colorbar(sm, cax=ax2)
+
+plt.tight_layout()
+sns.despine()
+
+# Save figure
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix.png'), format='png', dpi=300)
+
+# Save data
+np.save(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix_Rplus.npy'), mean_accs_rew)
+np.save(os.path.join(output_dir, 'pairwise_day_decoding_fixed_decoder_accuracy_matrix_Rminus.npy'), mean_accs_nonrew)
+
+
+# ---------------------------------------------------------------
+# Quantification: Does Day 0 look more like pre or post?
+# ---------------------------------------------------------------
+
+# For each mouse, compare decoding accuracy for:
+#  - Day -2/-1 vs Day 0 (pre vs day0)
+#  - Day 0 vs Day +1/+2 (day0 vs post)
+# This uses the fixed decoder trained on pre vs post (as above).
+
+def extract_pairwise_decoding_accuracy(acc_matrices, all_days):
+    # Returns two arrays: acc_pre_vs_day0, acc_day0_vs_post (n_mice,)
+    idx_pre = [0, 1]  # indices for -2, -1
+    idx_post = [3, 4] # indices for +1, +2
+    idx_day0 = 2      # index for 0
+    acc_pre_vs_day0 = []
+    acc_day0_vs_post = []
+    for mat in acc_matrices:
+        # Pre vs Day 0: average over both pre days
+        pre_accs = []
+        for i in idx_pre:
+            pre_accs.append(mat[i, idx_day0])
+        acc_pre_vs_day0.append(np.nanmean(pre_accs))
+        # Day 0 vs Post: average over both post days
+        post_accs = []
+        for j in idx_post:
+            post_accs.append(mat[idx_day0, j])
+        acc_day0_vs_post.append(np.nanmean(post_accs))
+    return np.array(acc_pre_vs_day0), np.array(acc_day0_vs_post)
+
+acc_pre_vs_day0_rew, acc_day0_vs_post_rew = extract_pairwise_decoding_accuracy(accs_rew_matrix, all_days)
+acc_pre_vs_day0_nonrew, acc_day0_vs_post_nonrew = extract_pairwise_decoding_accuracy(accs_nonrew_matrix, all_days)
+# Bar plot: R+ and R- groups, pre vs day0 and day0 vs post
+fig, axes = plt.subplots(1, 2, figsize=(8, 5), sharey=True)
+
+for ax, group, acc_pre, acc_post, color in zip(
+    axes,
+    ['R+', 'R-'],
+    [acc_pre_vs_day0_rew, acc_pre_vs_day0_nonrew],
+    [acc_day0_vs_post_rew, acc_day0_vs_post_nonrew],
+    reward_palette[::-1]
+):
+    df_plot = pd.DataFrame({
+        'Comparison': ['Pre vs Day0'] * len(acc_pre) + ['Day0 vs Post'] * len(acc_post),
+        'Accuracy': np.concatenate([acc_pre, acc_post])
+    })
+    sns.barplot(data=df_plot, x='Comparison', y='Accuracy', errorbar='ci', ax=ax, color=color, alpha=0.7)
+    sns.stripplot(data=df_plot, x='Comparison', y='Accuracy', ax=ax, color=color, alpha=0.5, size=7)
+    ax.set_title(f'{group} group')
+    ax.set_ylim(0.4, 1.0)
+    ax.axhline(0.5, color='grey', linestyle='--', alpha=0.5)
+    stat, pval = wilcoxon(acc_pre, acc_post, alternative='two-sided')
+    ax.text(0.5, 0.95, f'Wilcoxon p={pval:.3f}', ha='center', va='top', transform=ax.transAxes, fontsize=10)
+    ax.set_ylabel('Decoding accuracy (CV)')
+    ax.set_xlabel('')
+
+plt.suptitle('Does Day 0 look more like pre or post?')
+plt.tight_layout()
+sns.despine()
+
+plt.savefig(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_barplot.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_barplot.png'), format='png', dpi=300)
+
+# Save quantification data
+df_quant = pd.DataFrame({
+    'group': ['R+'] * len(acc_pre_vs_day0_rew) + ['R+'] * len(acc_day0_vs_post_rew) +
+             ['R-'] * len(acc_pre_vs_day0_nonrew) + ['R-'] * len(acc_day0_vs_post_nonrew),
+    'comparison': (['pre_vs_day0'] * len(acc_pre_vs_day0_rew) +
+                  ['day0_vs_post'] * len(acc_day0_vs_post_rew) +
+                  ['pre_vs_day0'] * len(acc_pre_vs_day0_nonrew) +
+                  ['day0_vs_post'] * len(acc_day0_vs_post_nonrew)),
+    'accuracy': np.concatenate([acc_pre_vs_day0_rew, acc_day0_vs_post_rew,
+                                acc_pre_vs_day0_nonrew, acc_day0_vs_post_nonrew])
+})
+df_quant.to_csv(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_quantification.csv'), index=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  ############################################
-# Inflexion/progressive learning during Day 0.
+# Decoding decision value across learning during Day 0.
 # #############################################
 
 # The idea is to see if decoding accuracy improves progressively during Day 0 learning trials,
@@ -837,7 +861,7 @@ vectors_rew_day0_learning = []
 path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
 table = pd.read_csv(path)
 # Select day 0 performance for whisker trials.
-bh_df = table.loc[(table['day'] == 0) & (table['whisker_stim'] == 1), ['mouse_id', 'trial_w', 'learning_curve_w', 'learning_trial']]
+bh_df = table.loc[(table['day'] == 0) & (table['whisker_stim'] == 1)]
 
 for mouse in mice:
     
@@ -1090,7 +1114,7 @@ window_size = 10
 step_size = 1
 
 # Set alignment parameters
-align_to_learning = True  # Set to True to align to individual learning onset
+align_to_learning = False  # Set to True to align to individual learning onset
 trials_before = 50  # Number of trials before learning onset to include
 trials_after = 100  # Number of trials after learning onset to include
 
@@ -1161,7 +1185,7 @@ def plot_behavior(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_le
         else:
             ax.set_xlim(0, cut_n_trials)
 
-def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
+def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False, ylim=None):
     if data is None or data.empty:
         ax.set_title(title + " (no data)")
         ax.set_xlim(-cut_n_trials//2 if align_to_learning else 0, cut_n_trials//2 if align_to_learning else cut_n_trials)
@@ -1181,7 +1205,8 @@ def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_le
     ax.set_xlabel(xlabel)
     ax.set_ylabel('Mean decision value')
     ax.set_title(title)
-    ax.set_ylim(-3, 6)
+    if ylim is not None:
+        ax.set_ylim(ylim)
     if cut_n_trials is not None:
         if align_to_learning:
             ax.set_xlim(-cut_n_trials//2, cut_n_trials//2)
@@ -1238,16 +1263,16 @@ plot_behavior(ax4, data_bad, reward_palette[1], 'Bad day0 mice behavior', align_
 
 # Middle row: Decision values (4 panels)
 ax5 = plt.subplot(3, 4, 5)
-plot_decision(ax5, results_rew, reward_palette[1], 'R+ mean decision value', align_to_learning=align_to_learning)
+plot_decision(ax5, results_rew, reward_palette[1], 'R+ mean decision value', align_to_learning=align_to_learning, ylim=(-3, 6))
 
 ax6 = plt.subplot(3, 4, 6)
-plot_decision(ax6, results_nonrew, reward_palette[0], 'R- mean decision value', align_to_learning=align_to_learning)
+plot_decision(ax6, results_nonrew, reward_palette[0], 'R- mean decision value', align_to_learning=align_to_learning, ylim=(-3, 6))
 
 ax7 = plt.subplot(3, 4, 7)
-plot_decision(ax7, results_good, reward_palette[1], 'Good day0 mean decision value', align_to_learning=align_to_learning)
+plot_decision(ax7, results_good, reward_palette[1], 'Good day0 mean decision value', align_to_learning=align_to_learning, ylim=(-3, 6))
 
 ax8 = plt.subplot(3, 4, 8)
-plot_decision(ax8, results_bad, reward_palette[1], 'Bad day0 mean decision value', align_to_learning=align_to_learning)
+plot_decision(ax8, results_bad, reward_palette[1], 'Bad day0 mean decision value', align_to_learning=align_to_learning, ylim=(-3, 6))
 
 # Bottom row: Probability P(post) (4 panels) - separated from decision values
 ax9 = plt.subplot(3, 4, 9)
@@ -1271,50 +1296,637 @@ output_dir = io.adjust_path_to_host(output_dir)
 plt.savefig(os.path.join(output_dir, 'decoder_decision_value_day0_learning_with_alignment_to_learning.svg'), format='svg', dpi=300)
 
 
-# Correlation between behavioral performance and decision value during Day 0 learning
-# ----------------------------------------------------------------------------------
 
-# For each mouse, correlate the behavioral learning curve with the decision value curve
-# during Day 0. Test if the population-level correlation is significantly different from zero
-# using one-sample tests (Wilcoxon and t-test).
+
+
+
+
+
+# ============================================================================
+# SINGLE MOUSE ANALYSIS: Robustness of Progressive Learning Effect
+# ============================================================================
+
+print("\n" + "="*80)
+print("SINGLE MOUSE PROGRESSIVE LEARNING ANALYSIS")
+print("="*80 + "\n")
+
+# 1. Individual mouse plots in a multi-page PDF
+# ----------------------------------------------
+
+from matplotlib.backends.backend_pdf import PdfPages
+
+# Create PDF with individual mouse plots
+pdf_file = os.path.join(output_dir, 'individual_mouse_progressive_learning.pdf')
+
+with PdfPages(pdf_file) as pdf:
+    # Plot each mouse separately
+    all_mice = results_combined['mouse_id'].unique()
+    
+    for mouse in all_mice:
+        mouse_data = results_combined[results_combined['mouse_id'] == mouse]
+        mouse_bh = bh_df[bh_df['mouse_id'] == mouse]
+        reward_group = mouse_data['reward_group'].iloc[0]
+        color = reward_palette[1] if reward_group == 'R+' else reward_palette[0]
+        
+        fig = plt.figure(figsize=(12, 8))
+        
+        # Top panel: Behavior
+        ax1 = plt.subplot(3, 1, 1)
+        plot_behavior(ax1, mouse_bh, color, f'{mouse} ({reward_group}) - Behavior', 
+                     cut_n_trials=cut_n_trials, align_to_learning=align_to_learning)
+        
+        # Middle panel: Decision values
+        ax2 = plt.subplot(3, 1, 2)
+        plot_decision(ax2, mouse_data, color, f'{mouse} ({reward_group}) - Decision Value',
+                     cut_n_trials=cut_n_trials, align_to_learning=align_to_learning)
+        
+        # Bottom panel: Probability P(post)
+        ax3 = plt.subplot(3, 1, 3)
+        plot_proba(ax3, mouse_data, color, f'{mouse} ({reward_group}) - P(post)',
+                  cut_n_trials=cut_n_trials, align_to_learning=align_to_learning)
+        
+        plt.tight_layout()
+        sns.despine()
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+    
+print(f"Individual mouse plots saved to: {pdf_file}")
+
+
+# 2. Statistical Quantification of Progressive Learning
+# ------------------------------------------------------
+
+print("\n" + "-"*80)
+print("STATISTICAL TESTS FOR PROGRESSIVE LEARNING EFFECT")
+print("-"*80 + "\n")
+
+# Method 1: Slope Analysis
+# ------------------------
+print("METHOD 1: Linear Trend Analysis")
+print("Test if decision values show significant positive slope over time\n")
+
+from scipy.stats import linregress
+
+slopes_per_mouse = []
+slopes_pvals = []
+slopes_mice = []
+slopes_groups = []
+
+for mouse in results_combined['mouse_id'].unique():
+    mouse_data = results_combined[results_combined['mouse_id'] == mouse]
+    reward_group = mouse_data['reward_group'].iloc[0]
+    
+    # Get trial indices and decision values
+    if align_to_learning and 'trial_center_aligned' in mouse_data.columns:
+        x = mouse_data['trial_center_aligned'].values
+        mask = ~np.isnan(x)
+        x = x[mask]
+        y = mouse_data['mean_decision_value'].values[mask]
+    else:
+        x = mouse_data['trial_center'].values
+        y = mouse_data['mean_decision_value'].values
+    
+    if len(x) < 5:
+        continue
+    
+    # Linear regression
+    slope, intercept, r_value, p_value, std_err = linregress(x, y)
+    
+    slopes_per_mouse.append(slope)
+    slopes_pvals.append(p_value)
+    slopes_mice.append(mouse)
+    slopes_groups.append(reward_group)
+    
+    print(f"{mouse} ({reward_group}): slope={slope:.4f}, p={p_value:.4f} {'***' if p_value < 0.001 else '**' if p_value < 0.01 else '*' if p_value < 0.05 else 'n.s.'}")
+
+# Test if slopes are significantly positive at population level
+df_slopes = pd.DataFrame({
+    'mouse_id': slopes_mice,
+    'reward_group': slopes_groups,
+    'slope': slopes_per_mouse,
+    'p_value': slopes_pvals
+})
+
+print("\nPopulation-level statistics:")
+for group in ['R+', 'R-']:
+    sub = df_slopes[df_slopes['reward_group'] == group]
+    if len(sub) >= 3:
+        # One-sample test against 0
+        stat_w, p_wilcox = wilcoxon(sub['slope'].values, alternative='greater')
+        stat_t, p_ttest = ttest_1samp(sub['slope'].values, 0, alternative='greater')
+        
+        # Count significant mice
+        n_sig = np.sum(sub['p_value'] < 0.05)
+        n_total = len(sub)
+        
+        print(f"\n{group} Group (N={n_total}):")
+        print(f"  Mean slope: {np.mean(sub['slope'].values):.4f} ± {np.std(sub['slope'].values):.4f}")
+        print(f"  Wilcoxon test (H0: median slope ≤ 0): p={p_wilcox:.4f}")
+        print(f"  t-test (H0: mean slope ≤ 0): p={p_ttest:.4f}")
+        print(f"  Mice with significant positive slope (p<0.05): {n_sig}/{n_total} ({100*n_sig/n_total:.1f}%)")
+
+
+# Method 2: First vs Last Quartile Comparison
+# --------------------------------------------
+print("\n" + "-"*80)
+print("METHOD 2: First vs Last Quartile Comparison")
+print("Test if decision values in last quartile > first quartile\n")
+
+quartile_diffs = []
+quartile_pvals = []
+quartile_mice = []
+quartile_groups = []
+
+for mouse in results_combined['mouse_id'].unique():
+    mouse_data = results_combined[results_combined['mouse_id'] == mouse]
+    reward_group = mouse_data['reward_group'].iloc[0]
+    
+    # Sort by trial
+    if align_to_learning and 'trial_center_aligned' in mouse_data.columns:
+        mouse_data_sorted = mouse_data.sort_values('trial_center_aligned')
+    else:
+        mouse_data_sorted = mouse_data.sort_values('trial_center')
+    
+    n = len(mouse_data_sorted)
+    if n < 20:
+        continue
+    
+    # Split into quartiles
+    q1_end = n // 4
+    q4_start = 3 * n // 4
+    
+    dec_first_q = mouse_data_sorted.iloc[:q1_end]['mean_decision_value'].values
+    dec_last_q = mouse_data_sorted.iloc[q4_start:]['mean_decision_value'].values
+    
+    # Paired test
+    from scipy.stats import mannwhitneyu
+    stat, p_value = mannwhitneyu(dec_last_q, dec_first_q, alternative='greater')
+    
+    mean_diff = np.mean(dec_last_q) - np.mean(dec_first_q)
+    
+    quartile_diffs.append(mean_diff)
+    quartile_pvals.append(p_value)
+    quartile_mice.append(mouse)
+    quartile_groups.append(reward_group)
+    
+    print(f"{mouse} ({reward_group}): Q4-Q1={mean_diff:.3f}, p={p_value:.4f} {'***' if p_value < 0.001 else '**' if p_value < 0.01 else '*' if p_value < 0.05 else 'n.s.'}")
+
+df_quartiles = pd.DataFrame({
+    'mouse_id': quartile_mice,
+    'reward_group': quartile_groups,
+    'quartile_diff': quartile_diffs,
+    'p_value': quartile_pvals
+})
+
+print("\nPopulation-level statistics:")
+for group in ['R+', 'R-']:
+    sub = df_quartiles[df_quartiles['reward_group'] == group]
+    if len(sub) >= 3:
+        stat_w, p_wilcox = wilcoxon(sub['quartile_diff'].values, alternative='greater')
+        stat_t, p_ttest = ttest_1samp(sub['quartile_diff'].values, 0, alternative='greater')
+        
+        n_sig = np.sum(sub['p_value'] < 0.05)
+        n_total = len(sub)
+        
+        print(f"\n{group} Group (N={n_total}):")
+        print(f"  Mean Q4-Q1 difference: {np.mean(sub['quartile_diff'].values):.3f} ± {np.std(sub['quartile_diff'].values):.3f}")
+        print(f"  Wilcoxon test (H0: median diff ≤ 0): p={p_wilcox:.4f}")
+        print(f"  t-test (H0: mean diff ≤ 0): p={p_ttest:.4f}")
+        print(f"  Mice with significant increase (p<0.05): {n_sig}/{n_total} ({100*n_sig/n_total:.1f}%)")
+
+
+# Method 3: Monotonic Trend Test (Mann-Kendall)
+# ----------------------------------------------
+print("\n" + "-"*80)
+print("METHOD 3: Mann-Kendall Monotonic Trend Test")
+print("Non-parametric test for monotonic trend (increasing or decreasing)\n")
+
+def mann_kendall_test(x):
+    """
+    Mann-Kendall test for monotonic trend.
+    Returns: tau (Kendall's tau), p-value (two-sided)
+    """
+    n = len(x)
+    s = 0
+    for i in range(n-1):
+        for j in range(i+1, n):
+            s += np.sign(x[j] - x[i])
+    
+    # Variance calculation (without correction for ties)
+    var_s = n * (n - 1) * (2 * n + 5) / 18
+    
+    if s > 0:
+        z = (s - 1) / np.sqrt(var_s)
+    elif s < 0:
+        z = (s + 1) / np.sqrt(var_s)
+    else:
+        z = 0
+    
+    # Two-sided p-value
+    from scipy.stats import norm
+    p_value = 2 * (1 - norm.cdf(abs(z)))
+    
+    # Kendall's tau
+    tau = s / (0.5 * n * (n - 1))
+    
+    return tau, p_value, z
+
+mk_taus = []
+mk_pvals = []
+mk_zscores = []
+mk_mice = []
+mk_groups = []
+
+for mouse in results_combined['mouse_id'].unique():
+    mouse_data = results_combined[results_combined['mouse_id'] == mouse]
+    reward_group = mouse_data['reward_group'].iloc[0]
+    
+    # Sort by trial
+    if align_to_learning and 'trial_center_aligned' in mouse_data.columns:
+        mouse_data_sorted = mouse_data.sort_values('trial_center_aligned')
+    else:
+        mouse_data_sorted = mouse_data.sort_values('trial_center')
+    
+    y = mouse_data_sorted['mean_decision_value'].values
+    
+    if len(y) < 5:
+        continue
+    
+    tau, p_value, z_score = mann_kendall_test(y)
+    
+    mk_taus.append(tau)
+    mk_pvals.append(p_value)
+    mk_zscores.append(z_score)
+    mk_mice.append(mouse)
+    mk_groups.append(reward_group)
+    
+    # One-sided interpretation (positive trend)
+    p_onesided = p_value / 2 if z_score > 0 else 1 - p_value / 2
+    
+    print(f"{mouse} ({reward_group}): tau={tau:.3f}, z={z_score:.2f}, p(increasing)={p_onesided:.4f} {'***' if p_onesided < 0.001 else '**' if p_onesided < 0.01 else '*' if p_onesided < 0.05 else 'n.s.'}")
+
+df_mk = pd.DataFrame({
+    'mouse_id': mk_mice,
+    'reward_group': mk_groups,
+    'kendall_tau': mk_taus,
+    'p_value': mk_pvals,
+    'z_score': mk_zscores
+})
+
+print("\nPopulation-level statistics:")
+for group in ['R+', 'R-']:
+    sub = df_mk[df_mk['reward_group'] == group]
+    if len(sub) >= 3:
+        # Test if z-scores are significantly positive
+        stat_w, p_wilcox = wilcoxon(sub['z_score'].values, alternative='greater')
+        stat_t, p_ttest = ttest_1samp(sub['z_score'].values, 0, alternative='greater')
+        
+        # Count mice with positive trend
+        n_pos = np.sum(sub['z_score'] > 0)
+        n_sig = np.sum((sub['z_score'] > 0) & (sub['p_value'] < 0.10))  # One-sided p < 0.05 = two-sided p < 0.10
+        n_total = len(sub)
+        
+        print(f"\n{group} Group (N={n_total}):")
+        print(f"  Mean Kendall's tau: {np.mean(sub['kendall_tau'].values):.3f} ± {np.std(sub['kendall_tau'].values):.3f}")
+        print(f"  Mean z-score: {np.mean(sub['z_score'].values):.2f} ± {np.std(sub['z_score'].values):.2f}")
+        print(f"  Wilcoxon test on z-scores (H0: median ≤ 0): p={p_wilcox:.4f}")
+        print(f"  t-test on z-scores (H0: mean ≤ 0): p={p_ttest:.4f}")
+        print(f"  Mice with positive trend: {n_pos}/{n_total} ({100*n_pos/n_total:.1f}%)")
+        print(f"  Mice with significant positive trend (p<0.05): {n_sig}/{n_total} ({100*n_sig/n_total:.1f}%)")
+
+
+# Save individual mouse results to CSV
+# -------------------------------------
+print("\n" + "-"*80)
+print("SAVING RESULTS TO CSV FILES")
+print("-"*80 + "\n")
+
+# Save slope data
+df_slopes.to_csv(os.path.join(output_dir, 'progressive_learning_slopes.csv'), index=False)
+print(f"Saved: progressive_learning_slopes.csv")
+
+# Save quartile data
+df_quartiles.to_csv(os.path.join(output_dir, 'progressive_learning_quartiles.csv'), index=False)
+print(f"Saved: progressive_learning_quartiles.csv")
+
+# Save Mann-Kendall data
+df_mk.to_csv(os.path.join(output_dir, 'progressive_learning_mann_kendall.csv'), index=False)
+print(f"Saved: progressive_learning_mann_kendall.csv")
+
+
+# Compute and save population-level statistics
+# ---------------------------------------------
+
+population_stats = []
+
+for group in ['R+', 'R-']:
+    # Method 1: Slopes
+    sub_slope = df_slopes[df_slopes['reward_group'] == group]
+    if len(sub_slope) >= 3:
+        stat_w_slope, p_wilcox_slope = wilcoxon(sub_slope['slope'].values, alternative='greater')
+        stat_t_slope, p_ttest_slope = ttest_1samp(sub_slope['slope'].values, 0, alternative='greater')
+        n_pos_slope = np.sum(sub_slope['slope'] > 0)
+        n_sig_slope = np.sum(sub_slope['p_value'] < 0.05)
+        mean_slope = np.mean(sub_slope['slope'].values)
+        std_slope = np.std(sub_slope['slope'].values)
+        
+        population_stats.append({
+            'reward_group': group,
+            'method': 'Linear Slope',
+            'mean_value': mean_slope,
+            'std_value': std_slope,
+            'n_positive': n_pos_slope,
+            'n_significant': n_sig_slope,
+            'n_total': len(sub_slope),
+            'p_wilcoxon': p_wilcox_slope,
+            'p_ttest': p_ttest_slope
+        })
+    
+    # Method 2: Quartiles
+    sub_quart = df_quartiles[df_quartiles['reward_group'] == group]
+    if len(sub_quart) >= 3:
+        stat_w_quart, p_wilcox_quart = wilcoxon(sub_quart['quartile_diff'].values, alternative='greater')
+        stat_t_quart, p_ttest_quart = ttest_1samp(sub_quart['quartile_diff'].values, 0, alternative='greater')
+        n_pos_quart = np.sum(sub_quart['quartile_diff'] > 0)
+        n_sig_quart = np.sum(sub_quart['p_value'] < 0.05)
+        mean_quart = np.mean(sub_quart['quartile_diff'].values)
+        std_quart = np.std(sub_quart['quartile_diff'].values)
+        
+        population_stats.append({
+            'reward_group': group,
+            'method': 'Q4-Q1 Difference',
+            'mean_value': mean_quart,
+            'std_value': std_quart,
+            'n_positive': n_pos_quart,
+            'n_significant': n_sig_quart,
+            'n_total': len(sub_quart),
+            'p_wilcoxon': p_wilcox_quart,
+            'p_ttest': p_ttest_quart
+        })
+    
+    # Method 3: Mann-Kendall z-scores
+    sub_mk = df_mk[df_mk['reward_group'] == group]
+    if len(sub_mk) >= 3:
+        stat_w_mk, p_wilcox_mk = wilcoxon(sub_mk['z_score'].values, alternative='greater')
+        stat_t_mk, p_ttest_mk = ttest_1samp(sub_mk['z_score'].values, 0, alternative='greater')
+        n_pos_mk = np.sum(sub_mk['z_score'] > 0)
+        n_sig_mk = np.sum((sub_mk['z_score'] > 0) & (sub_mk['p_value'] < 0.10))
+        mean_mk = np.mean(sub_mk['z_score'].values)
+        std_mk = np.std(sub_mk['z_score'].values)
+        
+        population_stats.append({
+            'reward_group': group,
+            'method': 'Mann-Kendall z-score',
+            'mean_value': mean_mk,
+            'std_value': std_mk,
+            'n_positive': n_pos_mk,
+            'n_significant': n_sig_mk,
+            'n_total': len(sub_mk),
+            'p_wilcoxon': p_wilcox_mk,
+            'p_ttest': p_ttest_mk
+        })
+
+df_population_stats = pd.DataFrame(population_stats)
+df_population_stats.to_csv(os.path.join(output_dir, 'progressive_learning_population_statistics.csv'), index=False)
+print(f"Saved: progressive_learning_population_statistics.csv")
+
+
+# Population-level statistics visualization
+# ------------------------------------------
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+methods = ['Linear Slope', 'Q4-Q1 Difference', 'Mann-Kendall z-score']
+data_sources = [df_slopes, df_quartiles, df_mk]
+value_cols = ['slope', 'quartile_diff', 'z_score']
+ylabels = ['Slope (per trial)', 'Q4 - Q1 difference', 'Mann-Kendall z-score']
+
+for idx, (method, data_source, value_col, ylabel) in enumerate(zip(methods, data_sources, value_cols, ylabels)):
+    ax = axes[idx]
+    
+    # Prepare data for plotting
+    plot_data = []
+    for group in ['R+', 'R-']:
+        sub = data_source[data_source['reward_group'] == group]
+        for val in sub[value_col].values:
+            plot_data.append({'group': group, 'value': val})
+    
+    df_plot = pd.DataFrame(plot_data)
+    
+    # Strip plot with individual mice
+    sns.swarmplot(data=df_plot, x='group', y='value', palette=reward_palette[::-1], 
+                 ax=ax, size=8, alpha=0.6)
+    
+    # Overlay mean with error bars (CI)
+    sns.pointplot(data=df_plot, x='group', y='value', palette=reward_palette[::-1],
+                 ax=ax, errorbar='ci', )
+    
+    # Add horizontal line at 0
+    ax.axhline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
+    
+    # Add p-values as text
+    for i, group in enumerate(['R+', 'R-']):
+        pop_stat = df_population_stats[(df_population_stats['reward_group'] == group) & 
+                                       (df_population_stats['method'] == method)]
+        if not pop_stat.empty:
+            p_wilcox = pop_stat['p_wilcoxon'].values[0]
+            p_text = f"p={p_wilcox:.4f}" if p_wilcox >= 0.001 else "p<0.001"
+            
+            # Add significance stars
+            if p_wilcox < 0.001:
+                sig_text = "***"
+            elif p_wilcox < 0.01:
+                sig_text = "**"
+            elif p_wilcox < 0.05:
+                sig_text = "*"
+            else:
+                sig_text = "n.s."
+            
+            # Position text above the data
+            y_max = df_plot[df_plot['group'] == group]['value'].max()
+            y_pos = y_max + 0.1 * (ax.get_ylim()[1] - ax.get_ylim()[0])
+            ax.text(i, y_pos, f"{p_text}\n{sig_text}", ha='center', va='bottom', 
+                   fontsize=9, fontweight='bold')
+    
+    ax.set_xlabel('Reward Group', fontsize=11)
+    ax.set_ylabel(ylabel, fontsize=11)
+    ax.set_title(f'{method}\nPopulation Test (Wilcoxon)', fontsize=12, fontweight='bold')
+    
+    # Set y-lim to include text
+    y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
+    ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1] + 0.15 * y_range)
+
+plt.tight_layout()
+sns.despine()
+
+plt.savefig(os.path.join(output_dir, 'progressive_learning_population_statistics.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'progressive_learning_population_statistics.png'), format='png', dpi=300)
+print(f"Saved: progressive_learning_population_statistics figure")
+
+
+# Summary visualization of individual mice
+# -----------------------------------------
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+# Panel 1: Slopes per mouse
+ax = axes[0, 0]
+for group, color in zip(['R+', 'R-'], reward_palette[::-1]):
+    sub = df_slopes[df_slopes['reward_group'] == group]
+    x = np.arange(len(sub))
+    ax.bar(x + (0.4 if group == 'R+' else 0), sub['slope'].values, 
+           width=0.4, color=color, alpha=0.7, label=group)
+    # Mark significant ones
+    sig_mask = sub['p_value'].values < 0.05
+    ax.scatter(x[sig_mask] + (0.4 if group == 'R+' else 0), 
+              sub['slope'].values[sig_mask], 
+              marker='*', s=200, color='black', zorder=10)
+ax.axhline(0, color='black', linestyle='--', alpha=0.5)
+ax.set_xlabel('Mouse')
+ax.set_ylabel('Slope (decision value per trial)')
+ax.set_title('Linear Trend per Mouse\n(* = p<0.05)')
+ax.legend()
+ax.set_xticks([])
+
+# Panel 2: Quartile differences
+ax = axes[0, 1]
+for group, color in zip(['R+', 'R-'], reward_palette[::-1]):
+    sub = df_quartiles[df_quartiles['reward_group'] == group]
+    x = np.arange(len(sub))
+    ax.bar(x + (0.4 if group == 'R+' else 0), sub['quartile_diff'].values,
+           width=0.4, color=color, alpha=0.7, label=group)
+    sig_mask = sub['p_value'].values < 0.05
+    ax.scatter(x[sig_mask] + (0.4 if group == 'R+' else 0),
+              sub['quartile_diff'].values[sig_mask],
+              marker='*', s=200, color='black', zorder=10)
+ax.axhline(0, color='black', linestyle='--', alpha=0.5)
+ax.set_xlabel('Mouse')
+ax.set_ylabel('Q4 - Q1 (decision value)')
+ax.set_title('Last vs First Quartile\n(* = p<0.05)')
+ax.legend()
+ax.set_xticks([])
+
+# Panel 3: Mann-Kendall z-scores
+ax = axes[1, 0]
+for group, color in zip(['R+', 'R-'], reward_palette[::-1]):
+    sub = df_mk[df_mk['reward_group'] == group]
+    x = np.arange(len(sub))
+    ax.bar(x + (0.4 if group == 'R+' else 0), sub['z_score'].values,
+           width=0.4, color=color, alpha=0.7, label=group)
+    sig_mask = sub['p_value'].values < 0.10  # Two-sided p<0.10 = one-sided p<0.05
+    pos_mask = sub['z_score'].values > 0
+    ax.scatter(x[sig_mask & pos_mask] + (0.4 if group == 'R+' else 0),
+              sub['z_score'].values[sig_mask & pos_mask],
+              marker='*', s=200, color='black', zorder=10)
+ax.axhline(0, color='black', linestyle='--', alpha=0.5)
+ax.axhline(1.96, color='red', linestyle=':', alpha=0.3, label='p=0.05')
+ax.axhline(-1.96, color='red', linestyle=':', alpha=0.3)
+ax.set_xlabel('Mouse')
+ax.set_ylabel('Mann-Kendall z-score')
+ax.set_title('Monotonic Trend Test\n(* = p<0.05, increasing)')
+ax.legend()
+ax.set_xticks([])
+
+# Panel 4: Summary statistics
+ax = axes[1, 1]
+ax.axis('off')
+
+summary_text = "SUMMARY OF PROGRESSIVE LEARNING\n"
+summary_text += "="*40 + "\n\n"
+
+for group in ['R+', 'R-']:
+    summary_text += f"{group} Group:\n"
+    summary_text += "-"*40 + "\n"
+    
+    # Slope analysis
+    sub_slope = df_slopes[df_slopes['reward_group'] == group]
+    n_pos_slope = np.sum(sub_slope['slope'] > 0)
+    n_sig_slope = np.sum(sub_slope['p_value'] < 0.05)
+    stat_w, p_slope = wilcoxon(sub_slope['slope'].values, alternative='greater')
+    
+    summary_text += f"Linear Trend:\n"
+    summary_text += f"  {n_pos_slope}/{len(sub_slope)} positive slopes\n"
+    summary_text += f"  {n_sig_slope}/{len(sub_slope)} significant (p<0.05)\n"
+    summary_text += f"  Population p = {p_slope:.4f}\n\n"
+    
+    # Quartile analysis
+    sub_quart = df_quartiles[df_quartiles['reward_group'] == group]
+    n_pos_quart = np.sum(sub_quart['quartile_diff'] > 0)
+    n_sig_quart = np.sum(sub_quart['p_value'] < 0.05)
+    stat_w, p_quart = wilcoxon(sub_quart['quartile_diff'].values, alternative='greater')
+    
+    summary_text += f"Quartile Comparison:\n"
+    summary_text += f"  {n_pos_quart}/{len(sub_quart)} positive changes\n"
+    summary_text += f"  {n_sig_quart}/{len(sub_quart)} significant (p<0.05)\n"
+    summary_text += f"  Population p = {p_quart:.4f}\n\n"
+    
+    # Mann-Kendall
+    sub_mk = df_mk[df_mk['reward_group'] == group]
+    n_pos_mk = np.sum(sub_mk['z_score'] > 0)
+    n_sig_mk = np.sum((sub_mk['z_score'] > 0) & (sub_mk['p_value'] < 0.10))
+    stat_w, p_mk = wilcoxon(sub_mk['z_score'].values, alternative='greater')
+    
+    summary_text += f"Mann-Kendall Test:\n"
+    summary_text += f"  {n_pos_mk}/{len(sub_mk)} positive trends\n"
+    summary_text += f"  {n_sig_mk}/{len(sub_mk)} significant (p<0.05)\n"
+    summary_text += f"  Population p = {p_mk:.4f}\n\n"
+
+ax.text(0.05, 0.95, summary_text, transform=ax.transAxes,
+        fontsize=9, verticalalignment='top', fontfamily='monospace')
+
+plt.tight_layout()
+sns.despine()
+
+plt.savefig(os.path.join(output_dir, 'progressive_learning_individual_mice_summary.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'progressive_learning_individual_mice_summary.png'), format='png', dpi=300)
+print(f"Saved: progressive_learning_individual_mice_summary figure")
+
+print("\n" + "="*80)
+print("ANALYSIS COMPLETE")
+print("="*80 + "\n")
+
+
+# ============================================================================
+# CORRELATION ANALYSIS: Decision Values vs Behavioral Performance
+# ============================================================================
+
+print("\n" + "="*80)
+print("CORRELATION ANALYSIS: Decision Values vs Behavioral Performance")
+print("="*80 + "\n")
 
 mice = results_combined['mouse_id'].unique()
 # mice = [m for m in mice if m in mice_groups['good_day0']]
 
+# Method 1: Direct Correlation
+# -----------------------------
+print("METHOD 1: Direct Correlation Analysis")
+print("Pearson correlation between decision values and behavioral performance\n")
+
 corr_real = []
-reward_groups = []
+corr_mice = []
+corr_groups = []
 
 for mouse in mice:
-    # Get reward group for this mouse
     group = results_combined.loc[results_combined['mouse_id'] == mouse, 'reward_group'].iloc[0]
-    reward_groups.append(group)
-    # Get decision values for this mouse
     dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
-    # Get behavioral curve for this mouse
     bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
     
     # Align trials appropriately
     if align_to_learning:
-        # Use aligned trial indices (trial_center_aligned for decision, trial_w - learning_trial for behavior)
         learning_trial = bh_mouse['learning_trial'].iloc[0] if 'learning_trial' in bh_mouse.columns else 0
-        # Align behavior trials to learning onset
         bh_mouse_aligned = bh_mouse.copy()
         bh_mouse_aligned['trial_w_aligned'] = bh_mouse_aligned['trial_w'] - learning_trial
-        # Match on aligned indices
         common_trials_aligned = np.intersect1d(
             dec_mouse['trial_center_aligned'].dropna(), 
             bh_mouse_aligned['trial_w_aligned']
         )
         if len(common_trials_aligned) < 10:
-            corr_real.append(np.nan)
             continue
         dec_vals = dec_mouse.set_index('trial_center_aligned').loc[common_trials_aligned]['mean_decision_value'].values
         perf_vals = bh_mouse_aligned.set_index('trial_w_aligned').loc[common_trials_aligned]['learning_curve_w'].values
     else:
-        # Use absolute trial indices (trial_start for decision, trial_w for behavior)
         common_trials = np.intersect1d(dec_mouse['trial_start'], bh_mouse['trial_w'])
         if len(common_trials) < 10:
-            corr_real.append(np.nan)
             continue
         dec_vals = dec_mouse.set_index('trial_start').loc[common_trials]['mean_decision_value'].values
         perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
@@ -1322,388 +1934,852 @@ for mouse in mice:
     # Compute Pearson correlation
     corr = pearsonr(perf_vals, dec_vals)[0]
     corr_real.append(corr)
+    corr_mice.append(mouse)
+    corr_groups.append(group)
+    
+    print(f"{mouse} ({group}): r={corr:.3f}")
 
-# Prepare DataFrame for analysis
+# Save correlation data
 df_corr = pd.DataFrame({
-    'mouse_id': mice,
-    'reward_group': reward_groups,
-    'real_corr': corr_real
+    'mouse_id': corr_mice,
+    'reward_group': corr_groups,
+    'correlation': corr_real
 })
 
-# Plot correlation results using seaborn
-fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+df_corr.to_csv(os.path.join(output_dir, 'correlation_decision_behavior_data.csv'), index=False)
+print(f"\nSaved: correlation_decision_behavior_data.csv")
 
-for i, group in enumerate(['R+', 'R-']):
-    ax = axes[i]
-    sub = df_corr[df_corr['reward_group'] == group].copy()
-    correlations = sub['real_corr'].dropna().values
-
-    if len(correlations) == 0:
-        continue
-
-    # Prepare DataFrame for seaborn
-    df_plot = pd.DataFrame({
-        'correlation': correlations,
-        'group': [group] * len(correlations)
-    })
-
-    # Violin/strip plot for individual data points
-    sns.swarmplot(data=df_plot, y='correlation', color='grey', ax=ax,edgecolor=None)
-
-    # Plot mean and CI using seaborn pointplot
-    sns.pointplot(data=df_plot, y='correlation', color=reward_palette_r[i], ax=ax, errorbar='ci',)
-
-    # Add horizontal line at 0
-    ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.7)
-
-    ax.set_ylim(-1, 1)
-    ax.set_ylabel('Correlation\n(Decision value vs Performance)', fontsize=11)
-    ax.set_title(f'{group}', fontsize=12, fontweight='bold')
-    ax.set_xticks([])
-    ax.set_xlabel('')
-    sns.despine(ax=ax)
-
-plt.tight_layout()
-
-# Statistical tests
-
+# Population-level statistics
+print("\nPopulation-level statistics:")
 for group in ['R+', 'R-']:
     sub = df_corr[df_corr['reward_group'] == group]
-    correlations = sub['real_corr'].dropna().values
-    
-    if len(correlations) == 0:
-        print(f"\n{group} Group: No data available")
-        continue
-
-    
-    # Test if mean correlation is significantly different from 0 (one-sample test)
-    if len(correlations) >= 3:
-        # Wilcoxon signed-rank test (non-parametric, preferred for small N)
-        stat_w, p_wilcoxon = wilcoxon(correlations, alternative='greater')
-
+    if len(sub) >= 3:
+        stat_w, p_wilcox = wilcoxon(sub['correlation'].values, alternative='greater')
+        stat_t, p_ttest = ttest_1samp(sub['correlation'].values, 0, alternative='greater')
         
-        print(f"  ---")
-        print(f"  One-sample Wilcoxon test (H0: median ≤ 0): p = {p_wilcoxon:.4f}")
+        print(f"\n{group} Group (N={len(sub)}):")
+        print(f"  Mean correlation: {np.mean(sub['correlation'].values):.3f} ± {np.std(sub['correlation'].values):.3f}")
+        print(f"  Wilcoxon test (H0: median ≤ 0): p={p_wilcox:.4f}")
+        print(f"  t-test (H0: mean ≤ 0): p={p_ttest:.4f}")
 
+# Save population statistics
+pop_stats_corr = []
+for group in ['R+', 'R-']:
+    sub = df_corr[df_corr['reward_group'] == group]
+    if len(sub) >= 3:
+        stat_w, p_wilcox = wilcoxon(sub['correlation'].values, alternative='greater')
+        stat_t, p_ttest = ttest_1samp(sub['correlation'].values, 0, alternative='greater')
         
-        # Interpretation
-        if p_wilcoxon < 0.05:
-            print(f"  ✓ Significant positive correlation (p < 0.05)")
-        else:
-            print(f"  ✗ Not significant (p ≥ 0.05)")
+        pop_stats_corr.append({
+            'reward_group': group,
+            'method': 'Direct Correlation',
+            'mean_value': np.mean(sub['correlation'].values),
+            'std_value': np.std(sub['correlation'].values),
+            'n_total': len(sub),
+            'p_wilcoxon': p_wilcox,
+            'p_ttest': p_ttest
+        })
+
+df_pop_stats_corr = pd.DataFrame(pop_stats_corr)
+
+
+# Method 2: Rate of Change Analysis
+# ----------------------------------
+print("\n" + "-"*80)
+print("METHOD 2: Rate of Change Analysis")
+print("Correlation between slopes of decision values and behavioral performance\n")
+
+slopes_dec = []
+slopes_perf = []
+slope_mice = []
+slope_groups = []
+
+for mouse in mice:
+    group = results_combined.loc[results_combined['mouse_id'] == mouse, 'reward_group'].iloc[0]
+    dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
+    bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
+    
+    if align_to_learning:
+        learning_trial = bh_mouse['learning_trial'].iloc[0] if 'learning_trial' in bh_mouse.columns else 0
+        bh_mouse_aligned = bh_mouse.copy()
+        bh_mouse_aligned['trial_w_aligned'] = bh_mouse_aligned['trial_w'] - learning_trial
+        common_trials = np.intersect1d(
+            dec_mouse['trial_center_aligned'].dropna(), 
+            bh_mouse_aligned['trial_w_aligned']
+        )
+        if len(common_trials) < 10:
+            continue
+        x_trials = np.array(common_trials)
+        dec_vals = dec_mouse.set_index('trial_center_aligned').loc[common_trials]['mean_decision_value'].values
+        perf_vals = bh_mouse_aligned.set_index('trial_w_aligned').loc[common_trials]['learning_curve_w'].values
     else:
-        print(f"  Insufficient data for statistical test (N < 3)")
-
-
-plt.savefig(os.path.join(output_dir, 'correlation_behavior_decision_day0.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'correlation_behavior_decision_day0.pdf'), format='pdf', dpi=300)
-
-
-
-# Cross-correlation analysis
-# --------------------------
-
-def crosscorr_peak_aligned(results_combined, bh_df, mice_list, min_trials=10):
-    crosscorr_curves = []
-    peak_lags = []
-    mice_xcorr = []
-
-    for mouse in mice_list:
-        # Get decision values and behavioral curve for this mouse
-        dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
-        bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
-        # Align by trial index (trial_center for decision, trial_w for behavior)
-        common_trials = np.intersect1d(dec_mouse['trial_center'], bh_mouse['trial_w'])
-        if len(common_trials) < min_trials:
+        common_trials = np.intersect1d(dec_mouse['trial_start'], bh_mouse['trial_w'])
+        if len(common_trials) < 10:
             continue
-        dec_vals = dec_mouse.set_index('trial_center').loc[common_trials]['mean_decision_value'].values
+        x_trials = np.array(common_trials)
+        dec_vals = dec_mouse.set_index('trial_start').loc[common_trials]['mean_decision_value'].values
         perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
-        # Remove nan
-        mask = ~np.isnan(dec_vals) & ~np.isnan(perf_vals)
-        if np.sum(mask) < min_trials:
-            continue
-        dec_vals = dec_vals[mask]
-        perf_vals = perf_vals[mask]
-        # Subtract mean for cross-correlation
-        dec_vals -= np.nanmean(dec_vals)
-        perf_vals -= np.nanmean(perf_vals)
-        # Compute cross-correlation (full mode)
-        xcorr = correlate(dec_vals, perf_vals, mode='full', method='auto')
-        lags = np.arange(-len(perf_vals)+1, len(dec_vals))
-        # Normalize
-        xcorr /= (np.std(dec_vals) * np.std(perf_vals) * len(dec_vals))
-        # Find peak
-        peak_idx = np.argmax(xcorr)
-        peak_lag = lags[peak_idx]
-        # Center curve at peak
-        center_idx = np.where(lags == 0)[0][0]
-        shift = peak_idx - center_idx
-        # Store curve and lag
-        crosscorr_curves.append(np.roll(xcorr, -shift))
-        peak_lags.append(peak_lag)
-        mice_xcorr.append(mouse)
+    
+    # Fit linear regression to get slopes
+    from sklearn.linear_model import LinearRegression
+    reg_dec = LinearRegression().fit(x_trials.reshape(-1, 1), dec_vals)
+    reg_perf = LinearRegression().fit(x_trials.reshape(-1, 1), perf_vals)
+    
+    slopes_dec.append(reg_dec.coef_[0])
+    slopes_perf.append(reg_perf.coef_[0])
+    slope_mice.append(mouse)
+    slope_groups.append(group)
+    
+    print(f"{mouse} ({group}): decoder slope={reg_dec.coef_[0]:.4f}, behavior slope={reg_perf.coef_[0]:.4f}")
 
-    # Pad curves to same length
-    if not crosscorr_curves:
-        return None, None, None, None
-    max_len = max(len(c) for c in crosscorr_curves)
-    xcorr_mat = np.full((len(crosscorr_curves), max_len), np.nan)
-    for i, c in enumerate(crosscorr_curves):
-        pad_left = (max_len - len(c)) // 2
-        pad_right = max_len - len(c) - pad_left
-        xcorr_mat[i, pad_left:pad_left+len(c)] = c
-
-    mean_xcorr = np.nanmean(xcorr_mat, axis=0)
-    sem_xcorr = np.nanstd(xcorr_mat, axis=0) / np.sqrt(np.sum(~np.isnan(xcorr_mat), axis=0))
-    lags_common = np.arange(-max_len//2+1, max_len//2+1)
-    return mean_xcorr, sem_xcorr, lags_common, mice_xcorr
-
-# Separate mice by reward group
-mice_rplus = results_combined[results_combined['reward_group'] == 'R+']['mouse_id'].unique()
-mice_rminus = results_combined[results_combined['reward_group'] == 'R-']['mouse_id'].unique()
-
-mean_xcorr_rplus, sem_xcorr_rplus, lags_common_rplus, mice_xcorr_rplus = crosscorr_peak_aligned(
-    results_combined, bh_df, mice_rplus)
-mean_xcorr_rminus, sem_xcorr_rminus, lags_common_rminus, mice_xcorr_rminus = crosscorr_peak_aligned(
-    results_combined, bh_df, mice_rminus)
-
-plt.figure(figsize=(7, 4))
-if mean_xcorr_rplus is not None:
-    plt.plot(lags_common_rplus, mean_xcorr_rplus, color=reward_palette[1], label='R+ mean cross-corr (centered)')
-    plt.fill_between(lags_common_rplus, mean_xcorr_rplus - sem_xcorr_rplus, mean_xcorr_rplus + sem_xcorr_rplus, color=reward_palette[1], alpha=0.3)
-if mean_xcorr_rminus is not None:
-    plt.plot(lags_common_rminus, mean_xcorr_rminus, color=reward_palette[0], label='R- mean cross-corr (centered)')
-    plt.fill_between(lags_common_rminus, mean_xcorr_rminus - sem_xcorr_rminus, mean_xcorr_rminus + sem_xcorr_rminus, color=reward_palette[0], alpha=0.3)
-plt.axvline(0, color='red', linestyle='--', label='Peak aligned')
-plt.xlabel('Lag (trials)')
-plt.ylabel('Cross-correlation')
-plt.title('Cross-correlation (decision vs behavior)\nAligned at peak for each mouse')
-plt.legend()
-sns.despine()
-plt.tight_layout()
-
-# Plot distributions of lags to peak for both groups
-plt.figure(figsize=(6, 4))
-all_peak_lags = []
-all_groups = []
-
-# Compute peak lags for R+ and R- mice
-def get_peak_lags(results_combined, bh_df, mice_list, min_trials=10):
-    peak_lags = []
-    for mouse in mice_list:
-        dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
-        bh_mouse = bh_df[bh_df['mouse_id'] == mouse]
-        common_trials = np.intersect1d(dec_mouse['trial_center'], bh_mouse['trial_w'])
-        if len(common_trials) < min_trials:
-            continue
-        dec_vals = dec_mouse.set_index('trial_center').loc[common_trials]['mean_decision_value'].values
-        perf_vals = bh_mouse.set_index('trial_w').loc[common_trials]['learning_curve_w'].values
-        dec_vals_smooth = gaussian_filter1d(dec_vals, sigma=2)
-        perf_vals_smooth = gaussian_filter1d(perf_vals, sigma=2)
-        mask = ~np.isnan(dec_vals_smooth) & ~np.isnan(perf_vals_smooth)
-        if np.sum(mask) < min_trials:
-            continue
-        dec_vals_smooth = dec_vals_smooth[mask]
-        perf_vals_smooth = perf_vals_smooth[mask]
-        dec_vals_smooth -= np.nanmean(dec_vals_smooth)
-        perf_vals_smooth -= np.nanmean(perf_vals_smooth)
-        xcorr = correlate(dec_vals_smooth, perf_vals_smooth, mode='full', method='auto')
-        lags = np.arange(-len(perf_vals_smooth)+1, len(dec_vals_smooth))
-        xcorr /= (np.std(dec_vals_smooth) * np.std(perf_vals_smooth) * len(dec_vals_smooth))
-        peak_idx = np.argmax(xcorr)
-        peak_lag = lags[peak_idx]
-        peak_lags.append(peak_lag)
-    return peak_lags
-
-peak_lags_rplus = get_peak_lags(results_combined, bh_df, mice_rplus)
-peak_lags_rminus = get_peak_lags(results_combined, bh_df, mice_rminus)
-
-# Prepare DataFrame for plotting
-df_lags = pd.DataFrame({
-    'peak_lag': np.concatenate([peak_lags_rplus, peak_lags_rminus]),
-    'reward_group': ['R+'] * len(peak_lags_rplus) + ['R-'] * len(peak_lags_rminus)
+# Save slope data
+df_slopes_corr = pd.DataFrame({
+    'mouse_id': slope_mice,
+    'reward_group': slope_groups,
+    'slope_decoder': slopes_dec,
+    'slope_behavior': slopes_perf
 })
 
-sns.violinplot(data=df_lags, x='reward_group', y='peak_lag', palette=reward_palette[::-1], inner=None)
-sns.stripplot(data=df_lags, x='reward_group', y='peak_lag', color='black', alpha=0.7)
-plt.axhline(0, color='red', linestyle='--', label='Zero lag')
-plt.ylabel('Lag to peak (trials)')
-plt.title('Distribution of lags to peak cross-correlation')
-plt.tight_layout()
-sns.despine()
+df_slopes_corr.to_csv(os.path.join(output_dir, 'correlation_slopes_data.csv'), index=False)
+print(f"\nSaved: correlation_slopes_data.csv")
 
-# Save lag distribution plot
-plt.savefig(os.path.join(output_dir, 'crosscorr_peak_lag_distribution.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'crosscorr_peak_lag_distribution.png'), format='png', dpi=300)
-
-plt.savefig(os.path.join(output_dir, 'crosscorr_decision_behavior_peak_aligned.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'crosscorr_decision_behavior_peak_aligned.png'), format='png', dpi=300)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Additional analysis: Trial-by-trial classification for individual mice
-def single_trial_classification_day0(vectors_mapping, vectors_learning, mice_list, seed=42):
-    """
-    Classify each individual trial in Day 0 learning using decoder trained on Day -2 vs +2 mapping.
-    
-    Sign convention: pre-learning (label 0) → negative decision values
-                     post-learning (label 1) → positive decision values
-    """
-    trial_results = []
-    
-    for i, (d_mapping, d_learning, mouse) in enumerate(zip(vectors_mapping, vectors_learning, mice_list)):
-        day_per_trial = d_mapping['day'].values
-        
-        # Train on Day -2 vs +2 mapping trials
-        train_mask = np.isin(day_per_trial, [-2, 2])
-        if np.sum(train_mask) < 10:
-            continue
-            
-        X_train = d_mapping.values[:, train_mask].T
-        y_train = np.array([0 if day == -2 else 1 for day in day_per_trial[train_mask]])
-        
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        clf = LogisticRegression(max_iter=5000, random_state=seed)
-        clf.fit(X_train_scaled, y_train)
-        
-        # Sanity check: Verify sign convention
-        pre_mask = day_per_trial == -2
-        post_mask = day_per_trial == 2
-        X_pre = scaler.transform(d_mapping.values[:, pre_mask].T)
-        X_post = scaler.transform(d_mapping.values[:, post_mask].T)
-        mean_dec_pre = np.mean(clf.decision_function(X_pre))
-        mean_dec_post = np.mean(clf.decision_function(X_post))
-        
-        if mean_dec_pre > mean_dec_post:
-            print(f"WARNING: {mouse} has flipped decision values! Pre={mean_dec_pre:.3f}, Post={mean_dec_post:.3f}")
-            sign_flip = -1
-        else:
-            sign_flip = 1
-        
-        # Test on Day 0 learning trials
-        n_learning_trials = d_learning.sizes['trial']
-        
-        for j in range(n_learning_trials):
-            X_trial = d_learning.values[:, j:j+1].T
-            X_trial_scaled = scaler.transform(X_trial)
-            
-            decision_value = clf.decision_function(X_trial_scaled)[0] * sign_flip  # Apply sign correction
-            proba_post = clf.predict_proba(X_trial_scaled)[0, 1]
-            prediction = clf.predict(X_trial_scaled)[0]
-            
-            trial_results.append({
-                'mouse_idx': i,
-                'mouse_id': mouse,
-                'trial_in_day0': j,
-                'decision_value': decision_value,
-                'proba_post': proba_post,
-                'prediction': prediction
-            })
-    
-    return pd.DataFrame(trial_results)
-
-# Run single trial analysis
-print("\nAnalyzing single trial classifications...")
-trial_results_rew = single_trial_classification_day0(vectors_rew, vectors_rew_day0_learning, mice_rew)
-trial_results_nonrew = single_trial_classification_day0(vectors_nonrew, vectors_nonrew_day0_learning, mice_nonrew)
-
-trial_results_rew['reward_group'] = 'R+'
-trial_results_nonrew['reward_group'] = 'R-'
-trial_results_all = pd.concat([trial_results_rew, trial_results_nonrew], ignore_index=True)
-
-# Plot single trial results
-plt.figure(figsize=(12, 8))
-
-# Plot decision values for individual trials
-plt.subplot(2, 2, 1)
-sns.scatterplot(data=trial_results_all, x='trial_in_day0', y='decision_value', 
-                hue='reward_group', palette=reward_palette[::-1], alpha=0.6)
-sns.lineplot(data=trial_results_all, x='trial_in_day0', y='decision_value', 
-                hue='reward_group', palette=reward_palette[::-1], estimator=np.mean, errorbar='ci')
-plt.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-plt.xlabel('Trial in Day 0')
-plt.ylabel('Decision value')
-plt.title('Single trial decision values')
-
-# Plot probability for individual trials
-plt.subplot(2, 2, 2)
-sns.scatterplot(data=trial_results_all, x='trial_in_day0', y='proba_post', 
-                hue='reward_group', palette=reward_palette[::-1], alpha=0.6)
-sns.lineplot(data=trial_results_all, x='trial_in_day0', y='proba_post', 
-                hue='reward_group', palette=reward_palette[::-1], estimator=np.mean, errorbar='ci')
-plt.axhline(y=0.5, color='black', linestyle='--', alpha=0.5)
-plt.xlabel('Trial in Day 0')
-plt.ylabel('Probability "post"')
-plt.title('Single trial probabilities')
-
-# Cumulative accuracy plot
-plt.subplot(2, 2, 3)
+# Test correlation between slopes
+print("\nCorrelation between decoder and behavior slopes:")
 for group in ['R+', 'R-']:
-    group_data = trial_results_all[trial_results_all['reward_group'] == group]
-    if len(group_data) > 0:
-        # Calculate cumulative accuracy for each mouse
-        mouse_cumulative = []
-        for mouse_idx in group_data['mouse_idx'].unique():
-            mouse_data = group_data[group_data['mouse_idx'] == mouse_idx].sort_values('trial_in_day0')
-            cumulative_acc = np.cumsum(mouse_data['prediction']) / (np.arange(len(mouse_data)) + 1)
-            mouse_cumulative.append(cumulative_acc)
+    sub = df_slopes_corr[df_slopes_corr['reward_group'] == group]
+    if len(sub) >= 3:
+        corr_slopes, p_corr = pearsonr(sub['slope_decoder'].values, sub['slope_behavior'].values)
+        print(f"\n{group} Group:")
+        print(f"  Decoder slope: mean={np.mean(sub['slope_decoder'].values):.4f} ± {np.std(sub['slope_decoder'].values):.4f}")
+        print(f"  Behavior slope: mean={np.mean(sub['slope_behavior'].values):.4f} ± {np.std(sub['slope_behavior'].values):.4f}")
+        print(f"  Correlation of slopes: r={corr_slopes:.3f}, p={p_corr:.4f}")
         
-        if mouse_cumulative:
-            # Pad sequences to same length and average
-            max_len = max(len(seq) for seq in mouse_cumulative)
-            padded = np.full((len(mouse_cumulative), max_len), np.nan)
-            for i, seq in enumerate(mouse_cumulative):
-                padded[i, :len(seq)] = seq
-            
-            mean_cumulative = np.nanmean(padded, axis=0)
-            sem_cumulative = np.nanstd(padded, axis=0) / np.sqrt(np.sum(~np.isnan(padded), axis=0))
-            
-            x_vals = np.arange(max_len)
-            color = reward_palette[::-1][0] if group == 'R+' else reward_palette[::-1][1]
-            plt.plot(x_vals, mean_cumulative, color=color, label=group)
-            plt.fill_between(x_vals, mean_cumulative - sem_cumulative, 
-                            mean_cumulative + sem_cumulative, color=color, alpha=0.3)
+        # Add to population stats
+        pop_stats_corr.append({
+            'reward_group': group,
+            'method': 'Slope Correlation',
+            'mean_value': corr_slopes,
+            'std_value': np.nan,  # Not applicable for a single correlation value
+            'n_total': len(sub),
+            'p_wilcoxon': np.nan,
+            'p_ttest': p_corr  # Use Pearson p-value here
+        })
 
-plt.axhline(y=0.5, color='black', linestyle='--', alpha=0.5)
-plt.xlabel('Trial in Day 0')
-plt.ylabel('Cumulative fraction "post"')
-plt.title('Cumulative classification')
-plt.legend()
+# Update population stats dataframe
+df_pop_stats_corr = pd.DataFrame(pop_stats_corr)
+df_pop_stats_corr.to_csv(os.path.join(output_dir, 'correlation_population_statistics.csv'), index=False)
+print(f"\nSaved: correlation_population_statistics.csv")
 
-# Distribution of decision values across trials
-plt.subplot(2, 2, 4)
-sns.boxplot(data=trial_results_all, x='reward_group', y='decision_value', palette=reward_palette[::-1])
-plt.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-plt.ylabel('Decision value')
-plt.title('Distribution of decision values')
+
+# Visualization
+# -------------
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Panel 1: Direct correlation
+ax = axes[0]
+sns.swarmplot(data=df_corr, x='reward_group', y='correlation', palette=reward_palette[::-1], size=8, alpha=0.6, ax=ax)
+sns.pointplot(data=df_corr, x='reward_group', y='correlation', palette=reward_palette[::-1], errorbar='ci', ax=ax, markersize=10, join=False)
+ax.axhline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
+ax.set_ylabel('Pearson Correlation\n(Decision value vs Performance)', fontsize=11)
+ax.set_title('Direct Correlation', fontsize=12, fontweight='bold')
+ax.set_ylim(-1, 1)
+
+# Add p-value text for each group
+for i, group in enumerate(['R+', 'R-']):
+    pop_stat = df_pop_stats_corr[(df_pop_stats_corr['reward_group'] == group) & 
+                                 (df_pop_stats_corr['method'] == 'Direct Correlation')]
+    if not pop_stat.empty:
+        p_wilcox = pop_stat['p_wilcoxon'].values[0]
+        p_text = f"p={p_wilcox:.4f}" if p_wilcox >= 0.001 else "p<0.001"
+        sig_text = "***" if p_wilcox < 0.001 else "**" if p_wilcox < 0.01 else "*" if p_wilcox < 0.05 else "n.s."
+        y_pos = ax.get_ylim()[1] - 0.1 * (ax.get_ylim()[1] - ax.get_ylim()[0])
+        ax.text(i, y_pos, f"{p_text}\n{sig_text}", ha='center', va='top', fontsize=10, fontweight='bold')
+
+# Panel 2: Slope correlation
+ax = axes[1]
+sns.scatterplot(data=df_slopes_corr, x='slope_behavior', y='slope_decoder', hue='reward_group', palette=reward_palette[::-1], alpha=0.7, s=80, edgecolor='black', linewidth=0.5, ax=ax)
+# Regression lines per group
+for group, color in zip(['R+', 'R-'], reward_palette[::-1]):
+    sub = df_slopes_corr[df_slopes_corr['reward_group'] == group]
+    if len(sub) >= 3:
+        from sklearn.linear_model import LinearRegression
+        X = sub['slope_behavior'].values.reshape(-1, 1)
+        y = sub['slope_decoder'].values
+        reg = LinearRegression().fit(X, y)
+        x_line = np.linspace(X.min(), X.max(), 100)
+        y_line = reg.predict(x_line.reshape(-1, 1))
+        ax.plot(x_line, y_line, color=color, linewidth=2, alpha=0.8)
+        # Add correlation text
+        pop_stat = df_pop_stats_corr[(df_pop_stats_corr['reward_group'] == group) & 
+                                    (df_pop_stats_corr['method'] == 'Slope Correlation')]
+        if not pop_stat.empty:
+            r_val = pop_stat['mean_value'].values[0]
+            p_val = pop_stat['p_ttest'].values[0]
+            p_text = f"p={p_val:.4f}" if p_val >= 0.001 else "p<0.001"
+            ax.text(0.05, 0.95 - (0.15 * (0 if group == 'R+' else 1)), f"{group}: r={r_val:.3f}, {p_text}",
+                    transform=ax.transAxes, fontsize=10, fontweight='bold',
+                    verticalalignment='top', color=color)
+
+ax.axhline(0, color='grey', linestyle='--', alpha=0.5)
+ax.axvline(0, color='grey', linestyle='--', alpha=0.5)
+ax.set_xlabel('Behavior Slope (per trial)', fontsize=11)
+ax.set_ylabel('Decoder Slope (per trial)', fontsize=11)
+ax.set_title('Rate of Change Correlation', fontsize=12, fontweight='bold')
+ax.legend(loc='lower right')
 
 plt.tight_layout()
 sns.despine()
 
-# Save figure
-plt.savefig(os.path.join(output_dir, 'single_trial_classification_day0.svg'), format='svg', dpi=300)
-plt.savefig(os.path.join(output_dir, 'single_trial_classification_day0.png'), format='png', dpi=300)
+plt.savefig(os.path.join(output_dir, 'correlation_decision_behavior.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'correlation_decision_behavior.png'), format='png', dpi=300)
+print(f"\nSaved: correlation_decision_behavior figure")
 
-# Save trial results
-trial_results_all.to_csv(os.path.join(output_dir, 'single_trial_classification_day0_data.csv'), index=False)
+print("\n" + "="*80)
+print("CORRELATION ANALYSIS COMPLETE")
+print("="*80 + "\n")
 
-print(f"\nAnalysis complete. Results saved to {output_dir}")
 
+
+
+
+
+
+
+table.loc[table.no_stim==1]
+
+
+# ============================================================================
+# ADDITIONAL LEARNING ANALYSES
+# ============================================================================
+
+# Load behaviour table with learning trials.
+path = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
+table = pd.read_csv(path)
+# Select day 0 performance for whisker trials.
+bh_df = table.loc[(table['day'] == 0)]
+
+mice = results_combined['mouse_id'].unique()
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/gradual_learning'
+
+
+# Analysis: Error-Driven Learning Signals
+# ========================================
+
+print("\n" + "="*80)
+print("ERROR-DRIVEN LEARNING SIGNALS ANALYSIS")
+print("="*80 + "\n")
+
+# Parameters
+trial_history_depth = 1  # Look at previous trial only
+
+# Part 1: Decision value adjustments after different trial types
+# ----------------------------------------------------------------
+print("Part 1: Analyzing decision value adjustments after all trial types...\n")
+
+error_driven_data = []
+
+for mouse in mice:
+    group = results_combined.loc[results_combined['mouse_id'] == mouse, 'reward_group'].iloc[0]
+    dec_mouse = results_combined[results_combined['mouse_id'] == mouse].copy()
+    bh_mouse = bh_df[bh_df['mouse_id'] == mouse].copy()
+    
+    # Align data
+    if align_to_learning:
+        learning_trial = bh_mouse['learning_trial'].iloc[0] if 'learning_trial' in bh_mouse.columns else 0
+        bh_mouse['trial_w_aligned'] = bh_mouse['trial_w'] - learning_trial
+        
+        # For decoder: only whisker trials
+        dec_mouse = dec_mouse.dropna(subset=['trial_center_aligned'])
+        dec_mouse = dec_mouse.sort_values('trial_center_aligned').reset_index(drop=True)
+        
+        # For behavior: all trials
+        bh_mouse = bh_mouse.sort_values('trial_w').reset_index(drop=True)
+        trial_col = 'trial_w_aligned'
+    else:
+        dec_mouse = dec_mouse.sort_values('trial_start').reset_index(drop=True)
+        bh_mouse = bh_mouse.sort_values('trial_w').reset_index(drop=True)
+        trial_col = 'trial_w'
+    
+    if len(dec_mouse) < 10 or len(bh_mouse) < 10:
+        continue
+    
+    # Create a lookup for decision values by whisker trial number
+    dv_lookup = {}
+    for _, row in dec_mouse.iterrows():
+        whisker_trial = row['trial_start'] if not align_to_learning else row['trial_center_aligned']
+        dv_lookup[whisker_trial] = row['mean_decision_value']
+    
+    # Go through all behavior trials
+    last_whisker_trial = None
+    last_dv = None
+    
+    for i, curr_bh_row in bh_mouse.iterrows():
+        curr_trial = curr_bh_row[trial_col]
+        
+        # Check if current trial is a whisker trial with decision value
+        if curr_trial in dv_lookup:
+            curr_dv = dv_lookup[curr_trial]
+            
+            # If we have a previous trial, compute adjustment
+            if last_whisker_trial is not None and i > 0:
+                prev_bh_row = bh_mouse.iloc[i-1]
+                
+                # Classify previous trial type and outcome
+                if prev_bh_row['whisker_stim'] == 1:
+                    if prev_bh_row['lick_flag'] == 1:
+                        prev_type = 'Whisker Hit'
+                    else:
+                        prev_type = 'Whisker Miss'
+                elif prev_bh_row['no_stim'] == 1:
+                    if prev_bh_row['lick_flag'] == 1:
+                        prev_type = 'No-stim FA'
+                    else:
+                        prev_type = 'No-stim CR'
+                else:
+                    # Skip auditory trials
+                    last_whisker_trial = curr_trial
+                    last_dv = curr_dv
+                    continue
+                
+                # Compute adjustment
+                adjustment = curr_dv - last_dv
+                
+                # Classify trial phase
+                if align_to_learning:
+                    phase = 'post' if curr_trial >= 0 else 'pre'
+                else:
+                    phase = 'post' if curr_trial >= np.median(bh_mouse[trial_col]) else 'pre'
+                
+                error_driven_data.append({
+                    'mouse_id': mouse,
+                    'reward_group': group,
+                    'trial': curr_trial,
+                    'prev_trial_type': prev_type,
+                    'adjustment': adjustment,
+                    'absolute_adjustment': abs(adjustment),
+                    'phase': phase
+                })
+            
+            # Update last whisker trial
+            last_whisker_trial = curr_trial
+            last_dv = curr_dv
+
+df_error = pd.DataFrame(error_driven_data)
+df_error.to_csv(os.path.join(output_dir, 'error_driven_analysis_data.csv'), index=False)
+print("Saved: error_driven_analysis_data.csv")
+
+# Compute per-mouse summary statistics
+print("Computing per-mouse adjustments...")
+mouse_adjustments = []
+
+trial_types = ['Whisker Hit', 'Whisker Miss', 'No-stim CR', 'No-stim FA']
+
+for mouse in df_error['mouse_id'].unique():
+    mouse_data = df_error[df_error['mouse_id'] == mouse]
+    group = mouse_data['reward_group'].iloc[0]
+    
+    perf_dict = {
+        'mouse_id': mouse,
+        'reward_group': group
+    }
+    
+    # Get adjustments for each trial type
+    for trial_type in trial_types:
+        type_data = mouse_data[mouse_data['prev_trial_type'] == trial_type]
+        if len(type_data) > 0:
+            perf_dict[f'mean_adj_after_{trial_type}'] = type_data['absolute_adjustment'].mean()
+            perf_dict[f'n_after_{trial_type}'] = len(type_data)
+        else:
+            perf_dict[f'mean_adj_after_{trial_type}'] = np.nan
+            perf_dict[f'n_after_{trial_type}'] = 0
+    
+    # Also compute phase-specific adjustments for panel 2 (keep old analysis)
+    adj_pre = mouse_data[mouse_data['phase'] == 'pre']['absolute_adjustment'].values
+    adj_post = mouse_data[mouse_data['phase'] == 'post']['absolute_adjustment'].values
+    
+    perf_dict['mean_adj_pre'] = np.mean(adj_pre) if len(adj_pre) > 0 else np.nan
+    perf_dict['mean_adj_post'] = np.mean(adj_post) if len(adj_post) > 0 else np.nan
+    perf_dict['n_trials'] = len(mouse_data)
+    
+    mouse_adjustments.append(perf_dict)
+
+df_mouse_adj = pd.DataFrame(mouse_adjustments)
+df_mouse_adj.to_csv(os.path.join(output_dir, 'error_driven_per_mouse_adjustments.csv'), index=False)
+print("Saved: error_driven_per_mouse_adjustments.csv")
+
+# Statistical analysis
+print("\nPopulation-level statistics for decision value adjustments:")
+
+error_stats = []
+
+for group in ['R+', 'R-']:
+    sub = df_mouse_adj[df_mouse_adj['reward_group'] == group]
+    
+    if len(sub) == 0:
+        continue
+    
+    print(f"\n{group} Group (N={len(sub)} mice):")
+    
+    # Test within-group comparisons for trial types
+    # 1. Whisker Hit vs. Whisker Miss
+    w_hit = sub['mean_adj_after_Whisker Hit'].dropna().values
+    w_miss = sub['mean_adj_after_Whisker Miss'].dropna().values
+    
+    if len(w_hit) >= 3 and len(w_miss) >= 3:
+        n_paired = min(len(w_hit), len(w_miss))
+        stat_w, p_whisker = wilcoxon(w_hit[:n_paired] - w_miss[:n_paired])
+        print(f"  Adjustment after Whisker Hit: {np.mean(w_hit):.4f} ± {np.std(w_hit):.4f}")
+        print(f"  Adjustment after Whisker Miss: {np.mean(w_miss):.4f} ± {np.std(w_miss):.4f}")
+        print(f"  Wilcoxon test (Hit vs Miss): p={p_whisker:.4f}")
+    else:
+        p_whisker = np.nan
+    
+    # 2. No-stim CR vs. No-stim FA
+    ns_cr = sub['mean_adj_after_No-stim CR'].dropna().values
+    ns_fa = sub['mean_adj_after_No-stim FA'].dropna().values
+    
+    if len(ns_cr) >= 3 and len(ns_fa) >= 3:
+        n_paired = min(len(ns_cr), len(ns_fa))
+        stat_w, p_nostim = wilcoxon(ns_cr[:n_paired] - ns_fa[:n_paired])
+        print(f"  Adjustment after No-stim CR: {np.mean(ns_cr):.4f} ± {np.std(ns_cr):.4f}")
+        print(f"  Adjustment after No-stim FA: {np.mean(ns_fa):.4f} ± {np.std(ns_fa):.4f}")
+        print(f"  Wilcoxon test (CR vs FA): p={p_nostim:.4f}")
+    else:
+        p_nostim = np.nan
+    
+    # Also keep pre vs post comparison for panel 2
+    adj_pre = sub['mean_adj_pre'].dropna().values
+    adj_post = sub['mean_adj_post'].dropna().values
+    
+    if len(adj_pre) > 0 and len(adj_post) > 0:
+        n_paired = min(len(adj_pre), len(adj_post))
+        if n_paired >= 3:
+            stat_w, p_phase = wilcoxon(adj_pre[:n_paired] - adj_post[:n_paired], alternative='greater')
+            print(f"  Adjustment pre-learning: mean={np.mean(adj_pre):.4f} ± {np.std(adj_pre):.4f}")
+            print(f"  Adjustment post-learning: mean={np.mean(adj_post):.4f} ± {np.std(adj_post):.4f}")
+            print(f"  Wilcoxon paired test (pre > post): p={p_phase:.4f}")
+        else:
+            p_phase = np.nan
+    else:
+        p_phase = np.nan
+    
+    error_stats.append({
+        'reward_group': group,
+        'n_mice': len(sub),
+        'p_whisker_hit_vs_miss': p_whisker,
+        'p_nostim_cr_vs_fa': p_nostim,
+        'mean_adj_pre': np.nanmean(adj_pre) if len(adj_pre) > 0 else np.nan,
+        'std_adj_pre': np.nanstd(adj_pre) if len(adj_pre) > 0 else np.nan,
+        'mean_adj_post': np.nanmean(adj_post) if len(adj_post) > 0 else np.nan,
+        'std_adj_post': np.nanstd(adj_post) if len(adj_post) > 0 else np.nan,
+        'p_pre_vs_post': p_phase
+    })
+
+df_error_stats = pd.DataFrame(error_stats)
+df_error_stats.to_csv(os.path.join(output_dir, 'error_driven_analysis_stats.csv'), index=False)
+print("\nSaved: error_driven_analysis_stats.csv")
+
+
+# Part 2: Behavioral performance after different trial types
+# -----------------------------------------------------------
+print("\n" + "-"*80)
+print("Part 2: Analyzing behavioral performance after different trial types...\n")
+
+behavioral_performance_data = []
+
+for mouse in mice:
+    group = results_combined.loc[results_combined['mouse_id'] == mouse, 'reward_group'].iloc[0] if mouse in results_combined['mouse_id'].values else None
+    bh_mouse = bh_df[bh_df['mouse_id'] == mouse].copy()
+    
+    if len(bh_mouse) < 10 or group is None:
+        continue
+    
+    # Sort by trial number
+    bh_mouse = bh_mouse.sort_values('id').reset_index(drop=True)
+    
+    # Identify trial types and outcomes for previous and current trials
+    for i in range(1, len(bh_mouse)):
+        prev_trial = bh_mouse.iloc[i-1]
+        curr_trial = bh_mouse.iloc[i]
+        
+        # Classify previous trial type and outcome
+        if prev_trial['whisker_stim'] == 1:
+            if prev_trial['lick_flag'] == 1:
+                prev_type = 'Whisker Hit'
+            else:
+                prev_type = 'Whisker Miss'
+        elif prev_trial['no_stim'] == 1:
+            if prev_trial['lick_flag'] == 1:
+                prev_type = 'No-stim FA'  # False alarm
+            else:
+                prev_type = 'No-stim CR'  # Correct rejection
+        else:
+            continue  # Skip auditory trials as previous trials
+        
+        # Classify current trial type and determine correct performance
+        # We want performance on whisker trials only (go trials with reward)
+        if curr_trial['whisker_stim'] == 1:
+            # Whisker trial: correct = hit (lick)
+            curr_correct = curr_trial['lick_flag'] == 1
+        else:
+            # Skip non-whisker current trials
+            continue
+        
+        behavioral_performance_data.append({
+            'mouse_id': mouse,
+            'reward_group': group,
+            'prev_trial_type': prev_type,
+            'current_correct': int(curr_correct)
+        })
+
+df_behavior_perf = pd.DataFrame(behavioral_performance_data)
+df_behavior_perf.to_csv(os.path.join(output_dir, 'behavioral_performance_after_trial_types_data.csv'), index=False)
+print("Saved: behavioral_performance_after_trial_types_data.csv")
+
+# Debug: Check what trial types we have
+print(f"\nTrial types found in data: {df_behavior_perf['prev_trial_type'].unique()}")
+print(f"Counts per trial type:")
+print(df_behavior_perf['prev_trial_type'].value_counts())
+
+# Compute per-mouse performance after each trial type
+print("Computing per-mouse performance after each trial type...")
+mouse_behavior_perf = []
+
+trial_types = ['Whisker Hit', 'Whisker Miss', 'No-stim CR', 'No-stim FA']
+
+for mouse in df_behavior_perf['mouse_id'].unique():
+    mouse_data = df_behavior_perf[df_behavior_perf['mouse_id'] == mouse]
+    group = mouse_data['reward_group'].iloc[0]
+    
+    perf_dict = {
+        'mouse_id': mouse,
+        'reward_group': group
+    }
+    
+    for trial_type in trial_types:
+        type_data = mouse_data[mouse_data['prev_trial_type'] == trial_type]
+        if len(type_data) > 0:
+            perf = type_data['current_correct'].mean()
+            perf_dict[f'perf_after_{trial_type}'] = perf
+            perf_dict[f'n_after_{trial_type}'] = len(type_data)
+        else:
+            perf_dict[f'perf_after_{trial_type}'] = np.nan
+            perf_dict[f'n_after_{trial_type}'] = 0
+    
+    mouse_behavior_perf.append(perf_dict)
+
+df_mouse_behavior_perf = pd.DataFrame(mouse_behavior_perf)
+df_mouse_behavior_perf.to_csv(os.path.join(output_dir, 'behavioral_performance_per_mouse.csv'), index=False)
+print("Saved: behavioral_performance_per_mouse.csv")
+
+# Debug: Check column names and data availability
+print(f"\nColumns in df_mouse_behavior_perf: {df_mouse_behavior_perf.columns.tolist()}")
+for col in ['perf_after_Whisker Hit', 'perf_after_Whisker Miss', 'perf_after_No-stim CR', 'perf_after_No-stim FA']:
+    if col in df_mouse_behavior_perf.columns:
+        n_valid = df_mouse_behavior_perf[col].notna().sum()
+        print(f"  {col}: {n_valid} mice with data")
+
+# Statistical analysis
+print("\nPopulation-level statistics for behavioral performance:")
+
+behavior_perf_stats = []
+
+for group in ['R+', 'R-']:
+    sub = df_mouse_behavior_perf[df_mouse_behavior_perf['reward_group'] == group]
+    
+    if len(sub) == 0:
+        continue
+    
+    print(f"\n{group} Group (N={len(sub)} mice):")
+    
+    # Test within-group comparisons
+    # 1. Whisker Hit vs. Whisker Miss
+    w_hit = sub['perf_after_Whisker Hit'].dropna().values
+    w_miss = sub['perf_after_Whisker Miss'].dropna().values
+    
+    if len(w_hit) >= 3 and len(w_miss) >= 3:
+        n_paired = min(len(w_hit), len(w_miss))
+        stat_w, p_whisker = wilcoxon(w_hit[:n_paired] - w_miss[:n_paired])
+        print(f"  After Whisker Hit: {np.mean(w_hit):.3f} ± {np.std(w_hit):.3f}")
+        print(f"  After Whisker Miss: {np.mean(w_miss):.3f} ± {np.std(w_miss):.3f}")
+        print(f"  Wilcoxon test (Hit vs Miss): p={p_whisker:.4f}")
+        
+        behavior_perf_stats.append({
+            'reward_group': group,
+            'comparison': 'Whisker Hit vs Miss',
+            'mean_condition1': np.mean(w_hit),
+            'mean_condition2': np.mean(w_miss),
+            'p_value': p_whisker,
+            'n_mice': n_paired
+        })
+    
+    # 2. No-stim CR vs. No-stim FA
+    ns_cr = sub['perf_after_No-stim CR'].dropna().values
+    ns_fa = sub['perf_after_No-stim FA'].dropna().values
+    
+    if len(ns_cr) >= 3 and len(ns_fa) >= 3:
+        n_paired = min(len(ns_cr), len(ns_fa))
+        stat_w, p_nostim = wilcoxon(ns_cr[:n_paired] - ns_fa[:n_paired])
+        print(f"  After No-stim CR: {np.mean(ns_cr):.3f} ± {np.std(ns_cr):.3f}")
+        print(f"  After No-stim FA: {np.mean(ns_fa):.3f} ± {np.std(ns_fa):.3f}")
+        print(f"  Wilcoxon test (CR vs FA): p={p_nostim:.4f}")
+        
+        behavior_perf_stats.append({
+            'reward_group': group,
+            'comparison': 'No-stim CR vs FA',
+            'mean_condition1': np.mean(ns_cr),
+            'mean_condition2': np.mean(ns_fa),
+            'p_value': p_nostim,
+            'n_mice': n_paired
+        })
+
+df_behavior_perf_stats = pd.DataFrame(behavior_perf_stats)
+df_behavior_perf_stats.to_csv(os.path.join(output_dir, 'behavioral_performance_stats.csv'), index=False)
+print("\nSaved: behavioral_performance_stats.csv")
+
+# Visualization
+# -------------
+print("\nGenerating visualization...")
+
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+# Row 1: Behavioral performance
+# ==============================
+
+# Panel 1 (top-left): Behavioral performance for R+ group
+ax = axes[0, 0]
+
+sub = df_mouse_behavior_perf[df_mouse_behavior_perf['reward_group'] == 'R+']
+color = reward_palette[1]
+
+# Prepare data for barplot
+conditions = ['W Hit', 'W Miss', 'NS CR', 'NS FA']
+trial_type_map = {
+    'W Hit': 'Whisker Hit',
+    'W Miss': 'Whisker Miss',
+    'NS CR': 'No-stim CR',
+    'NS FA': 'No-stim FA'
+}
+
+plot_data_p1 = []
+for cond in conditions:
+    col_name = f'perf_after_{trial_type_map[cond]}'
+    if col_name in sub.columns:
+        for idx, row in sub.iterrows():
+            if not np.isnan(row[col_name]):
+                plot_data_p1.append({
+                    'Condition': cond,
+                    'Performance': row[col_name],
+                    'mouse_id': row['mouse_id']
+                })
+
+df_plot_p1 = pd.DataFrame(plot_data_p1)
+
+# Use seaborn barplot with bootstrap CI
+if len(df_plot_p1) > 0:
+    sns.barplot(data=df_plot_p1, x='Condition', y='Performance', order=conditions,
+               color=color, alpha=0.7, errorbar=('ci', 95), capsize=0.1,
+               err_kws={'linewidth': 2}, ax=ax)
+    
+    # Add individual points
+    sns.stripplot(data=df_plot_p1, x='Condition', y='Performance', order=conditions,
+                 color=color, alpha=0.4, size=6, ax=ax)
+
+# Add p-values for comparisons
+stats_r_plus = df_behavior_perf_stats[df_behavior_perf_stats['reward_group'] == 'R+']
+if len(stats_r_plus) > 0:
+    # Whisker comparison
+    p_whisker = stats_r_plus[stats_r_plus['comparison'] == 'Whisker Hit vs Miss']['p_value'].values
+    if len(p_whisker) > 0:
+        y_max = df_plot_p1[df_plot_p1['Condition'].isin(['W Hit', 'W Miss'])]['Performance'].max()
+        ax.plot([0, 1], [y_max + 0.05, y_max + 0.05], 'k-', linewidth=1.5)
+        ax.text(0.5, y_max + 0.06, f'p={p_whisker[0]:.4f}', 
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    # No-stim comparison
+    p_nostim = stats_r_plus[stats_r_plus['comparison'] == 'No-stim CR vs FA']['p_value'].values
+    if len(p_nostim) > 0:
+        y_max = df_plot_p1[df_plot_p1['Condition'].isin(['NS CR', 'NS FA'])]['Performance'].max()
+        ax.plot([2, 3], [y_max + 0.05, y_max + 0.05], 'k-', linewidth=1.5)
+        ax.text(2.5, y_max + 0.06, f'p={p_nostim[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+ax.axhline(0.5, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+ax.set_xlabel('Previous Trial Type', fontsize=11)
+ax.set_ylabel('Performance on Next Whisker Trial', fontsize=11)
+ax.set_title('Behavioral: R+ Group', fontsize=12, fontweight='bold')
+ax.set_ylim([0, 1.2])
+
+# Panel 2 (top-right): Behavioral performance for R- group
+ax = axes[0, 1]
+
+sub = df_mouse_behavior_perf[df_mouse_behavior_perf['reward_group'] == 'R-']
+color = reward_palette[0]
+
+plot_data_p2 = []
+for cond in conditions:
+    col_name = f'perf_after_{trial_type_map[cond]}'
+    if col_name in sub.columns:
+        for idx, row in sub.iterrows():
+            if not np.isnan(row[col_name]):
+                plot_data_p2.append({
+                    'Condition': cond,
+                    'Performance': row[col_name],
+                    'mouse_id': row['mouse_id']
+                })
+
+df_plot_p2 = pd.DataFrame(plot_data_p2)
+
+if len(df_plot_p2) > 0:
+    sns.barplot(data=df_plot_p2, x='Condition', y='Performance', order=conditions,
+               color=color, alpha=0.7, errorbar=('ci', 95), capsize=0.1,
+               err_kws={'linewidth': 2}, ax=ax)
+    
+    sns.stripplot(data=df_plot_p2, x='Condition', y='Performance', order=conditions,
+                 color=color, alpha=0.4, size=6, ax=ax)
+
+# Add p-values for comparisons
+stats_r_minus = df_behavior_perf_stats[df_behavior_perf_stats['reward_group'] == 'R-']
+if len(stats_r_minus) > 0:
+    # Whisker comparison
+    p_whisker = stats_r_minus[stats_r_minus['comparison'] == 'Whisker Hit vs Miss']['p_value'].values
+    if len(p_whisker) > 0:
+        y_max = df_plot_p2[df_plot_p2['Condition'].isin(['W Hit', 'W Miss'])]['Performance'].max()
+        ax.plot([0, 1], [y_max + 0.05, y_max + 0.05], 'k-', linewidth=1.5)
+        ax.text(0.5, y_max + 0.06, f'p={p_whisker[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    # No-stim comparison
+    p_nostim = stats_r_minus[stats_r_minus['comparison'] == 'No-stim CR vs FA']['p_value'].values
+    if len(p_nostim) > 0:
+        y_max = df_plot_p2[df_plot_p2['Condition'].isin(['NS CR', 'NS FA'])]['Performance'].max()
+        ax.plot([2, 3], [y_max + 0.05, y_max + 0.05], 'k-', linewidth=1.5)
+        ax.text(2.5, y_max + 0.06, f'p={p_nostim[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+ax.axhline(0.5, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+ax.set_xlabel('Previous Trial Type', fontsize=11)
+ax.set_ylabel('Performance on Next Whisker Trial', fontsize=11)
+ax.set_title('Behavioral: R- Group', fontsize=12, fontweight='bold')
+ax.set_ylim([0, 1.2])
+
+
+# Row 2: Neural decision value adjustments
+# =========================================
+
+# Panel 3 (bottom-left): Decision value adjustment after different trial types for R+
+ax = axes[1, 0]
+
+sub = df_mouse_adj[df_mouse_adj['reward_group'] == 'R+']
+color = reward_palette[1]
+
+plot_data_p3 = []
+for cond in conditions:
+    col_name = f'mean_adj_after_{trial_type_map[cond]}'
+    if col_name in sub.columns:
+        for idx, row in sub.iterrows():
+            if not np.isnan(row[col_name]):
+                plot_data_p3.append({
+                    'Condition': cond,
+                    'Adjustment': row[col_name],
+                    'mouse_id': row['mouse_id']
+                })
+
+df_plot_p3 = pd.DataFrame(plot_data_p3)
+
+if len(df_plot_p3) > 0:
+    sns.barplot(data=df_plot_p3, x='Condition', y='Adjustment', order=conditions,
+               color=color, alpha=0.7, errorbar=('ci', 95), capsize=0.1,
+               err_kws={'linewidth': 2}, ax=ax)
+    
+    sns.stripplot(data=df_plot_p3, x='Condition', y='Adjustment', order=conditions,
+                 color=color, alpha=0.4, size=6, ax=ax)
+
+# Add p-values
+error_stats_r_plus = df_error_stats[df_error_stats['reward_group'] == 'R+']
+if len(error_stats_r_plus) > 0:
+    # Whisker comparison
+    p_whisker = error_stats_r_plus['p_whisker_hit_vs_miss'].values
+    if len(p_whisker) > 0 and not np.isnan(p_whisker[0]):
+        y_max = df_plot_p3[df_plot_p3['Condition'].isin(['W Hit', 'W Miss'])]['Adjustment'].max()
+        ax.plot([0, 1], [y_max + 0.02, y_max + 0.02], 'k-', linewidth=1.5)
+        ax.text(0.5, y_max + 0.03, f'p={p_whisker[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    # No-stim comparison
+    p_nostim = error_stats_r_plus['p_nostim_cr_vs_fa'].values
+    if len(p_nostim) > 0 and not np.isnan(p_nostim[0]):
+        y_max = df_plot_p3[df_plot_p3['Condition'].isin(['NS CR', 'NS FA'])]['Adjustment'].max()
+        ax.plot([2, 3], [y_max + 0.02, y_max + 0.02], 'k-', linewidth=1.5)
+        ax.text(2.5, y_max + 0.03, f'p={p_nostim[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+ax.set_xlabel('Previous Trial Type', fontsize=11)
+ax.set_ylabel('Mean |Decision Value Adjustment|', fontsize=11)
+ax.set_title('Neural: R+ Group', fontsize=12, fontweight='bold')
+
+# Panel 4 (bottom-right): Decision value adjustment after different trial types for R-
+ax = axes[1, 1]
+
+sub = df_mouse_adj[df_mouse_adj['reward_group'] == 'R-']
+color = reward_palette[0]
+
+plot_data_p4 = []
+for cond in conditions:
+    col_name = f'mean_adj_after_{trial_type_map[cond]}'
+    if col_name in sub.columns:
+        for idx, row in sub.iterrows():
+            if not np.isnan(row[col_name]):
+                plot_data_p4.append({
+                    'Condition': cond,
+                    'Adjustment': row[col_name],
+                    'mouse_id': row['mouse_id']
+                })
+
+df_plot_p4 = pd.DataFrame(plot_data_p4)
+
+if len(df_plot_p4) > 0:
+    sns.barplot(data=df_plot_p4, x='Condition', y='Adjustment', order=conditions,
+               color=color, alpha=0.7, errorbar=('ci', 95), capsize=0.1,
+               err_kws={'linewidth': 2}, ax=ax)
+    
+    sns.stripplot(data=df_plot_p4, x='Condition', y='Adjustment', order=conditions,
+                 color=color, alpha=0.4, size=6, ax=ax)
+
+# Add p-values
+error_stats_r_minus = df_error_stats[df_error_stats['reward_group'] == 'R-']
+if len(error_stats_r_minus) > 0:
+    # Whisker comparison
+    p_whisker = error_stats_r_minus['p_whisker_hit_vs_miss'].values
+    if len(p_whisker) > 0 and not np.isnan(p_whisker[0]):
+        y_max = df_plot_p4[df_plot_p4['Condition'].isin(['W Hit', 'W Miss'])]['Adjustment'].max()
+        ax.plot([0, 1], [y_max + 0.02, y_max + 0.02], 'k-', linewidth=1.5)
+        ax.text(0.5, y_max + 0.03, f'p={p_whisker[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    # No-stim comparison
+    p_nostim = error_stats_r_minus['p_nostim_cr_vs_fa'].values
+    if len(p_nostim) > 0 and not np.isnan(p_nostim[0]):
+        y_max = df_plot_p4[df_plot_p4['Condition'].isin(['NS CR', 'NS FA'])]['Adjustment'].max()
+        ax.plot([2, 3], [y_max + 0.02, y_max + 0.02], 'k-', linewidth=1.5)
+        ax.text(2.5, y_max + 0.03, f'p={p_nostim[0]:.4f}',
+               ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+ax.set_xlabel('Previous Trial Type', fontsize=11)
+ax.set_ylabel('Mean |Decision Value Adjustment|', fontsize=11)
+ax.set_title('Neural: R- Group', fontsize=12, fontweight='bold')
+
+plt.tight_layout()
+sns.despine()
+
+sns.despine()
+
+plt.savefig(os.path.join(output_dir, 'error_driven_analysis.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(output_dir, 'error_driven_analysis.png'), format='png', dpi=300)
+print("Saved: error_driven_analysis figure")
+
+print("\n" + "="*80)
+print("ERROR-DRIVEN ANALYSIS COMPLETE")
+print("="*80 + "\n")
+# ================================================
 
