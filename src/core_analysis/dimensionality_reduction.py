@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 import src.utils.utils_io as io
-import src.utils.utils_imaging as imaging_utils
+import src.utils.utils_imaging as imaging_utils 
 
 
 # =============================================================================
@@ -45,7 +45,7 @@ mice = list(set(mice))
 mice = [m for m in mice if 'AR' in m]
 mice = mice[:1]
 
-activity = imaging_utils.shape_features_matrix(mice, nwb_list_rew, processed_dir, trial_type, 50)
+activity = utils_imaging.shape_features_matrix(mice, nwb_list_rew, processed_dir, trial_type, 50)
 # Subtract baselines.
 activity = activity - np.nanmean(activity[:, :, baseline[0]:baseline[1]],
                                  axis=2, keepdims=True)
