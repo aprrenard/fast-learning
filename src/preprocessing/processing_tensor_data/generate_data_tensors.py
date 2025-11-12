@@ -288,6 +288,7 @@ trial_indices = pd.DataFrame(trial_indices.items(), columns=['session_id', 'tria
 # trial_indices_sensory_map = pd.DataFrame(trial_indices_sensory_map.items(), columns=['session_id', 'trial_idx'])
 
 mice_list = ['GF305',]
+mice_list = ['GF305',]
 # nwb_list = [nwb for nwb in nwb_list if 'AR143' in nwb]
 
 for mouse in mice_list:
@@ -481,6 +482,8 @@ for mouse_id in mice_list:
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
     xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
+    xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
     # Save the xarray.
     save_path = os.path.join(folder, mouse_id, 'tensor_xarray_learning_data_baselinesubstracted.nc')
     xarr.to_netcdf(save_path)
@@ -489,9 +492,12 @@ for mouse_id in mice_list:
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
     xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=False)
+    xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
     # Save the xarray.
     save_path = os.path.join(folder, mouse_id, 'tensor_xarray_mapping_data_baselinesubstracted.nc')
     xarr.to_netcdf(save_path)
+
 
 
 
@@ -505,6 +511,7 @@ nwb_path = io.solve_common_paths('nwb')
 processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
 
 days = ['-2', '-1', '0', '+1', '+2']
+days = ['-2', '-1', '0', '+1', '+2']
 _, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
                                                 exclude_cols=['exclude', 'two_p_exclude'],
                                                 experimenters=['AR', 'GF', 'MI'],
@@ -513,10 +520,12 @@ _, _, mice_list, _ = io.select_sessions_from_db(db_path, nwb_path,
 
 # mouse = 'GF305'
 mice_list = mice_list[-8:]
+mice_list = mice_list[-8:]
 
 for mouse in mice_list:
     print(f'Processing lick aligned array for {mouse}')
     file_name = 'tensor_xarray_learning_data.nc'
+    xarray = utils_imaging.load_mouse_xarray(mouse, processed_dir, file_name)
     xarray = utils_imaging.load_mouse_xarray(mouse, processed_dir, file_name)
     xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(db_path, mouse, db)

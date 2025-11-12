@@ -10,6 +10,8 @@ import xarray as xr
 import scipy.stats as stats
 from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
+from sklearn.metrics import auc, roc_curve
+from sklearn.utils import shuffle
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
@@ -223,6 +225,7 @@ df.to_csv(os.path.join(processed_data_folder, f'response_test_results_alldaystog
 # Parameters.
 append_results = False
 response_win = (0, 0.180)
+response_win = (0, 0.180)
 baseline_win = (-1, 0)
 nshuffles = 1000
 
@@ -275,6 +278,7 @@ else:
     print('No new data to process.')
 
 
+
 # =============================================================================
 # Compute LMI.
 # =============================================================================
@@ -285,6 +289,7 @@ else:
 # Parameters.
 append_results = False
 response_win = (0, 0.180)
+response_win = (0, 0.180)
 baseline_win = (-1, 0)
 nshuffles = 1000
 
@@ -292,6 +297,7 @@ nshuffles = 1000
 db_path = io.solve_common_paths('db')
 nwb_path = io.solve_common_paths('nwb')
 processed_data_folder = io.solve_common_paths('processed_data')
+result_file = os.path.join(processed_data_folder, 'lmi_results_180ms.csv')
 result_file = os.path.join(processed_data_folder, 'lmi_results_180ms.csv')
 
 # Get mice list.
@@ -323,6 +329,7 @@ for mouse_id in mice_list:
     data_pre = data_pre.sel(time=slice(*response_win)).mean(dim='time')
     data_post = data_mapping.sel(trial=data_mapping.coords['day'].isin([1, 2]))
     data_post = data_post.sel(time=slice(*response_win)).mean(dim='time')
+    lmi, lmi_p = utils_imaging.compute_roc(data_pre, data_post, nshuffles=nshuffles)
     lmi, lmi_p = utils_imaging.compute_roc(data_pre, data_post, nshuffles=nshuffles)
     df.append(pd.DataFrame({'mouse_id': mouse_id,
                             'roi': data_mapping.roi.values,
@@ -430,6 +437,8 @@ else:
 
 # Parameters.
 append_results = False
+response_win = (0, 0.180)
+baseline_win = (-500, 0)
 response_win = (0, 0.180)
 baseline_win = (-500, 0)
 nshuffles = 100

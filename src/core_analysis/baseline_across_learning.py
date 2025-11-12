@@ -29,7 +29,7 @@ from sklearn.utils import resample
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 # from nwb_wrappers import nwb_reader_functions as nwb_read
-import src.utils.utils_imaging as imaging_utils 
+import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *

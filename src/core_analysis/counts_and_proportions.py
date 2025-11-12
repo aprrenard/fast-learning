@@ -44,6 +44,7 @@ for mouse_id in mice:
     file_name = 'tensor_xarray_mapping_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
     data = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
+    data = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
     
     rois = data.coords['roi'].values
     cts = data.coords['cell_type'].values
@@ -586,6 +587,49 @@ for i, (group, cell_type) in enumerate([
         y_max = axes[i].get_ylim()[1]
         axes[i].annotate(star, xy=(0.5, y_max*0.95), xycoords='axes fraction', ha='center', va='bottom', fontsize=18, color='black')
 
+# Plot.
+fig, axes = plt.subplots(1, 6, figsize=(15, 3), sharey=True)
+sns.barplot(data=lmi_prop, x='reward_group', order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[0], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[0].set_title('LMI Positive')
+sns.barplot(data=lmi_prop, x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg',  ax=axes[1], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[1].set_title('LMI Negative')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[2], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[2].set_title('LMI Positive wS2')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[3], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[3].set_title('LMI Negative wS2')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[4], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[4].set_title('LMI Positive wM1')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[5], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[5].set_title('LMI Negative wM1')
+sns.despine(trim=True)
+
+# Add stars to plots according to computed stats
+def get_star(p):
+    if p < 0.001:
+        return '***'
+    elif p < 0.01:
+        return '**'
+    elif p < 0.05:
+        return '*'
+    else:
+        return ''
+
+for i, (group, cell_type) in enumerate([
+    ('lmi_pos', None),
+    ('lmi_neg', None),
+    ('lmi_pos', 'wS2'),
+    ('lmi_neg', 'wS2'),
+    ('lmi_pos', 'wM1'),
+    ('lmi_neg', 'wM1')
+]):
+    stat_row = results_df[(results_df['group'] == group) & (results_df['cell_type'] == (cell_type if cell_type else 'all'))]
+    if not stat_row.empty:
+        p = stat_row.iloc[0]['p_value']
+        star = get_star(p)
+        # Add star annotation between bars
+        y_max = axes[i].get_ylim()[1]
+        axes[i].annotate(star, xy=(0.5, y_max*0.95), xycoords='axes fraction', ha='center', va='bottom', fontsize=18, color='black')
+
 # Save figure and data.
 svg_file = f'prop_lmi.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
@@ -616,6 +660,7 @@ for i, cell_type in enumerate(cell_types):
             color=color,
             label=rg,
             stat='density',
+            alpha=0.5,
             alpha=0.5,
         )
     axes[i].set_title(titles[i])

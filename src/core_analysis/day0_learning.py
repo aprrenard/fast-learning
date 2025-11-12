@@ -80,6 +80,7 @@ for mouse in mice:
     processed_dir = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_learning_data.nc'
     xarray = utils_imaging.load_mouse_xarray(mouse, processed_dir, file_name, substracted=True)
+    xarray = utils_imaging.load_mouse_xarray(mouse, processed_dir, file_name, substracted=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
     
     # Select day 0. 
@@ -419,6 +420,7 @@ for mouse_id in mice:
     file_name = 'tensor_xarray_learning_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
 
     # Select days.
     xarr = xarr.sel(trial=xarr['day'].isin(days))
@@ -470,6 +472,7 @@ variance = 'mice'  # 'mice' or 'cells'
 
 if variance == "mice":
     min_cells = 3
+    data = utils_imaging.filter_data_by_cell_count(psth, min_cells)
     data = utils_imaging.filter_data_by_cell_count(psth, min_cells)
     data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim'])['psth'].agg('mean').reset_index()
     data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
@@ -617,6 +620,7 @@ for mouse_id in mice:
     file_name = 'tensor_xarray_learning_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
 
     # Select days.
     xarr = xarr.sel(trial=xarr['day'].isin(days))
@@ -717,6 +721,7 @@ def process_psth_data(psth_df, variance, min_cells=3, win_bin=(0, 0.180), cluste
     if variance == "mice":
         # Filter by minimum cell count per mouse
         data = utils_imaging.filter_data_by_cell_count(psth_df_copy, min_cells)
+        data = utils_imaging.filter_data_by_cell_count(psth_df_copy, min_cells)
         # Aggregate by ROI, then by mouse (mean across ROIs)
         data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
         data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
@@ -724,6 +729,7 @@ def process_psth_data(psth_df, variance, min_cells=3, win_bin=(0, 0.180), cluste
         data_bin = data_bin.groupby(['mouse_id', 'day', 'reward_group', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
 
         # Projector neurons (with cell_type)
+        data_proj = utils_imaging.filter_data_by_cell_count(psth_df_copy, min_cells)
         data_proj = utils_imaging.filter_data_by_cell_count(psth_df_copy, min_cells)
         data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch', 'roi'])['activity'].agg('mean').reset_index()
         data_proj = data_proj.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'epoch'])['activity'].agg('mean').reset_index()
@@ -991,6 +997,7 @@ for mouse_id in mice:
     file_name = 'tensor_xarray_learning_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
 
     # Select days.
     xarr = xarr.sel(trial=xarr['day'].isin(days))
@@ -1056,6 +1063,7 @@ psth = pd.concat(psth)
 variance = 'cell'  # 'mice' or 'cells'
 if variance == "mice":
     min_cells = 3
+    data = utils_imaging.filter_data_by_cell_count(psth, min_cells)
     data = utils_imaging.filter_data_by_cell_count(psth, min_cells)
     data = data.groupby(['mouse_id', 'day', 'reward_group', 'time', 'cell_type', 'stim', 'outcome'])['activity'].agg('mean').reset_index()
     data_bin = data.loc[(data.time>=win_bin[0]) & (data.time<=win_bin[1])]
@@ -1315,6 +1323,8 @@ for mouse_id in mice:
 
     file_name = 'tensor_xarray_learning_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
+    xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
     xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
     xarr = utils_imaging.substract_baseline(xarr, 2, baseline_win)
     

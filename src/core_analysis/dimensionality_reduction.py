@@ -46,6 +46,7 @@ mice = [m for m in mice if 'AR' in m]
 mice = mice[:1]
 
 activity = utils_imaging.shape_features_matrix(mice, nwb_list_rew, processed_dir, trial_type, 50)
+activity = utils_imaging.shape_features_matrix(mice, nwb_list_rew, processed_dir, trial_type, 50)
 # Subtract baselines.
 activity = activity - np.nanmean(activity[:, :, baseline[0]:baseline[1]],
                                  axis=2, keepdims=True)
