@@ -12,11 +12,6 @@ from scipy.stats import mannwhitneyu
 from sklearn.metrics import auc, roc_curve
 from sklearn.utils import shuffle
 
-# Set plot parameters.
-plt.rcParams['pdf.fonttype'] = 42
-plt.rcParams['ps.fonttype'] = 42
-plt.rcParams['svg.fonttype'] = 'none'
-
 PROCESSED_DATA_PATH = r'\\sv-nas1.rcp.epfl.ch\Petersen-Lab\analysis\Anthony_Renard\data_processed'
 # PROCESSED_DATA_PATH = r'E:\anthony\analysis\data_processed'
 

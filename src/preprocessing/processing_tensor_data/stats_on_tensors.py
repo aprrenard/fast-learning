@@ -3,24 +3,19 @@
 
 import os
 import sys
-import pickle
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import yaml
 import xarray as xr
 import scipy.stats as stats
+from sklearn.metrics import auc, roc_curve
+from sklearn.utils import shuffle
 
 # sys.path.append('H:\\anthony\\repos\\NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 import src.utils.utils_io as io
-import src.utils.utils_imaging as imaging_utils
-from analysis.psth_analysis import (make_events_aligned_array_6d,
-                                   make_events_aligned_array_3d)
-from nwb_wrappers import nwb_reader_functions as nwb_read
+import src.utils.utils_imaging 
 from src.utils.utils_behavior import *
 from src.utils.utils_imaging import compute_roc
 from joblib import Parallel, delayed
@@ -227,7 +222,7 @@ df.to_csv(os.path.join(processed_data_folder, f'response_test_results_alldaystog
 
 # Parameters.
 append_results = False
-response_win = (0, 0.300)
+response_win = (0, 0.180)
 baseline_win = (-1, 0)
 nshuffles = 1000
 
@@ -278,7 +273,7 @@ if len(df)>0:
     df_results.to_csv(result_file)
 else:
     print('No new data to process.')
-    
+
 
 # =============================================================================
 # Compute LMI.
@@ -289,7 +284,7 @@ else:
 
 # Parameters.
 append_results = False
-response_win = (0, 0.300)
+response_win = (0, 0.180)
 baseline_win = (-1, 0)
 nshuffles = 1000
 
@@ -297,7 +292,7 @@ nshuffles = 1000
 db_path = io.solve_common_paths('db')
 nwb_path = io.solve_common_paths('nwb')
 processed_data_folder = io.solve_common_paths('processed_data')
-result_file = os.path.join(processed_data_folder, 'lmi_results.csv')
+result_file = os.path.join(processed_data_folder, 'lmi_results_180ms.csv')
 
 # Get mice list.
 days = ['-3', '-2', '-1', '0', '+1', '+2']
@@ -328,7 +323,7 @@ for mouse_id in mice_list:
     data_pre = data_pre.sel(time=slice(*response_win)).mean(dim='time')
     data_post = data_mapping.sel(trial=data_mapping.coords['day'].isin([1, 2]))
     data_post = data_post.sel(time=slice(*response_win)).mean(dim='time')
-    lmi, lmi_p = compute_lmi(data_pre, data_post, nshuffles=nshuffles)
+    lmi, lmi_p = utils_imaging.compute_roc(data_pre, data_post, nshuffles=nshuffles)
     df.append(pd.DataFrame({'mouse_id': mouse_id,
                             'roi': data_mapping.roi.values,
                             'cell_type': data_mapping.cell_type.values,
@@ -435,8 +430,8 @@ else:
 
 # Parameters.
 append_results = False
-response_win = (0, 0.300)
-baseline_win = (-300, 0)
+response_win = (0, 0.180)
+baseline_win = (-500, 0)
 nshuffles = 100
 
 # Get directories and files.

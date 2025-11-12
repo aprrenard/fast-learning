@@ -266,15 +266,19 @@ def plot_perf_across_blocks(data, reward_group, day, palette, nmax_trials=None, 
     color_c = palette[5]
     if reward_group=='R-':
         color_c = palette[4]
-    sns.lineplot(data=data, x='block_id', y='hr_c', estimator='mean',
-                 color=color_c, alpha=1, legend=True, marker='o',
-                 errorbar='ci', err_style='band', ax=ax)
+    sns.lineplot(
+        data=data, x='block_id', y='hr_c', estimator='mean',
+        color=color_c, alpha=1, legend=True, marker='o',
+        markerfacecolor=color_c, markeredgecolor=color_c,  # No border, same as fill
+        errorbar='ci', err_style='band', ax=ax
+    )
     
     color_a = palette[1]
     if reward_group=='R-':
         color_a = palette[0]
     sns.lineplot(data=data, x='block_id', y='hr_a', estimator='mean',
                  color=color_a, alpha=1, legend=True, marker='o',
+                 markerfacecolor=color_a, markeredgecolor=color_a,  # No border, same as fill
                  errorbar='ci', err_style='band', ax=ax)
     
     color_wh = palette[3]
@@ -282,6 +286,7 @@ def plot_perf_across_blocks(data, reward_group, day, palette, nmax_trials=None, 
         color_wh = palette[2]
     sns.lineplot(data=data, x='block_id', y='hr_w', estimator='mean',
                  color=color_wh ,alpha=1, legend=True, marker='o',
+                 markerfacecolor=color_wh, markeredgecolor=color_wh,  # No border, same as fill
                  errorbar='ci', err_style='band', ax=ax)
 
     nblocks = int(data.block_id.max())
@@ -296,7 +301,7 @@ def plot_perf_across_blocks(data, reward_group, day, palette, nmax_trials=None, 
     sns.despine(trim=True)
 
 
-def fit_learning_curve(outcomes):
+def fit_learning_curve(outcomes, alpha=1, beta=1):
     n_trials = len(outcomes)
     conf_int = 80  # Confidence interval percentage
     if n_trials == 0:
@@ -305,7 +310,7 @@ def fit_learning_curve(outcomes):
     with pm.Model() as model:
 
         # Precision (Inverse Variance)
-        tau = pm.Gamma("tau", alpha=10, beta=10)
+        tau = pm.Gamma("tau", alpha=alpha, beta=beta)
         sigma = pm.Deterministic("sigma", 1 / pm.math.sqrt(tau))  # Convert to std dev
 
         # Define latent states as a Gaussian Random Walk (GRW)
@@ -333,7 +338,7 @@ def compute_learning_curves(table):
     session_list = table.session_id.unique()
     
     for session in session_list:
-        data = table.loc[table.day==0].reset_index(drop=True)
+        data = table.loc[table.day.isin([-2,-1,0,1,2])].reset_index(drop=True).copy()
         # if data.day[0] != 0:
         #     continue
         print(f'Processing session {session}...')

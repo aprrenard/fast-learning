@@ -33,7 +33,7 @@ from sklearn.ensemble import RandomForestClassifier
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 # from nwb_wrappers import nwb_reader_functions as nwb_read
-import src.utils.utils_imaging as imaging_utils
+import src.utils.utils_imaging 
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *
@@ -45,8 +45,6 @@ from scipy.stats import pearsonr
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import correlate
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-            rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
 
 
 # ##################################################
@@ -104,7 +102,7 @@ for mouse in mice:
     print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+    xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name)
     xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
@@ -816,7 +814,7 @@ df_quant.to_csv(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_qua
 
 
 
-#  ############################################
+# ############################################
 # Decoding decision value across learning during Day 0.
 # #############################################
 
@@ -871,7 +869,7 @@ for mouse in mice:
     print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name, substracted=True)
+    xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name, substracted=True)
     # xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
@@ -917,7 +915,7 @@ for mouse in mice:
     # -----------------------------
     
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = imaging_utils.load_mouse_xarray(mouse, folder, file_name)
+    xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name)
     # xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
 
@@ -1150,7 +1148,7 @@ results_rew['reward_group'] = 'R+'
 results_nonrew['reward_group'] = 'R-'
 results_combined = pd.concat([results_rew, results_nonrew], ignore_index=True)
 
-cut_n_trials = 100
+cut_n_trials = 120
 
 def plot_behavior(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
     if data is None or data.empty:
@@ -1211,7 +1209,7 @@ def plot_decision(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_le
         if align_to_learning:
             ax.set_xlim(-cut_n_trials//2, cut_n_trials//2)
         else:
-            ax.set_xlim(0, cut_n_trials)
+            ax.set_xlim(0, cut_n_trials) 
 
 def plot_proba(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
     if data is None or data.empty:
@@ -1886,6 +1884,9 @@ print("ANALYSIS COMPLETE")
 print("="*80 + "\n")
 
 
+
+
+
 # ============================================================================
 # CORRELATION ANALYSIS: Decision Values vs Behavioral Performance
 # ============================================================================
@@ -2143,9 +2144,73 @@ print("="*80 + "\n")
 
 
 
+ 
+# ############################################################################
+# Illustration of the result for two example mice.
+# ############################################################################
+# Find the R+ and R- mouse with highest correlation between behavior and decision value
+best_rplus = df_corr[df_corr['reward_group'] == 'R+'].sort_values('correlation', ascending=False).iloc[0]['mouse_id']
+best_rminus = df_corr[df_corr['reward_group'] == 'R-'].sort_values('correlation', ascending=False).iloc[1]['mouse_id']
+example_mice = [best_rplus, best_rminus]
 
+# Improved publication-quality figure: one figure, one column per mouse, reward color palette 
+fig, axes = plt.subplots(2, len(example_mice), figsize=(7 , 7), sharex=False)
 
-table.loc[table.no_stim==1]
+for col, mouse in enumerate(example_mice):
+    # Panel 1: Behavioral performance (whisker trials only)
+    bh_mouse = bh_df[(bh_df['mouse_id'] == mouse) & (bh_df['whisker_stim'] == 1)]
+    color = reward_palette[1] if results_combined[results_combined['mouse_id'] == mouse]['reward_group'].iloc[0] == 'R+' else reward_palette[0]
+    ax_beh = axes[0, col]
+    # Cut to first 120 trials for reward mouse
+    if results_combined[results_combined['mouse_id'] == mouse]['reward_group'].iloc[0] == 'R+':
+        bh_mouse = bh_mouse[bh_mouse['trial_w'] < 120]
+    if not bh_mouse.empty:
+        sns.lineplot(data=bh_mouse, x='trial_w', y='learning_curve_w', ax=ax_beh, color=color, linewidth=2.5)
+        ax_beh.set_ylabel('Performance (whisker trials)', fontsize=13)
+        ax_beh.set_ylim(0, 1)
+        ax_beh.tick_params(axis='both', labelsize=12)
+        ax_beh.spines['top'].set_visible(False)
+        ax_beh.spines['right'].set_visible(False)
+    else:
+        ax_beh.set_title(f"{mouse}: No behavioral data", fontsize=14, fontweight='bold')
+    # Panel 2: Decision values (same trials)
+    dec_mouse = results_combined[results_combined['mouse_id'] == mouse]
+    ax_dec = axes[1, col]
+    if not dec_mouse.empty and not bh_mouse.empty:
+        common_trials = np.intersect1d(dec_mouse['trial_start'], bh_mouse['trial_w'])
+        dec_plot = dec_mouse.set_index('trial_start').loc[common_trials]
+        sns.lineplot(x=common_trials, y=dec_plot['mean_decision_value'], ax=ax_dec, color=color, linewidth=2.5)
+        ax_dec.set_ylabel('Decoder Decision Value', fontsize=13)
+        ax_dec.tick_params(axis='both', labelsize=12)
+        ax_dec.spines['top'].set_visible(False)
+        ax_dec.spines['right'].set_visible(False)
+        # Set different y-limits for R+ and R-
+        if results_combined[results_combined['mouse_id'] == mouse]['reward_group'].iloc[0] == 'R+':
+            ax_dec.set_ylim([-5, 3])
+            yticks = np.arange(-5, 4, 1)
+        else:
+            ax_dec.set_ylim([-4, 3])
+            yticks = np.arange(-4, 4, 1)
+        ax_dec.set_yticks(yticks)
+        ax_dec.set_yticklabels([str(y) for y in yticks], fontsize=12)
+        ax_dec.axhline(0, color='gray', linestyle='--', linewidth=1)
+    else:
+        ax_dec.set_title(f"{mouse}: No decoder data", fontsize=14, fontweight='bold')
+    ax_dec.set_xlabel('Trial within Day 0', fontsize=13)
+
+# Shared x-label for bottom row
+for ax in axes[1, :]:
+    ax.set_xlabel('Trial within Day 0', fontsize=13)
+
+plt.tight_layout(h_pad=2.5)
+sns.despine()
+
+# Save to SVG
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/gradual_learning'
+output_dir = io.adjust_path_to_host(output_dir)
+plt.savefig(os.path.join(output_dir, 'example_mice_behavior_decision_value.svg'), format='svg', dpi=300)
+plt.close(fig)
+
 
 
 # ============================================================================

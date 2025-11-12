@@ -27,11 +27,9 @@ from matplotlib.colors import Normalize
 from scipy.ndimage import gaussian_filter1d
 from statsmodels.stats.multitest import multipletests
 import matplotlib
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, hilbert
 import matplotlib.cm as cm
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-            rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
 
 
 # nwb_dir = r'//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
@@ -586,10 +584,8 @@ plt.savefig(output_file, format='svg', dpi=300)
 
 
 
-
 # Performance during sessions across mice with fitted learning curves.
 # --------------------------------------------------------------------
-
 
 # Load the table from the CSV file.
 table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
@@ -597,9 +593,14 @@ table = pd.read_csv(table_file)
 
 table.columns
 
+# Parameter: maximum number of trials per type to plot
+max_trials_per_type = 120
+
 # Performance over blocks
-fig, axes = plt.subplots(1, 5, sharey=True, figsize=(20, 4))
-for i, day in enumerate([-2, -1, 0, 1, 2]):
+fig, axes = plt.subplots(1, 1, sharey=True, figsize=(8, 4)); axes = [axes]
+
+
+for i, day in enumerate([0]):
     ax = axes[i]
     for reward_group, color_w, color_a, color_ns in zip(
         ['R-', 'R+'],
@@ -608,29 +609,36 @@ for i, day in enumerate([-2, -1, 0, 1, 2]):
         behavior_palette[4:6],  # no_stim
     ):
         d = table[(table.day == day) & (table.reward_group == reward_group)]
+        # Cut to max_trials_per_type for each trial type
+        d_whisker = d.loc[d.trial_w<max_trials_per_type]
+        d_auditory = d.loc[d.trial_a<max_trials_per_type]
+        d_nostim = d.loc[d.trial_c<max_trials_per_type]
+        
+        # # Plot no_stim learning curve
+        # sns.lineplot(
+        #     data=d_nostim,
+        #     x='trial_c', y='learning_curve_ns',
+        #     errorbar='ci', ax=ax, color=color_ns, label=f'{reward_group} no_stim', linewidth=2,
+        #     err_kws={'edgecolor': 'none'}
+        # )
+        
         # Plot whisker learning curve
         sns.lineplot(
-            data=d[d.whisker_stim == 1],
+            data=d_whisker,
             x='trial_w', y='learning_curve_w',
-            errorbar='ci', ax=ax, color=color_w, label=f'{reward_group} whisker', linewidth=2
+            errorbar='ci', ax=ax, color=color_w, label=f'{reward_group} whisker', linewidth=2,
+            err_kws={'edgecolor': 'none'}
         )
         # # Plot auditory learning curve
         # sns.lineplot(
-        #     data=d[d.auditory_stim == 1],
-        #     x='trial_w', y='learning_curve_a',
+        #     data=d_auditory,
+        #     x='trial_a', y='learning_curve_a',
         #     errorbar='ci', ax=ax, color=color_a, label=f'{reward_group} auditory', linewidth=2
         # )
-        # Plot no_stim learning curve
-        sns.lineplot(
-            data=d[d.no_stim == 1],
-            x='trial_w', y='learning_curve_ns',
-            errorbar='ci', ax=ax, color=color_ns, label=f'{reward_group} no_stim', linewidth=2
-        )
     ax.set_title(f'Day {day}')
     ax.set_xlabel('Whisker trial')
 axes[0].set_ylabel('Lick probability')
 sns.despine()
-
 
 # Save the figure
 output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
@@ -639,6 +647,60 @@ plt.savefig(output_file, format='svg', dpi=300)
 
 
 
+
+# Performance during sessions across mice during day 0.
+# -----------------------------------------------------
+
+# Load the table from the CSV file.
+table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
+table = pd.read_csv(table_file)
+
+table.columns
+
+# Parameter: maximum number of trials per type to plot
+max_trials_per_type = 120
+
+# Performance over blocks - three representations
+fig, axes = plt.subplots(1, 3, sharey=True, figsize=(15, 4))
+
+day = 0
+
+for i, (metric, ylabel, title) in enumerate([
+    ('outcome_w', 'Hit rate (raw)', 'Raw trial outcomes'),
+    ('hr_w', 'Hit rate (block avg)', 'Block-averaged performance'),
+    ('learning_curve_w', 'Lick probability', 'Fitted learning curves')
+]):
+    ax = axes[i]
+
+    for reward_group, color_w in zip(
+        ['R-', 'R+'],
+        behavior_palette[2:4],  # whisker colors
+    ): 
+        d = table[(table.day == day) & (table.reward_group == reward_group)]
+        # Cut to max_trials_per_type for each trial type
+        d_whisker = d.loc[d.trial_w < max_trials_per_type]
+
+        # Plot the specified metric
+        sns.lineplot(
+            data=d_whisker,
+            x='trial_w', y=metric,
+            errorbar='ci', ax=ax, color=color_w, label=f'{reward_group}', linewidth=2,
+            err_kws={'edgecolor': 'none'}
+        )
+
+    ax.set_title(title)
+    ax.set_xlabel('Whisker trial')
+    if i == 0:
+        ax.set_ylabel(ylabel)
+    ax.legend(frameon=False)
+
+sns.despine()
+plt.tight_layout()
+
+# Save the figure
+output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
+output_file = os.path.join(output_dir, 'performance_comparison_day0.svg')
+plt.savefig(output_file, format='svg', dpi=300)
 
 
 
@@ -660,154 +722,108 @@ def remove_initial_zero_outcome_w(table):
     table = table.groupby('session_id', group_keys=False).apply(remove_initial_zeros)
     return table
 
+# Prepare data
 block_size = 1
-n_trials = 60
+n_trials = 120
 df = table.loc[(table.whisker_stim==1) & (table.day==0)]
 df_fh = remove_initial_zero_outcome_w(df)
 df_fh['trial_w'] = df_fh.groupby('session_id').cumcount()
-# Filter to keep only the first n_trials
 df_fh = df_fh.loc[df_fh.trial_w <= n_trials]
 
-# Reindex trial_w.
-df_fh['trial_w'] = df_fh.groupby('session_id').cumcount()
-df_fh = df_fh[['mouse_id', 'reward_group', 'session_id','trial_w','outcome_w']]
-df_fh['block_id'] = (df_fh['trial_w']) // block_size + 1
-block_avg = df_fh.groupby(['session_id', 'reward_group','block_id'])['outcome_w'].mean().reset_index()
+# Prepare data for single trial plot
+df_single = df_fh.copy()
+df_single['trial_w'] = df_single.groupby('session_id').cumcount()
 
+# Prepare data for block average plot (using existing block_id and hr_w columns)
+df_block = df_fh[['session_id', 'reward_group', 'block_id', 'hr_w']].drop_duplicates().copy()
 
-plt.figure(figsize=(8,5))
-sns.lineplot(data=block_avg, x='block_id', y='outcome_w', 
-                palette=reward_palette[::-1], legend=False, hue='reward_group',
-                errorbar='ci', err_style='band')
+# Prepare data for learning curve plot
+df_learning = df_fh.copy()
+df_learning['trial_w'] = df_learning.groupby('session_id').cumcount() + 1
 
-# Perform Mann-Whitney U test for each block_id
-p_values = []
-for block_id in block_avg['block_id'].unique():
-    group_R_plus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R+')]['outcome_w']
-    group_R_minus = block_avg[(block_avg['block_id'] == block_id) & (block_avg['reward_group'] == 'R-')]['outcome_w']
-    stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
-    p_values.append((block_id, p_value))
+# Create three-panel figure
+fig, axes = plt.subplots(1, 2, sharey=True, figsize=(12, 5))
 
-# Account for multiple comparisons using Benjamini-Hochberg (FDR) correction.
-
-# Extract p-values for correction
-block_ids, raw_pvals = zip(*p_values)
-rejected, corrected_pvals, _, _ = multipletests(raw_pvals, alpha=0.05, method='fdr_bh')
-# Replace p_values with corrected p-values
-p_values = list(zip(block_ids, corrected_pvals))
-# Plot p-value squares on the graph using a colormap from white (p=0.05) to black (p=0)
-
-# Create a colormap from white (p=0.05) to black (p=0)
+# Create colormap for p-values
 cmap = matplotlib.colors.LinearSegmentedColormap.from_list('pval_cmap', ['black', 'white'])
 norm = matplotlib.colors.Normalize(vmin=0, vmax=0.05)
 
-for block_id, p_value in p_values:
-    # Clamp p_value to [0, 0.05] for colormap
+# Panel 1: Single trial performance
+ax = axes[0]
+sns.lineplot(data=df_single, x='trial_w', y='outcome_w',
+            palette=reward_palette[::-1], hue='reward_group',
+            errorbar='ci', err_style='band', ax=ax, legend=False)
+
+# Statistical test for panel 1
+p_values_single = []
+for trial_w in df_single['trial_w'].unique():
+    group_R_plus = df_single[(df_single['trial_w'] == trial_w) & (df_single['reward_group'] == 'R+')]['outcome_w']
+    group_R_minus = df_single[(df_single['trial_w'] == trial_w) & (df_single['reward_group'] == 'R-')]['outcome_w']
+    if len(group_R_plus) > 0 and len(group_R_minus) > 0:
+        stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
+        p_values_single.append((trial_w, p_value))
+
+# FDR correction
+trials_single, raw_pvals_single = zip(*p_values_single)
+_, corrected_pvals_single, _, _ = multipletests(raw_pvals_single, alpha=0.05, method='fdr_bh')
+p_values_single = list(zip(trials_single, corrected_pvals_single))
+
+# Plot p-value rectangles
+for trial, p_value in p_values_single:
     color = cmap(norm(min(p_value, 0.05)))
-    plt.gca().add_patch(plt.Rectangle((block_id - 0.4, .95), 0.8, 0.03, color=color, edgecolor='none'))
+    ax.add_patch(plt.Rectangle((trial - 0.4, .95), 0.8, 0.03, color=color, edgecolor='none'))
 
-plt.ylim([-0.1, 1])
-plt.xlabel(f'Trials (average over blocks of {block_size} trials)')
-plt.ylabel('Lick probability')
+ax.set_title('Raw trial outcomes')
+ax.set_xlabel('Whisker trial')
+ax.set_ylabel('Hit rate')
+ax.set_ylim([-0.1, 1])
+
+# Panel 2: Fitted learning curves
+ax = axes[1]
+sns.lineplot(data=df_learning, x='trial_w', y='learning_curve_w',
+            palette=reward_palette[::-1], hue='reward_group',
+            errorbar='ci', err_style='band', ax=ax)
+
+# Statistical test for panel 3
+p_values_learning = []
+for trial_w in df_learning['trial_w'].unique():
+    group_R_plus = df_learning[(df_learning['trial_w'] == trial_w) & (df_learning['reward_group'] == 'R+')]['learning_curve_w']
+    group_R_minus = df_learning[(df_learning['trial_w'] == trial_w) & (df_learning['reward_group'] == 'R-')]['learning_curve_w']
+    if len(group_R_plus) > 0 and len(group_R_minus) > 0:
+        stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
+        p_values_learning.append((trial_w, p_value))
+
+# FDR correction
+trials_learning, raw_pvals_learning = zip(*p_values_learning)
+_, corrected_pvals_learning, _, _ = multipletests(raw_pvals_learning, alpha=0.05, method='fdr_bh')
+p_values_learning = list(zip(trials_learning, corrected_pvals_learning))
+
+# Plot p-value rectangles
+for trial, p_value in p_values_learning:
+    color = cmap(norm(min(p_value, 0.05)))
+    ax.add_patch(plt.Rectangle((trial - 0.4, .95), 0.8, 0.03, color=color, edgecolor='none'))
+
+ax.set_title('Fitted learning curves')
+ax.set_xlabel('Whisker trial')
+ax.set_ylim([-0.1, 1])
+ax.legend(frameon=False, title='Reward group')
+
 sns.despine()
-# Change x tick labels to block_id * block_size
-ax = plt.gca()
-ax.set_xticklabels([str(int(label) * block_size) for label in ax.get_xticks()])
+plt.tight_layout()
 
-# Add number of mice in each reward group to the plot
-n_mice = block_avg.groupby('reward_group')['session_id'].nunique()
-for i, group in enumerate(['R+', 'R-']):
-    count = n_mice.get(group, 0)
-    plt.text(
-        0.98, 1.15 - i*0.07,  # y offset for each group
-        f"{group}: n={count}",
-        ha='right', va='top', fontsize=12, color='black', transform=ax.transAxes
-    )
-    
 # Save the figure
 output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
-output_file = os.path.join(output_dir, f'performance_D0_over_trials_imagingmice_blocksize_{block_size}.svg')
+output_file = os.path.join(output_dir, f'performance_D0_comparison_aligned_firsthit.svg')
 plt.savefig(output_file, format='svg', dpi=300)
-# Save the block average data to CSV
-block_avg.to_csv(os.path.join(output_dir, f'performance_D0_over_trials_imagingmice_blocksize_{block_size}_data.csv'), index=False)
-# Save the p-values to CSV
-p_values_df = pd.DataFrame(p_values, columns=['block_id', 'p_value'])
-p_values_df.to_csv(os.path.join(output_dir, f'performance_D0_over_trials_imagingmice_blocksize_{block_size}_stats.csv'), index=False)
 
+# Save all data and p-values
+df_single.to_csv(os.path.join(output_dir, 'performance_D0_single_trial_data.csv'), index=False)
+pd.DataFrame(p_values_single, columns=['trial_w', 'p_value']).to_csv(
+    os.path.join(output_dir, 'performance_D0_single_trial_stats.csv'), index=False)
 
-# Same with fitted learning curves.
-# ---------------------------------
-
-# Load the table from the CSV file.
-table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/behavior_imagingmice_table_5days_cut_with_learning_curves.csv')
-table = pd.read_csv(table_file)
-
-n_trials = 60
-df = table.loc[(table.whisker_stim==1) & (table.day==0)]
-df_fh = remove_initial_zero_outcome_w(df)
-df_fh = df_fh.loc[df_fh.trial_w <= n_trials]
-df_fh['trial_w'] = df_fh.groupby('session_id').cumcount() + 1
-
-
-plt.figure(figsize=(8,5))
-sns.lineplot(data=df_fh, x='trial_w', y='learning_curve_w', 
-                palette=reward_palette[::-1], legend=False, hue='reward_group',
-                errorbar='ci', err_style='band')
-
-# Perform Mann-Whitney U test for each block_id
-p_values = []
-for trial_w in df_fh['trial_w'].unique():
-    group_R_plus = df_fh[(df_fh['trial_w'] == trial_w) & (df_fh['reward_group'] == 'R+')]['learning_curve_w']
-    group_R_minus = df_fh[(df_fh['trial_w'] == trial_w) & (df_fh['reward_group'] == 'R-')]['learning_curve_w']
-    stat, p_value = mannwhitneyu(group_R_plus, group_R_minus, alternative='two-sided')
-    p_values.append((trial_w, p_value))
-
-# Account for multiple comparisons using Benjamini-Hochberg (FDR) correction.
-
-# Extract p-values for correction
-trials, raw_pvals = zip(*p_values)
-rejected, corrected_pvals, _, _ = multipletests(raw_pvals, alpha=0.05, method='fdr_bh')
-# Replace p_values with corrected p-values
-p_values = list(zip(trials, corrected_pvals))
-# Plot p-value squares on the graph using a colormap from white (p=0.05) to black (p=0)
-
-# Create a colormap from white (p=0.05) to black (p=0)
-cmap = matplotlib.colors.LinearSegmentedColormap.from_list('pval_cmap', ['black', 'white'])
-norm = matplotlib.colors.Normalize(vmin=0, vmax=0.05)
-
-for trial, p_value in p_values:
-    # Clamp p_value to [0, 0.05] for colormap
-    color = cmap(norm(min(p_value, 0.05)))
-    plt.gca().add_patch(plt.Rectangle((trial - 0.4, .95), 0.8, 0.03, color=color, edgecolor='none'))
-
-plt.ylim([-0.1, 1])
-plt.xlabel(f'Trials')
-plt.ylabel('Lick probability')
-sns.despine()
-# Change x tick labels to block_id * block_size
-ax = plt.gca()
-ax.set_xticklabels([str(int(label) * block_size) for label in ax.get_xticks()])
-
-# Add number of mice in each reward group to the plot
-n_mice = block_avg.groupby('reward_group')['session_id'].nunique()
-for i, group in enumerate(['R+', 'R-']):
-    count = n_mice.get(group, 0)
-    plt.text(
-        0.98, 1.15 - i*0.07,  # y offset for each group
-        f"{group}: n={count}",
-        ha='right', va='top', fontsize=12, color='black', transform=ax.transAxes
-    )
-    
-# Save the figure
-output_dir = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/behavior')
-output_file = os.path.join(output_dir, f'performance_D0_over_trials_learningcurves.svg')
-plt.savefig(output_file, format='svg', dpi=300)
-# Save the block average data to CSV
-block_avg.to_csv(os.path.join(output_dir, f'performance_D0_over_trials_learningcurves_data.csv'), index=False)
-# Save the p-values to CSV
-p_values_df = pd.DataFrame(p_values, columns=['block_id', 'p_value'])
-p_values_df.to_csv(os.path.join(output_dir, f'performance_D0_over_trials_learningcurves_stats.csv'), index=False)
-
+df_learning.to_csv(os.path.join(output_dir, 'performance_D0_learning_curve_data.csv'), index=False)
+pd.DataFrame(p_values_learning, columns=['trial_w', 'p_value']).to_csv(
+    os.path.join(output_dir, 'performance_D0_learning_curve_stats.csv'), index=False)
 
 
 # ############################################################
@@ -1178,9 +1194,6 @@ data['outcome_w'] = data['outcome_w'] * 100
 # Plot inactivation for wS1 and fpS1.
 # -----------------------------------
 
-sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1,
-                rc={'pdf.fonttype':42, 'ps.fonttype':42, 'svg.fonttype':'none'})
-
 fig, axes = plt.subplots(1, 2, sharey=True, figsize=(12,5))
 
 ax = axes[0]
@@ -1202,6 +1215,17 @@ sns.pointplot(data=data.loc[data.mouse_id.isin(wS1_mice)], x='opto_day',
 sns.pointplot(data=data.loc[data.mouse_id.isin(wS1_mice)], x='opto_day',
             y='outcome_w', order=inactivation_labels,
             color=stim_palette[1], ax=ax, linewidth=2)
+
+# Add dots for individual points
+sns.stripplot(data=data.loc[data.mouse_id.isin(wS1_mice)], x='opto_day',
+              y='outcome_c', order=inactivation_labels,
+              color=stim_palette[2], ax=ax, jitter=False, dodge=True, alpha=0.5, size=4)
+sns.stripplot(data=data.loc[data.mouse_id.isin(wS1_mice)], x='opto_day',
+              y='outcome_a', order=inactivation_labels,
+              color=stim_palette[0], ax=ax, jitter=False, dodge=True, alpha=0.5, size=4)
+sns.stripplot(data=data.loc[data.mouse_id.isin(wS1_mice)], x='opto_day',
+              y='outcome_w', order=inactivation_labels,
+              color=stim_palette[1], ax=ax, jitter=False, dodge=True, alpha=0.5, size=4)
 
 ax = axes[1]
 
@@ -1331,7 +1355,7 @@ table_file = io.adjust_path_to_host(r'/mnt/lsens-analysis/Anthony_Renard/data_pr
 table = pd.read_csv(table_file)
 
 # Fit learning curves and define learning trial.
-# table = compute_learning_curves(table)
+table = compute_learning_curves(table)
 table = compute_learning_trial(table, n_consecutive_trials=10)
 
 # Save updated table.
@@ -1340,6 +1364,12 @@ table.to_csv(save_path, index=False)
 
 # table = pd.read_csv(save_path)
 
+
+# d = table.loc[(table.day==0) & (table.reward_group=='R+') & (table.whisker_stim==1) & (table.mouse_id=='GF305')]
+
+# dd = fit_learning_curve(d.outcome_w.values, alpha=1, beta=1)
+# plt.plot(d.hr_w.reset_index(drop=True))
+# plt.plot(dd[1])
 
 
 # # Convert learning curve columns to float type to avoid dtype issues
@@ -1353,63 +1383,47 @@ table.to_csv(save_path, index=False)
 #         table[col] = pd.to_numeric(table[col], errors='coerce')
 
 # Day 0 learning curves pdf
-pdf_path = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/behavior/learning_curves_day0_smooth.pdf'
+pdf_path = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/day0_learning/behavior/learning_curves_day0.pdf'
 pdf_path = io.adjust_path_to_host(pdf_path)
 session_list = table.session_id.unique()
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
 
+def plot_learning_curves_pdf(table, session_list, pdf_path):
+    with PdfPages(pdf_path) as pdf:
+        for session_id in session_list:
+            data = table.loc[table.session_id == session_id]
+            if data.day.iloc[0] != 0:
+                continue
+            reward_group = data.reward_group.values[0]
+            color = reward_palette[0] if reward_group == 'R-' else reward_palette[1]
 
-with PdfPages(pdf_path) as pdf:
-    for session_id in session_list:
-        
-        data = table.loc[table.session_id==session_id]
-        if data.day.iloc[0] != 0:
-            continue
-        reward_group = data.reward_group.values[0]
-        if reward_group == 'R-':
-            color = reward_palette[0]
-        else:
-            color = reward_palette[1]
-        
-        d = data.loc[data.whisker_stim==1].reset_index(drop=True)
-        # Smooth the learning curves for plotting
+            d = data.loc[data.whisker_stim == 1].reset_index(drop=True)
 
-        # Apply Gaussian smoothing (sigma can be adjusted for more/less smoothing)
-        sigma = 1
 
-        smoothed_curve_w = gaussian_filter1d(d.learning_curve_w.values.astype(float), sigma=sigma)
-        smoothed_ci_low = gaussian_filter1d(d.learning_curve_w_ci_low.values.astype(float), sigma=sigma)
-        smoothed_ci_high = gaussian_filter1d(d.learning_curve_w_ci_high.values.astype(float), sigma=sigma)
-        smoothed_chance = gaussian_filter1d(d.learning_curve_chance.astype(float), sigma=sigma)
-        
-        # smoothed_curve_w = d.learning_curve_w.values.astype(float)
-        # smoothed_ci_low = d.learning_curve_w_ci_low.values.astype(float)
-        # smoothed_ci_high = d.learning_curve_w_ci_high.values.astype(float)
-        # smoothed_chance = d.learning_curve_chance.astype(float)
-        
-        
+            learning_curve_w = d.learning_curve_w.values.astype(float)
+            learning_ci_low = d.learning_curve_w_ci_low.values.astype(float)
+            learning_ci_high = d.learning_curve_w_ci_high.values.astype(float)
+            learning_chance = d.learning_curve_chance.astype(float)
 
-        # plt.plot(d.stim_onset.values, d.learning_curve_w.values, label='Whisker', color=color)
-        plt.plot(d.trial_w, smoothed_curve_w, label='Whisker', color=color)
-        plt.fill_between(d.trial_w, smoothed_ci_low, smoothed_ci_high, color=color, alpha=0.2)
-        sns.lineplot(data=d, x='trial_w', y='hr_w', color=color,legend=False, linestyle='--')
-        # plt.plot(d.stim_onset.values, d.learning_curve_ns.values, label='No_stim', color=stim_palette[2])
-        plt.plot(d.trial_w, smoothed_chance, label='No_stim', color=stim_palette[2])
-        # plt.fill_between(d.stim_onset.values, d.learning_curve_ns_ci_low.values, d.learning_curve_ns_ci_high.values, color=stim_palette[2], alpha=0.2)
-        # sns.lineplot(data=d, x='stim_onset', y='hr_c', color=stim_palette[2],legend=False, linestyle='--')
-        # Add vertical line indicating learning trial.
-        learning_trial = data.learning_trial.values[0]
-        if not pd.isna(learning_trial):
-            plt.axvline(x=learning_trial, color='black', linestyle='--', label='Learning trial')
-        plt.title(f'Session {session_id} - {reward_group}')
-        plt.ylim([0, 1])
-        plt.xlabel('Whisker trial')
-        plt.ylabel('Lick probability')
-        sns.despine()
-        
-        pdf.savefig()
-        plt.close()
+            plt.plot(d.trial_w, learning_curve_w, label='Whisker (learning curve)', color=color)
+            plt.fill_between(d.trial_w, learning_ci_low, learning_ci_high, color=color, alpha=0.2)
+            sns.lineplot(data=d, x='trial_w', y='hr_w', color=color, legend=False, linestyle='--')
+            plt.plot(d.trial_w, learning_chance, label='No_stim', color=stim_palette[2])
 
+            learning_trial = data.learning_trial.values[0]
+            if not pd.isna(learning_trial):
+                plt.axvline(x=learning_trial, color='black', linestyle='--', label='Learning trial')
+            plt.title(f'Session {session_id} - {reward_group}')
+            plt.ylim([0, 1])
+            plt.xlabel('Whisker trial')
+            plt.ylabel('Lick probability')
+            plt.legend()
+            sns.despine()
+
+            pdf.savefig()
+            plt.close()
+
+plot_learning_curves_pdf(table, session_list, pdf_path)
 
 # ############################################
 # Licking raster plot to illustrates the task.
@@ -1423,35 +1437,41 @@ with PdfPages(pdf_path) as pdf:
 
 def detect_piezo_lick_times(lick_data, ni_session_sr=5000, sigma=100, height=None, distance=None, prominence=None, width=None, do_plot=False, t_start=0, t_stop=800,):
     """
-        Detect lick times from the lick data envelope.
-        The lick data is first filtered with a low pass filter to remove high frequency fluctuations.
+        Detect lick times from the lick data envelope using Hilbert transform.
+        The envelope is extracted using the Hilbert transform and then smoothed.
+        This method preserves peak amplitudes better than Gaussian filtering alone.
     Args:
-        sigma:
-        continuous_data_dict: Dictionary containing continuous data
+        lick_data: Raw piezo lick trace
         ni_session_sr: Sampling rate of session
-        lick_threshold: Lick threshold of session
-        sigma: Standard deviation of gaussian filter used to smooth lick data
+        sigma: Standard deviation of gaussian filter used to smooth the envelope
+        height: Minimum peak height for find_peaks
+        distance: Minimum distance between peaks for find_peaks
+        prominence: Minimum prominence for find_peaks
+        width: Minimum width for find_peaks
+        do_plot: Whether to plot the detection for debugging
+        t_start: Start time for plotting (seconds)
+        t_stop: Stop time for plotting (seconds)
 
     Returns:
-
+        lick_times: Array of detected lick times in seconds
     """
 
+    # Get envelope using Hilbert transform
+    analytic_signal = hilbert(lick_data)
+    envelope = np.abs(analytic_signal)
 
-    # Z-score normalization
-    lick_data = (lick_data - np.mean(lick_data)) / np.std(lick_data)
-    # Smooth lick data with a gaussian filter
-    lick_data_smooth = gaussian_filter1d(lick_data, sigma=sigma)
-    # Find peaks in the smoothed lick data above the threshold
-    # Use more parameters for find_peaks for better control
-    peaks, _ = find_peaks(lick_data_smooth, height=height, distance=distance, prominence=prominence, width=width)
+    # Smooth the envelope with a gaussian filter
+    envelope = gaussian_filter1d(envelope, sigma=sigma)
+
+    # Find peaks in the smoothed envelope
+    peaks, _ = find_peaks(envelope, height=height, distance=distance, prominence=prominence, width=width)
     lick_times = peaks / ni_session_sr
-
 
     # Debugging: optional plotting
     if do_plot:
         ni_session_sr = int(float(ni_session_sr))
         plt.plot(lick_data[int(ni_session_sr*t_start):int(ni_session_sr*t_stop)], c='k', label="lick_data", lw=1)
-        plt.plot(lick_data_smooth[int(ni_session_sr*t_start):int(ni_session_sr*t_stop)], c='green', label="lick_envelope", lw=1)
+        plt.plot(envelope[int(ni_session_sr*t_start):int(ni_session_sr*t_stop)], c='green', label="lick_envelope", lw=1)
         for lick_time in lick_times:
             if lick_time > t_start and lick_time < t_stop:
                 plt.axvline(x=ni_session_sr*lick_time - ni_session_sr*t_start, color='red', lw=1, alpha=0.6)
@@ -1460,6 +1480,11 @@ def detect_piezo_lick_times(lick_data, ni_session_sr=5000, sigma=100, height=Non
         plt.show()
 
     return lick_times
+
+# analytic_signal = hilbert(lick_trace)
+# envelope = np.abs(analytic_signal)
+# plt.plot(lick_trace[:1000], c='k', label="lick_data", lw=1, )
+# plt.plot(envelope[:1000], c='green', label="lick_envelope", lw=1, )
 
 
 mouse_id = 'GF305'
@@ -1503,7 +1528,7 @@ df_results = pd.read_csv(result_file, sep=r'\s+', engine='python')
 # table.early_lick.sum()
 
 
-
+sr = 100000  # Sampling rate of piezo lick trace
 df_lick_raster = pd.DataFrame(columns=['trialnumber', 'trial_type', 'lick_times'])
 trial_counter = 1
 for _, trial in df_results.iterrows():
@@ -1522,11 +1547,49 @@ for _, trial in df_results.iterrows():
         lick_trace,
         ni_session_sr=sr,
         sigma=200,
-        prominence=1,
+        height=0.04,
+        # prominence=1,
         distance=sr*0.05,
         width=None,
         do_plot=False,
     )
+
+    # Visualize lick trace for trials with a lick before stimulus onset (t < 2 sec)
+    stim_onset_time = 2  # Stimulus onset time in seconds
+    if np.any(lick_times < stim_onset_time):
+        plt.figure(figsize=(10, 4))
+
+        # Compute envelope for plotting
+        from scipy.signal import hilbert
+        analytic_signal = hilbert(lick_trace)
+        envelope = np.abs(analytic_signal)
+        envelope_smooth = gaussian_filter1d(envelope, sigma=200)
+
+        # Time vector
+        time_vec = np.arange(len(lick_trace)) / sr
+
+        # Plot raw trace
+        plt.plot(time_vec, lick_trace, color='black', lw=0.5, alpha=0.7, label='Raw trace')
+        # Plot envelope
+        plt.plot(time_vec, envelope_smooth, color='green', lw=1.5, label='Envelope (smoothed)')
+
+        # Mark stimulus onset
+        plt.axvline(stim_onset_time, color='blue', linestyle='--', lw=2, label='Stimulus onset')
+
+        # Mark detected lick times
+        for lt in lick_times:
+            plt.axvline(lt, color='red', linestyle='-', lw=1, alpha=0.7)
+
+        # Add custom legend entry for detected licks
+        plt.axvline(np.nan, color='red', linestyle='-', lw=1, alpha=0.7, label='Detected licks')
+
+        plt.title(f'Trial {int(trial.trialnumber)}: Lick before stimulus onset', fontsize=12)
+        plt.xlabel('Time (s)')
+        plt.ylabel('Piezo signal')
+        plt.legend(loc='upper right', frameon=False)
+        plt.tight_layout()
+        plt.show()
+
     # Use trial_counter to avoid blanks due to early licks
     df_lick_raster = pd.concat([
         df_lick_raster,
@@ -1543,40 +1606,57 @@ for _, trial in df_results.iterrows():
 df_lick_raster = df_lick_raster[df_lick_raster.trialnumber <= 320]
 
 
-# Plot licking raster around stimulus events for all trials
-# Parameters for raster plot
+# Plot licking raster around stimulus events for all trials (non-sorted)
 interval_start = 1.0  # seconds
-interval_stop = 6.0   # seconds
+interval_stop = 6.0    # seconds
 
-# Sort trials: no_stim first, then whisker, then auditory
-trial_order = ['no_stim', 'whisker', 'auditory']
-df_lick_raster_sorted = pd.concat([
-    df_lick_raster[df_lick_raster['trial_type'] == t] for t in trial_order
-], ignore_index=True)
-
-fig = plt.figure(figsize=(3, 6))
+fig = plt.figure(figsize=(3, 8))
 ax = fig.add_subplot(111)
 
 colors = {'whisker': stim_palette[1], 'auditory': stim_palette[0], 'no_stim': stim_palette[2]}
 
-for i, row in df_lick_raster_sorted.iterrows():
-    
+for i, row in df_lick_raster.iterrows():
     trial_type = row['trial_type']
     lick_times = np.array(row['lick_times'])
-
-    # Only plot licks within [0, 7] sec interval
     lick_window = lick_times[(lick_times >= interval_start) & (lick_times <= interval_stop)]
-    ax.scatter(lick_window, np.full_like(lick_window, i + 0.5), color=colors.get(trial_type, 'grey'), s=4, alpha=1)
+    ax.scatter(lick_window, np.full_like(lick_window, i + 0.5), color=colors.get(trial_type, 'grey'),
+               s=1.5, alpha=1, marker='|', linewidths=1.5)
+    # Add background shading for lick window (0 to 1 sec)
+    ax.axvspan(2, 3, color='lightgrey', alpha=0.5, zorder=0)
 
-
-ax.set_xlabel('Absolute lick time (s)')
-ax.set_ylabel('Trial') 
+ax.set_xlabel('Lick time from stim onset (secs)')
+ax.set_ylabel('Trial')
 ax.set_xlim([interval_start, interval_stop])
-# ax.set_ylim([0, 340])
-
+ax.set_xticklabels(range(-1, 5))
 sns.despine()
 
-# Save plot.
+# Save non-sorted plot
 save_path = r"/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/illustrations/lick_raster"
 save_path = io.adjust_path_to_host(save_path)
-plt.savefig(os.path.join(save_path, 'lick_raster_GF305.svg'), format='svg', dpi=300)
+plt.savefig(os.path.join(save_path, 'lick_raster_GF305_nosorting.svg'), format='svg', dpi=300)
+plt.close()
+
+# Plot licking raster with sorted trials (no_stim first, then whisker, then auditory)
+trial_order = ['no_stim', 'whisker', 'auditory']
+df_sorted = pd.concat([df_lick_raster[df_lick_raster['trial_type'] == t] for t in trial_order], ignore_index=True)
+
+fig = plt.figure(figsize=(3, 8))
+ax = fig.add_subplot(111)
+
+for i, row in df_sorted.iterrows():
+    trial_type = row['trial_type']
+    lick_times = np.array(row['lick_times'])
+    lick_window = lick_times[(lick_times >= interval_start) & (lick_times <= interval_stop)]
+    ax.scatter(lick_window, np.full_like(lick_window, i + 0.5), color=colors.get(trial_type, 'grey'),
+               s=1.5, alpha=1, marker='|', linewidths=1.5)
+    ax.axvspan(2, 3, color='lightgrey', alpha=0.5, zorder=0)
+    
+ax.set_xlabel('Lick time from stim onset (secs)')
+ax.set_ylabel('Trial')
+ax.set_xlim([interval_start, interval_stop])
+ax.set_xticklabels(range(-1, 5))
+sns.despine()
+
+# Save sorted plot
+plt.savefig(os.path.join(save_path, 'lick_raster_GF305_sorted.svg'), format='svg', dpi=300)
+plt.close()

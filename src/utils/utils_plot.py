@@ -3,19 +3,51 @@ import seaborn as sns
 
 
 # Set plot parameters.
-plt.rcParams['pdf.fonttype'] = 42
-plt.rcParams['ps.fonttype'] = 42
-plt.rcParams['svg.fonttype'] = 'none'
+sns.set_theme(
+    context='paper',
+    style='ticks',
+    palette='deep',
+    font='sans-serif',
+    font_scale=1,
+    rc={
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+        'svg.fonttype': 'none',
+        
+        'axes.linewidth': 0.8,
+        'xtick.major.width': 0.8,
+        'ytick.major.width': 0.8,
+        'xtick.major.size': 3,
+        'ytick.major.size': 3,
+        # Font sizes
+        'axes.labelsize': 10,      # X and Y axis label font size
+        'xtick.labelsize': 10,      # X tick label font size
+        'ytick.labelsize': 10,      # Y tick label font size
+        'axes.titlesize': 10,      # Title font size
+        'legend.fontsize': 10,      # Legend font size
+        'font.size': 10,           # Base font size
+    }
+)
+
+# # Color palettes.
+# reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
+# reward_palette_r = sns.color_palette([ '#1b9e77', '#c959affe'])
+# cell_types_palette = sns.color_palette(['#a3a3a3', '#1f77b4', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
+# # s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
+# s2_m1_palette = sns.color_palette(['steelblue', 'salmon'])
+# # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
+# stim_palette = sns.color_palette(['#1f77b4', '#FF9600', '#333333'])
+# behavior_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#c959affe', '#1b9e77', '#cccccc', '#333333'])
 
 # Color palettes.
-reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
-reward_palette_r = sns.color_palette([ '#1b9e77', '#c959affe'])
-cell_types_palette = sns.color_palette(['#a3a3a3', '#1f77b4', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
+reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
+reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])
+cell_types_palette = sns.color_palette(['#807f7fff', '#0100fdff', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
 # s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
 s2_m1_palette = sns.color_palette(['steelblue', 'salmon'])
 # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
-stim_palette = sns.color_palette(['#1f77b4', '#FF9600', '#333333'])
-behavior_palette = sns.color_palette(['#0ddddd', '#1f77b4', '#c959affe', '#1b9e77', '#cccccc', '#333333'])
+stim_palette = sns.color_palette(['#0100fdff', '#FF9600', '#010101ff'])
+behavior_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#980099ff', '#009600ff', '#807f7fff', '#010101ff'])
 
 # Mice groups.
 mice_groups = {
@@ -33,4 +65,3 @@ mice_groups = {
                  'MI040','MI044','MI045','MI053','AR115','AR116','AR117','AR119','AR120','AR122','AR144',
                  'AR163',],
 }
-# 

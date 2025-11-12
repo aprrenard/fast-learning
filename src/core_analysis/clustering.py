@@ -21,7 +21,7 @@ from scipy.stats import zscore
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 # from nwb_wrappers import nwb_reader_functions as nwb_read
-import src.utils.utils_imaging as imaging_utils
+import src.utils.utils_imaging 
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *
@@ -310,9 +310,9 @@ for mouse_id in mice:
 
     file_name = 'tensor_xarray_mapping_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
-    xarr_mapping = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    xarr_mapping = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
     print('Substracting baseline...')
-    xarr_mapping = imaging_utils.substract_baseline(xarr_mapping, 2, baseline_win)
+    xarr_mapping = utils_imaging.substract_baseline(xarr_mapping, 2, baseline_win)
     
     print('Selecting trials...')
     # Select days.
@@ -352,7 +352,7 @@ for mouse_id in mice:
 
     file_name = 'tensor_xarray_learning_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
-    xarr_learning = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
+    xarr_learning = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
     
     print('Selecting trials...')
     # Select days.

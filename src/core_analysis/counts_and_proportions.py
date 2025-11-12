@@ -19,7 +19,7 @@ import xarray as xr
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 # from nwb_wrappers import nwb_reader_functions as nwb_read
-import src.utils.utils_imaging as imaging_utils
+import src.utils.utils_imaging 
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from scipy.stats import ks_2samp
@@ -43,7 +43,7 @@ for mouse_id in mice:
     reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
     file_name = 'tensor_xarray_mapping_data.nc'
     folder = os.path.join(io.processed_dir, 'mice')
-    data = imaging_utils.load_mouse_xarray(mouse_id, folder, file_name)
+    data = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name)
     
     rois = data.coords['roi'].values
     cts = data.coords['cell_type'].values
@@ -498,7 +498,6 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 # #############################################################################
 # Proportion of LMI.
 # #############################################################################
-
 processed_folder = io.solve_common_paths('processed_data')
 lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 
@@ -516,22 +515,6 @@ lmi_df['lmi_neg'] = lmi_df['lmi_p'] <= 0.025
 
 lmi_prop = lmi_df.groupby(['mouse_id', 'reward_group'])[['lmi_pos', 'lmi_neg']].apply(lambda x: x.sum() / x.count()).reset_index()
 lmi_prop_ct = lmi_df.groupby(['mouse_id', 'reward_group', 'cell_type'])[['lmi_pos', 'lmi_neg']].apply(lambda x: x.sum() / x.count()).reset_index()
-
-# Plot.
-fig, axes = plt.subplots(1, 6, figsize=(15, 3), sharey=True)
-sns.barplot(data=lmi_prop, x='reward_group', order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[0], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[0].set_title('LMI Positive')
-sns.barplot(data=lmi_prop, x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg',  ax=axes[1], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[1].set_title('LMI Negative')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[2], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[2].set_title('LMI Positive wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[3], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[3].set_title('LMI Negative wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[4], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[4].set_title('LMI Positive wM1')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[5], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[5].set_title('LMI Negative wM1')
-sns.despine(trim=True)
 
 # Stats.
 # Perform Mann-Whitney U test for each LMI group.
@@ -559,6 +542,49 @@ for group in groups:
 results_df = pd.DataFrame(results)
 output_dir = fr'/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/cell_proportions/'
 results_df.to_csv(os.path.join(output_dir, 'prop_lmi_mannwhitney_results.csv'), index=False)
+
+# Plot.
+fig, axes = plt.subplots(1, 6, figsize=(15, 3), sharey=True)
+sns.barplot(data=lmi_prop, x='reward_group', order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[0], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[0].set_title('LMI Positive')
+sns.barplot(data=lmi_prop, x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg',  ax=axes[1], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[1].set_title('LMI Negative')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[2], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[2].set_title('LMI Positive wS2')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[3], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[3].set_title('LMI Negative wS2')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[4], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[4].set_title('LMI Positive wM1')
+sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[5], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
+axes[5].set_title('LMI Negative wM1')
+sns.despine(trim=True)
+
+# Add stars to plots according to computed stats
+def get_star(p):
+    if p < 0.001:
+        return '***'
+    elif p < 0.01:
+        return '**'
+    elif p < 0.05:
+        return '*'
+    else:
+        return ''
+
+for i, (group, cell_type) in enumerate([
+    ('lmi_pos', None),
+    ('lmi_neg', None),
+    ('lmi_pos', 'wS2'),
+    ('lmi_neg', 'wS2'),
+    ('lmi_pos', 'wM1'),
+    ('lmi_neg', 'wM1')
+]):
+    stat_row = results_df[(results_df['group'] == group) & (results_df['cell_type'] == (cell_type if cell_type else 'all'))]
+    if not stat_row.empty:
+        p = stat_row.iloc[0]['p_value']
+        star = get_star(p)
+        # Add star annotation between bars
+        y_max = axes[i].get_ylim()[1]
+        axes[i].annotate(star, xy=(0.5, y_max*0.95), xycoords='axes fraction', ha='center', va='bottom', fontsize=18, color='black')
 
 # Save figure and data.
 svg_file = f'prop_lmi.svg'
@@ -590,7 +616,7 @@ for i, cell_type in enumerate(cell_types):
             color=color,
             label=rg,
             stat='density',
-            alpha=0.5
+            alpha=0.5,
         )
     axes[i].set_title(titles[i])
     axes[i].set_xlabel('LMI')
@@ -613,9 +639,3 @@ for cell_type in cell_types:
     ks_results.append({'cell_type': cell_type if cell_type else 'all', 'stat': stat, 'p_value': p})
 
 pd.DataFrame(ks_results).to_csv(os.path.join(output_dir, 'lmi_distribution_ks.csv'), index=False)
-
-
-# Proportion of LMI in each cluster compared to whole population.
-# ---------------------------------------------------------------
-
-
