@@ -42,7 +42,7 @@ sns.set_theme(
 # Color palettes.
 reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
 reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])
-cell_types_palette = sns.color_palette(['#807f7fff', '#0100fdff', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
+cell_types_palette = sns.color_palette(['#807f7fff', 'salmon', 'steelblue'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
 # s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
 s2_m1_palette = sns.color_palette(['steelblue', 'salmon'])
 # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 

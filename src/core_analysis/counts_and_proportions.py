@@ -23,6 +23,9 @@ import src.utils.utils_imaging as imaging_utils
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from scipy.stats import ks_2samp
+from matplotlib_venn import venn3
+import colorsys
+from matplotlib import colors as mcolors
 
 
 # #############################################################################
@@ -494,11 +497,10 @@ plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
 
 
 
-
-
 # #############################################################################
 # Proportion of LMI.
 # #############################################################################
+
 processed_folder = io.solve_common_paths('processed_data')
 lmi_df = pd.read_csv(os.path.join(processed_folder, 'lmi_results.csv'))
 
@@ -587,49 +589,6 @@ for i, (group, cell_type) in enumerate([
         y_max = axes[i].get_ylim()[1]
         axes[i].annotate(star, xy=(0.5, y_max*0.95), xycoords='axes fraction', ha='center', va='bottom', fontsize=18, color='black')
 
-# Plot.
-fig, axes = plt.subplots(1, 6, figsize=(15, 3), sharey=True)
-sns.barplot(data=lmi_prop, x='reward_group', order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[0], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[0].set_title('LMI Positive')
-sns.barplot(data=lmi_prop, x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg',  ax=axes[1], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[1].set_title('LMI Negative')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[2], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[2].set_title('LMI Positive wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wS2'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[3], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[3].set_title('LMI Negative wS2')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_pos', ax=axes[4], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[4].set_title('LMI Positive wM1')
-sns.barplot(data=lmi_prop_ct.loc[lmi_prop_ct.cell_type=='wM1'], x='reward_group',  order=['R+', 'R-'], hue='reward_group', y='lmi_neg', ax=axes[5], palette=reward_palette, hue_order=['R-', 'R+'], legend=False)
-axes[5].set_title('LMI Negative wM1')
-sns.despine(trim=True)
-
-# Add stars to plots according to computed stats
-def get_star(p):
-    if p < 0.001:
-        return '***'
-    elif p < 0.01:
-        return '**'
-    elif p < 0.05:
-        return '*'
-    else:
-        return ''
-
-for i, (group, cell_type) in enumerate([
-    ('lmi_pos', None),
-    ('lmi_neg', None),
-    ('lmi_pos', 'wS2'),
-    ('lmi_neg', 'wS2'),
-    ('lmi_pos', 'wM1'),
-    ('lmi_neg', 'wM1')
-]):
-    stat_row = results_df[(results_df['group'] == group) & (results_df['cell_type'] == (cell_type if cell_type else 'all'))]
-    if not stat_row.empty:
-        p = stat_row.iloc[0]['p_value']
-        star = get_star(p)
-        # Add star annotation between bars
-        y_max = axes[i].get_ylim()[1]
-        axes[i].annotate(star, xy=(0.5, y_max*0.95), xycoords='axes fraction', ha='center', va='bottom', fontsize=18, color='black')
-
 # Save figure and data.
 svg_file = f'prop_lmi.svg'
 plt.savefig(os.path.join(output_dir, svg_file), format='svg', dpi=300)
@@ -661,7 +620,6 @@ for i, cell_type in enumerate(cell_types):
             label=rg,
             stat='density',
             alpha=0.5,
-            alpha=0.5,
         )
     axes[i].set_title(titles[i])
     axes[i].set_xlabel('LMI')
@@ -684,3 +642,116 @@ for cell_type in cell_types:
     ks_results.append({'cell_type': cell_type if cell_type else 'all', 'stat': stat, 'p_value': p})
 
 pd.DataFrame(ks_results).to_csv(os.path.join(output_dir, 'lmi_distribution_ks.csv'), index=False)
+
+
+# #############################################################################
+
+# Pie chart showing number of cells of each type and subproportion that are LMI positive/negative significant
+def plot_piechart_lmi_pos_neg_by_reward(df, output_dir, suffix):
+    cell_types = ['non_proj', 'wS2', 'wM1']
+    for rg in ['R+', 'R-']:
+        df_rg = df[df.reward_group == rg]
+        total_counts = {
+            'wS2': df_rg[df_rg.cell_type == 'wS2'].shape[0],
+            'wM1': df_rg[df_rg.cell_type == 'wM1'].shape[0],
+            'non_proj': df_rg[~df_rg.cell_type.isin(['wS2', 'wM1'])].shape[0]
+        }
+        sig_pos = df_rg[df_rg['lmi_pos']]
+        sig_neg = df_rg[df_rg['lmi_neg']]
+        sig_pos_counts = {
+            'wS2': sig_pos[sig_pos.cell_type == 'wS2'].shape[0],
+            'wM1': sig_pos[sig_pos.cell_type == 'wM1'].shape[0],
+            'non_proj': sig_pos[~sig_pos.cell_type.isin(['wS2', 'wM1'])].shape[0]
+        }
+        sig_neg_counts = {
+            'wS2': sig_neg[sig_neg.cell_type == 'wS2'].shape[0],
+            'wM1': sig_neg[sig_neg.cell_type == 'wM1'].shape[0],
+            'non_proj': sig_neg[~sig_neg.cell_type.isin(['wS2', 'wM1'])].shape[0]
+        }
+        sizes = []
+        labels = []
+        colors = []
+        for ct in cell_types:
+            n_total = total_counts[ct]
+            n_pos = sig_pos_counts[ct]
+            n_neg = sig_neg_counts[ct]
+            n_non_sig = n_total - n_pos - n_neg
+            if n_pos > 0:
+                sizes.append(n_pos)
+                labels.append(f'{ct} (LMI+)')
+                colors.append(cell_types_palette[ct])
+            if n_neg > 0:
+                sizes.append(n_neg)
+                labels.append(f'{ct} (LMI-)')
+                colors.append(faded_color(cell_types_palette[ct], alpha=0.7))
+            if n_non_sig > 0:
+                sizes.append(n_non_sig)
+                labels.append(f'{ct} (not LMI)')
+                colors.append(faded_color(cell_types_palette[ct], alpha=0.3))
+        plt.figure(figsize=(7,7))
+        plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90, wedgeprops={'edgecolor': 'white'})
+        plt.title(f'Cell type and LMI+/- proportion ({rg})')
+        plt.tight_layout()
+        # plt.savefig(os.path.join(output_dir, f'piechart_lmi_pos_neg_{suffix}_{rg}.svg'), format='svg', dpi=300)
+        # plt.close()
+
+# If cell_types_palette is a dict of hex colors, convert to RGB tuples for colorsys
+def hex_to_rgb(hex_color):
+    return mcolors.to_rgb(hex_color)
+
+# Make faded color for non-significant slices
+def faded_color(hex_color, alpha=0.3):
+    rgb = hex_to_rgb(hex_color)
+    return (rgb[0], rgb[1], rgb[2], alpha)
+
+# Prepare palette for pie chart
+cell_types_palette = {
+    'non_proj': cell_types_palette[0],
+    'wS2': cell_types_palette[1],
+    'wM1': cell_types_palette[2]
+}
+
+# Run pie chart for LMI positive and negative by reward group
+plot_piechart_lmi_pos_neg_by_reward(lmi_df, output_dir, 'by_reward')
+
+# Pie chart showing proportions among significant LMI cells (positive/negative) by cell type and reward group
+def plot_piechart_lmi_sig_combined_by_reward(df, output_dir, suffix):
+    cell_types = ['non_proj', 'wS2', 'wM1']
+    for rg in ['R+', 'R-']:
+        df_rg = df[df.reward_group == rg]
+        # Significant LMI positive and negative cells
+        sig_pos = df_rg[df_rg['lmi_pos']]
+        sig_neg = df_rg[df_rg['lmi_neg']]
+        sig_pos_counts = {
+            'wS2': sig_pos[sig_pos.cell_type == 'wS2'].shape[0],
+            'wM1': sig_pos[sig_pos.cell_type == 'wM1'].shape[0],
+            'non_proj': sig_pos[~sig_pos.cell_type.isin(['wS2', 'wM1'])].shape[0]
+        }
+        sig_neg_counts = {
+            'wS2': sig_neg[sig_neg.cell_type == 'wS2'].shape[0],
+            'wM1': sig_neg[sig_neg.cell_type == 'wM1'].shape[0],
+            'non_proj': sig_neg[~sig_neg.cell_type.isin(['wS2', 'wM1'])].shape[0]
+        }
+        sizes = []
+        labels = []
+        colors = []
+        for ct in cell_types:
+            n_pos = sig_pos_counts[ct]
+            n_neg = sig_neg_counts[ct]
+            if n_pos > 0:
+                sizes.append(n_pos)
+                labels.append(f'{ct} (LMI+)')
+                colors.append(cell_types_palette[ct])
+            if n_neg > 0:
+                sizes.append(n_neg)
+                labels.append(f'{ct} (LMI-)')
+                colors.append(faded_color(cell_types_palette[ct], alpha=0.7))
+        if sizes:
+            plt.figure(figsize=(7,7))
+            plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90, wedgeprops={'edgecolor': 'white'})
+            plt.title(f'Cell type proportion among significant LMI+/- ({rg})')
+            plt.tight_layout()
+            # plt.savefig(os.path.join(output_dir, f'piechart_lmi_sig_combined_{suffix}_{rg}.svg'), format='svg', dpi=300)
+            # plt.close()
+
+plot_piechart_lmi_sig_combined_by_reward(lmi_df, output_dir, 'sig_combined_by_reward')
