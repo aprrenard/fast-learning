@@ -155,6 +155,7 @@ def solve_common_paths(target):
     analysis_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard'
     nwb_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/NWB'
     processed_data_dir = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/data_processed'
+    results_dir = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/analysis_output/fast-learning'
     
     # Files.    
     db_path = '//sv-nas1.rcp.epfl.ch/Petersen-Lab/analysis/Anthony_Renard/mice_info/session_metadata.xlsx'
@@ -181,11 +182,14 @@ def solve_common_paths(target):
         path = stop_flags_yaml
     elif target == 'stop_flags_sensory_map':
         path = stop_flags_sensory_map_yaml
+    elif target == 'results':
+        path = results_dir
         
     return adjust_path_to_host(path)
 
 
 # Path to the directory containing the processed data.
+results_dir = solve_common_paths('results')
 processed_dir = solve_common_paths('processed_data')
 nwb_dir = solve_common_paths('nwb')
 db_path = solve_common_paths('db')

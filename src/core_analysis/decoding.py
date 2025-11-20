@@ -33,7 +33,7 @@ from sklearn.ensemble import RandomForestClassifier
 sys.path.append(r'/home/aprenard/repos/NWB_analysis')
 sys.path.append(r'/home/aprenard/repos/fast-learning')
 # from nwb_wrappers import nwb_reader_functions as nwb_read
-import src.utils.utils_imaging as imaging_utils 
+import src.utils.utils_imaging as utils_imaging
 import src.utils.utils_io as io
 from src.utils.utils_plot import *
 from src.utils.utils_behavior import *
@@ -816,7 +816,6 @@ df_quant.to_csv(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_qua
 
 
 # ############################################
-# ############################################
 # Decoding decision value across learning during Day 0.
 # #############################################
 
@@ -829,7 +828,7 @@ df_quant.to_csv(os.path.join(output_dir, 'day0_pre_vs_post_decoding_accuracy_qua
 # We want to correlate that with performance across mice.
 
 sampling_rate = 30
-win = (0, 0.180)  # from stimulus onset to 180 ms after.
+win = (0, 0.300)  # from stimulus onset to 180 ms after.
 win_length = f'{int(np.round((win[1]-win[0]) * 1000))}'  # for file naming.
 # win = (int(win[0] * sampling_rate), int(win[1] * sampling_rate))
 baseline_win = (-1, 0)
@@ -871,7 +870,6 @@ for mouse in mice:
     print(f"Processing mouse: {mouse}")
     folder = os.path.join(io.solve_common_paths('processed_data'), 'mice')
     file_name = 'tensor_xarray_mapping_data.nc'
-    xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name, substracted=True)
     xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name, substracted=True)
     # xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
@@ -918,7 +916,6 @@ for mouse in mice:
     # -----------------------------
     
     file_name = 'tensor_xarray_learning_data.nc'
-    xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name)
     xarray = utils_imaging.load_mouse_xarray(mouse, folder, file_name)
     # xarray = xarray - np.nanmean(xarray.sel(time=slice(-1, 0)).values, axis=2, keepdims=True)
     rew_gp = io.get_mouse_reward_group_from_db(io.db_path, mouse, db)
@@ -989,9 +986,12 @@ def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, 
 
     Returns:
     --------
-    pd.DataFrame with window results including trial indices (absolute and relative to learning)
+    tuple: (pd.DataFrame, dict)
+        - pd.DataFrame with window results including trial indices (absolute and relative to learning)
+        - dict with classifier weights for each mouse: {'mouse_id': {'coef': weights, 'intercept': bias, 'scaler_mean': mean, 'scaler_scale': scale}}
     """
     results = []
+    classifier_weights = {}
 
     for i, (d_mapping, d_learning, mouse) in enumerate(zip(vectors_mapping, vectors_learning, mice_list)):
         print(d_mapping.shape, d_learning.shape)
@@ -1012,6 +1012,24 @@ def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, 
         clf = LogisticRegression(max_iter=5000, random_state=seed)
         clf.fit(X_train_scaled, y_train)
 
+        # Store classifier weights for this mouse (cell-by-cell contribution)
+        # Extract ROI coordinates from the xarray
+        if 'roi' in d_mapping.coords:
+            roi_coords = d_mapping.coords['roi'].values
+        else:
+            # Fallback to indices if roi coord not found
+            roi_coords = np.arange(clf.coef_.shape[1])
+
+        classifier_weights[mouse] = {
+            'coef': clf.coef_[0],  # Weights for each cell/neuron
+            'roi': roi_coords,  # ROI identifiers for each cell
+            'intercept': clf.intercept_[0],  # Classifier bias term
+            'scaler_mean': scaler.mean_,  # Mean values used for scaling
+            'scaler_scale': scaler.scale_,  # Scale values used for scaling
+            'n_features': clf.coef_.shape[1],  # Number of cells/features
+            'sign_flip': None  # Will be set after sign check
+        }
+
         # Sanity check: Verify sign convention is correct (decision_function sign)
         pre_mask = np.isin(day_per_trial, pre_days)
         post_mask = np.isin(day_per_trial, post_days)
@@ -1030,6 +1048,9 @@ def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, 
         else:
             sign_flip = 1
             print(f"{mouse}: Decision values oriented. Pre={mean_dec_pre:.3f}, Post={mean_dec_post:.3f}")
+
+        # Update sign_flip in classifier weights
+        classifier_weights[mouse]['sign_flip'] = sign_flip
 
         # Get learning trial for this mouse if aligning
         learning_trial_idx = None
@@ -1109,7 +1130,7 @@ def progressive_learning_analysis(vectors_mapping, vectors_learning, mice_list, 
 
         results.extend(window_results)
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), classifier_weights
 
 # Run analysis for both groups
 window_size = 10
@@ -1128,21 +1149,21 @@ except Exception:
     mice_good, mice_bad = [], []
 
 # Build results for R+ and R- (and optionally good/bad subsets)
-results_rew = progressive_learning_analysis(
-    vectors_rew_mapping, vectors_rew_day0_learning, mice_rew, 
+results_rew, weights_rew = progressive_learning_analysis(
+    vectors_rew_mapping, vectors_rew_day0_learning, mice_rew,
     bh_df=bh_df, window_size=window_size, step_size=step_size,
     align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
-results_nonrew = progressive_learning_analysis(
+results_nonrew, weights_nonrew = progressive_learning_analysis(
     vectors_nonrew_mapping, vectors_nonrew_day0_learning, mice_nonrew,
     bh_df=bh_df, window_size=window_size, step_size=step_size,
     align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
-results_good = progressive_learning_analysis(
+results_good, weights_good = progressive_learning_analysis(
     [vectors_rew_mapping[i] for i, m in enumerate(mice_rew) if m in mice_good],
     [vectors_rew_day0_learning[i] for i, m in enumerate(mice_rew) if m in mice_good],
     mice_good,
     bh_df=bh_df, window_size=window_size, step_size=step_size,
     align_to_learning=align_to_learning, trials_before=trials_before, trials_after=trials_after)
-results_bad = progressive_learning_analysis(
+results_bad, weights_bad = progressive_learning_analysis(
     [vectors_rew_mapping[i] for i, m in enumerate(mice_rew) if m in mice_bad],
     [vectors_rew_day0_learning[i] for i, m in enumerate(mice_rew) if m in mice_bad],
     mice_bad,
@@ -1152,7 +1173,57 @@ results_rew['reward_group'] = 'R+'
 results_nonrew['reward_group'] = 'R-'
 results_combined = pd.concat([results_rew, results_nonrew], ignore_index=True)
 
-cut_n_trials = 120
+# Save classifier weights to disk for later use
+# Convert weights dictionaries to DataFrame format with columns: mouse_id, roi, classifier_weight
+
+output_dir = '/mnt/lsens-analysis/Anthony_Renard/analysis_output/fast-learning/decoding'
+output_dir = io.adjust_path_to_host(output_dir)
+os.makedirs(output_dir, exist_ok=True)
+
+# Combine all weights dictionaries
+all_weights_dict = {
+    'R+': weights_rew,
+    'R-': weights_nonrew,
+    'good_learners': weights_good,
+    'bad_learners': weights_bad
+}
+
+# Convert to DataFrame format
+weights_rows = []
+for group_name, weights_dict in all_weights_dict.items():
+    for mouse_id, weight_info in weights_dict.items():
+        # Get the weights and ROI IDs for each cell
+        coefs = weight_info['coef']
+        rois = weight_info['roi']
+        sign_flip = weight_info['sign_flip']
+
+        # Create a row for each cell
+        for roi, weight in zip(rois, coefs):
+            weights_rows.append({
+                'mouse_id': mouse_id,
+                'roi': roi,
+                'classifier_weight': weight * sign_flip,  # Apply sign flip for consistency
+                'classifier_weight_raw': weight,  # Keep raw weight without sign flip
+                'reward_group': 'R+' if group_name in ['R+', 'good_learners'] else 'R-',
+                'learner_group': group_name,
+                'sign_flip': sign_flip
+            })
+
+df_weights = pd.DataFrame(weights_rows)
+
+# Save as CSV
+weights_file_csv = os.path.join(output_dir, 'classifier_weights.csv')
+df_weights.to_csv(weights_file_csv, index=False)
+print(f"Classifier weights saved to: {weights_file_csv}")
+print(f"  Format: DataFrame with {len(df_weights)} rows (cells)")
+print(f"  Columns: {', '.join(df_weights.columns)}")
+
+# Also save the full weights dictionaries with all metadata as pickle for backward compatibility
+weights_file_pkl = os.path.join(output_dir, 'classifier_weights_full.pkl')
+with open(weights_file_pkl, 'wb') as f:
+    pickle.dump(all_weights_dict, f)
+print(f"Full weight metadata saved to: {weights_file_pkl}")
+[]
 cut_n_trials = 120
 
 def plot_behavior(ax, data, color, title, cut_n_trials=cut_n_trials, align_to_learning=False):
