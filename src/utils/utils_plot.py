@@ -43,11 +43,12 @@ sns.set_theme(
 reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
 reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])
 cell_types_palette = sns.color_palette(['#807f7fff', '#ca59afff', '#0100fdff'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
-# s2_m1_palette = sns.color_palette(['#ca59afff', '#0100fdff'])
 s2_m1_palette = sns.color_palette(['#ca59afff', '#0100fdff'])
 # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
 stim_palette = sns.color_palette(['#0100fdff', '#FF9600', '#010101ff'])
 behavior_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#980099ff', '#009600ff', '#807f7fff', '#010101ff'])
+trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])
+trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])
 
 # Mice groups.
 mice_groups = {

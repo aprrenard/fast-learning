@@ -1,8 +1,8 @@
 """
-Population-level PSTH analysis for LMI-defined cell populations.
+Cell-level PSTH analysis for LMI-defined cell populations.
 
 This script generates comprehensive PSTH visualizations for positive and negative LMI cells,
-averaging across mice to show population-level responses during learning.
+with variance computed across individual cells (not across mice).
 
 Output: One PDF with pages for each reward group × LMI group combination.
 """
@@ -30,10 +30,8 @@ from src.utils.utils_behavior import *
 # =============================================================================
 
 # Cell selection parameters
-USE_TOP_N = False  # If True, use top N cells; if False, use all cells meeting threshold
-TOP_N = 5  # Number of top cells to use per reward group (if USE_TOP_N=True)
-LMI_POSITIVE_THRESHOLD = 0.975  # Percentile threshold for positive LMI cells
-LMI_NEGATIVE_THRESHOLD = 0.025  # Percentile threshold for negative LMI cells
+USE_TOP_N = True  # If True, use top N cells; if False, use all cells meeting threshold
+TOP_N = 20  # Number of top cells to use per reward group (if USE_TOP_N=True)
 
 # Data parameters
 DAYS_LEARNING = [-2, -1, 0, 1, 2]
@@ -74,8 +72,8 @@ lmi_df['reward_group'] = lmi_df['mouse_id'].map(
 all_mice = [m for m in all_mice if m != 'GF305']
 
 # Filter cells based on LMI percentile thresholds
-positive_lmi_cells = lmi_df.loc[lmi_df['lmi_p'] >= LMI_POSITIVE_THRESHOLD].copy()
-negative_lmi_cells = lmi_df.loc[lmi_df['lmi_p'] <= LMI_NEGATIVE_THRESHOLD].copy()
+positive_lmi_cells = lmi_df.loc[lmi_df['lmi'] >= 0].copy()
+negative_lmi_cells = lmi_df.loc[lmi_df['lmi'] < 0].copy()
 
 # If using top N, select top N cells per reward group
 if USE_TOP_N:
@@ -96,37 +94,41 @@ if USE_TOP_N:
     positive_lmi_cells = pd.concat(top_positive)
     negative_lmi_cells = pd.concat(top_negative)
 
-    pdf_name = f'lmi_population_analysis_top{TOP_N}.pdf'
+    pdf_name = f'lmi_cell_analysis_top{TOP_N}.pdf'
 else:
-    print(f"Using all cells meeting threshold (p >= {LMI_POSITIVE_THRESHOLD} or p <= {LMI_NEGATIVE_THRESHOLD})...")
-    pdf_name = 'lmi_population_analysis_all.pdf'
+    print(f"Using all cells meeting threshold (lmi >= 0 or lmi < 0)...")
+    pdf_name = 'lmi_cell_analysis_all.pdf'
 
 print(f"  Positive LMI cells: {len(positive_lmi_cells)}")
 print(f"  Negative LMI cells: {len(negative_lmi_cells)}")
 
-# Organize cells by mouse, reward group, and LMI group
-cell_organization = {}
-for mouse_id in all_mice:
-    reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse_id)
-    cell_organization[mouse_id] = {
-        'reward_group': reward_group,
-        'positive': positive_lmi_cells[positive_lmi_cells['mouse_id'] == mouse_id]['roi'].tolist(),
-        'negative': negative_lmi_cells[negative_lmi_cells['mouse_id'] == mouse_id]['roi'].tolist()
-    }
+# Create cell metadata for easy lookup
+# Structure: {cell_key: {'mouse_id': ..., 'roi': ..., 'reward_group': ...}}
+cell_metadata = {}
+for lmi_group, cells_df in [('positive', positive_lmi_cells), ('negative', negative_lmi_cells)]:
+    for _, row in cells_df.iterrows():
+        cell_key = f"{row['mouse_id']}_{row['roi']}"
+        cell_metadata[cell_key] = {
+            'mouse_id': row['mouse_id'],
+            'roi': row['roi'],
+            'reward_group': row['reward_group'],
+            'lmi_group': lmi_group,
+            'lmi': row['lmi']
+        }
 
 
 # =============================================================================
-# FUNCTION: compute_population_psth_summary
+# FUNCTION: compute_cell_psth_summary
 # =============================================================================
 
-def compute_population_psth_summary(mice_list, lmi_group, reward_group):
+def compute_cell_psth_summary(cell_list, lmi_group, reward_group):
     """
-    Compute PSTH summary data for a population of cells.
+    Compute PSTH summary data at the cell level.
 
     Parameters
     ----------
-    mice_list : list
-        List of mouse IDs to include
+    cell_list : list
+        List of cell_keys (mouse_id_roi format)
     lmi_group : str
         'positive' or 'negative'
     reward_group : str
@@ -135,37 +137,37 @@ def compute_population_psth_summary(mice_list, lmi_group, reward_group):
     Returns
     -------
     dict
-        {trial_type: {mouse_id: averaged_xarray}}
+        {trial_type: {cell_key: averaged_xarray}}
     """
-    print(f"\n  Computing PSTH summary for {reward_group} {lmi_group} cells...")
+    print(f"\n  Computing PSTH summary for {reward_group} {lmi_group} cells (n={len(cell_list)})...")
 
     psth_data = {}
     folder = os.path.join(io.processed_dir, 'mice')
 
-    for mouse_id in mice_list:
-        cell_list = cell_organization[mouse_id][lmi_group]
-        if not cell_list:
-            continue
+    for cell_key in cell_list:
+        meta = cell_metadata[cell_key]
+        mouse_id = meta['mouse_id']
+        roi = meta['roi']
 
-        print(f"    Processing {mouse_id}: {len(cell_list)} cells")
+        print(f"    Processing {cell_key}...")
 
         # Load mapping data for each day
         try:
             file_name_mapping = 'tensor_xarray_mapping_data.nc'
             xarr_mapping = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name_mapping, substracted=True)
-            xarr_mapping = xarr_mapping.sel(cell=xarr_mapping['roi'].isin(cell_list))
+            xarr_mapping = xarr_mapping.sel(cell=xarr_mapping['roi'] == roi)
             xarr_mapping.load()  # Load into memory and close file handle
 
-            # Average trials per day, then across cells
+            # Average trials per day
             for day in DAYS_LEARNING:
                 day_data = xarr_mapping.sel(trial=xarr_mapping['day'] == day)
                 if len(day_data.trial) > 0:
-                    day_avg = day_data.mean(dim='trial').mean(dim='cell')
+                    day_avg = day_data.mean(dim='trial').squeeze()
 
                     key = f'mapping_day{day}'
                     if key not in psth_data:
                         psth_data[key] = {}
-                    psth_data[key][mouse_id] = day_avg
+                    psth_data[key][cell_key] = day_avg
 
         except Exception as e:
             print(f"      Warning: Could not load mapping data: {e}")
@@ -174,7 +176,7 @@ def compute_population_psth_summary(mice_list, lmi_group, reward_group):
         try:
             file_name_learning = 'tensor_xarray_learning_data.nc'
             xarr_learning = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name_learning, substracted=True)
-            xarr_learning = xarr_learning.sel(cell=xarr_learning['roi'].isin(cell_list))
+            xarr_learning = xarr_learning.sel(cell=xarr_learning['roi'] == roi)
             xarr_learning = xarr_learning.sel(trial=xarr_learning['day'].isin(DAYS_LEARNING))
             xarr_learning.load()  # Load into memory and close file handle
 
@@ -189,16 +191,16 @@ def compute_population_psth_summary(mice_list, lmi_group, reward_group):
             for trial_key, trial_filter in trial_filters.items():
                 xarr_trial_type = xarr_learning.sel(trial=trial_filter)
 
-                # Average trials per day, then across cells
+                # Average trials per day
                 for day in DAYS_LEARNING:
                     day_data = xarr_trial_type.sel(trial=xarr_trial_type['day'] == day)
                     if len(day_data.trial) > 0:
-                        day_avg = day_data.mean(dim='trial').mean(dim='cell')
+                        day_avg = day_data.mean(dim='trial').squeeze()
 
                         key = f'{trial_key}_day{day}'
                         if key not in psth_data:
                             psth_data[key] = {}
-                        psth_data[key][mouse_id] = day_avg
+                        psth_data[key][cell_key] = day_avg
 
         except Exception as e:
             print(f"      Warning: Could not load learning data: {e}")
@@ -207,21 +209,21 @@ def compute_population_psth_summary(mice_list, lmi_group, reward_group):
         try:
             file_name_lick = 'lick_aligned_xarray.nc'
             xarr_lick = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name_lick, substracted=False)
-            xarr_lick = xarr_lick.sel(cell=xarr_lick['roi'].isin(cell_list))
+            xarr_lick = xarr_lick.sel(cell=xarr_lick['roi'] == roi)
             xarr_lick = xarr_lick.sel(trial=(xarr_lick['no_stim'] == 1) & (xarr_lick['lick_flag'] == 1))
             xarr_lick = xarr_lick.sel(trial=xarr_lick['day'].isin(DAYS_LEARNING))
             xarr_lick.load()  # Load into memory and close file handle
 
-            # Average trials per day, then across cells
+            # Average trials per day
             for day in DAYS_LEARNING:
                 day_data = xarr_lick.sel(trial=xarr_lick['day'] == day)
                 if len(day_data.trial) > 0:
-                    day_avg = day_data.mean(dim='trial').mean(dim='cell')
+                    day_avg = day_data.mean(dim='trial').squeeze()
 
                     key = f'false_alarm_day{day}'
                     if key not in psth_data:
                         psth_data[key] = {}
-                    psth_data[key][mouse_id] = day_avg
+                    psth_data[key][cell_key] = day_avg
 
         except Exception as e:
             print(f"      Warning: Could not load lick-aligned data: {e}")
@@ -230,17 +232,17 @@ def compute_population_psth_summary(mice_list, lmi_group, reward_group):
 
 
 # =============================================================================
-# FUNCTION: compute_population_whisker_evolution
+# FUNCTION: compute_cell_whisker_evolution
 # =============================================================================
 
-def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
+def compute_cell_whisker_evolution(cell_list, lmi_group, reward_group):
     """
-    Compute whisker evolution data for a population of cells (Day 0).
+    Compute whisker evolution data at the cell level (Day 0).
 
     Parameters
     ----------
-    mice_list : list
-        List of mouse IDs to include
+    cell_list : list
+        List of cell_keys (mouse_id_roi format)
     lmi_group : str
         'positive' or 'negative'
     reward_group : str
@@ -249,25 +251,51 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
     Returns
     -------
     dict
-        {data_key: {mouse_id: averaged_xarray}}
+        {data_key: {cell_key: averaged_xarray}}
     """
-    print(f"\n  Computing whisker evolution for {reward_group} {lmi_group} cells...")
+    print(f"\n  Computing whisker evolution for {reward_group} {lmi_group} cells (n={len(cell_list)})...")
 
     evolution_data = {}
     folder = os.path.join(io.processed_dir, 'mice')
 
-    for mouse_id in mice_list:
-        cell_list = cell_organization[mouse_id][lmi_group]
-        if not cell_list:
+    # First, we need to find the first hit for each mouse
+    mouse_first_hits = {}
+
+    for cell_key in cell_list:
+        meta = cell_metadata[cell_key]
+        mouse_id = meta['mouse_id']
+        roi = meta['roi']
+
+        # Find first hit for this mouse (if not already found)
+        if mouse_id not in mouse_first_hits:
+            try:
+                file_name = 'tensor_xarray_learning_data.nc'
+                xarr_temp = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
+                xarr_temp = xarr_temp.sel(trial=xarr_temp['day'] == 0)
+                whisker_trials_temp = xarr_temp.sel(trial=xarr_temp['whisker_stim'] == 1)
+
+                if len(whisker_trials_temp.trial) > 0:
+                    lick_flags = whisker_trials_temp['lick_flag'].values
+                    hit_indices = np.where(lick_flags == 1)[0]
+                    if len(hit_indices) > 0:
+                        mouse_first_hits[mouse_id] = hit_indices[0]
+                        print(f"    Mouse {mouse_id}: First hit at trial {hit_indices[0] + 1}")
+            except Exception as e:
+                print(f"      Warning: Could not find first hit for {mouse_id}: {e}")
+
+        if mouse_id not in mouse_first_hits:
+            print(f"    Skipping {cell_key}: No first hit found for mouse {mouse_id}")
             continue
 
-        print(f"    Processing {mouse_id}: {len(cell_list)} cells")
+        first_hit_idx = mouse_first_hits[mouse_id]
+
+        print(f"    Processing {cell_key}...")
 
         try:
-            # Load Day 0 learning data
+            # Load Day 0 learning data for this cell
             file_name = 'tensor_xarray_learning_data.nc'
             xarr = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name, substracted=True)
-            xarr = xarr.sel(cell=xarr['roi'].isin(cell_list))
+            xarr = xarr.sel(cell=xarr['roi'] == roi)
             xarr = xarr.sel(trial=xarr['day'] == 0)
             xarr.load()  # Load into memory and close file handle
 
@@ -275,43 +303,33 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
             whisker_trials = xarr.sel(trial=xarr['whisker_stim'] == 1)
 
             if len(whisker_trials.trial) == 0:
-                print(f"      Warning: No whisker trials for {mouse_id}")
+                print(f"      Warning: No whisker trials for {cell_key}")
                 continue
 
-            # Find first hit (first trial where whisker_stim==1 and lick_flag==1)
             lick_flags = whisker_trials['lick_flag'].values
-            hit_indices = np.where(lick_flags == 1)[0]
-
-            if len(hit_indices) == 0:
-                print(f"      Warning: No whisker hits for {mouse_id}")
-                continue
-
-            first_hit_idx = hit_indices[0]
-            print(f"      First hit at trial {first_hit_idx + 1}")
 
             # Extract misses before first hit
             if first_hit_idx > 0:
                 misses_before = whisker_trials.isel(trial=slice(0, first_hit_idx))
-                misses_avg = misses_before.mean(dim='trial').mean(dim='cell')
+                misses_avg = misses_before.mean(dim='trial').squeeze()
                 if 'misses_before_first_hit' not in evolution_data:
                     evolution_data['misses_before_first_hit'] = {}
-                evolution_data['misses_before_first_hit'][mouse_id] = misses_avg
+                evolution_data['misses_before_first_hit'][cell_key] = misses_avg
 
             # Extract first hit
-            first_hit = whisker_trials.isel(trial=first_hit_idx)
-            first_hit_avg = first_hit.mean(dim='cell')
+            first_hit = whisker_trials.isel(trial=first_hit_idx).squeeze()
             if 'first_hit' not in evolution_data:
                 evolution_data['first_hit'] = {}
-            evolution_data['first_hit'][mouse_id] = first_hit_avg
+            evolution_data['first_hit'][cell_key] = first_hit
 
             # Extract next 5 trials after first hit
             next_5_end = min(first_hit_idx + 6, len(whisker_trials.trial))
             if next_5_end > first_hit_idx + 1:
                 next_5 = whisker_trials.isel(trial=slice(first_hit_idx + 1, next_5_end))
-                next_5_avg = next_5.mean(dim='trial').mean(dim='cell')
+                next_5_avg = next_5.mean(dim='trial').squeeze()
                 if 'next_5_after_hit' not in evolution_data:
                     evolution_data['next_5_after_hit'] = {}
-                evolution_data['next_5_after_hit'][mouse_id] = next_5_avg
+                evolution_data['next_5_after_hit'][cell_key] = next_5_avg
 
             # Compute percentiles for all whisker trials, hits, and misses
             n_whisker = len(whisker_trials.trial)
@@ -324,22 +342,22 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
             all_last_20 = whisker_trials.isel(trial=slice(last_20_idx, n_whisker))
 
             if len(all_first_20.trial) > 0:
-                avg = all_first_20.mean(dim='trial').mean(dim='cell')
+                avg = all_first_20.mean(dim='trial').squeeze()
                 if 'all_first_20pct' not in evolution_data:
                     evolution_data['all_first_20pct'] = {}
-                evolution_data['all_first_20pct'][mouse_id] = avg
+                evolution_data['all_first_20pct'][cell_key] = avg
 
             if len(all_middle.trial) > 0:
-                avg = all_middle.mean(dim='trial').mean(dim='cell')
+                avg = all_middle.mean(dim='trial').squeeze()
                 if 'all_middle_60pct' not in evolution_data:
                     evolution_data['all_middle_60pct'] = {}
-                evolution_data['all_middle_60pct'][mouse_id] = avg
+                evolution_data['all_middle_60pct'][cell_key] = avg
 
             if len(all_last_20.trial) > 0:
-                avg = all_last_20.mean(dim='trial').mean(dim='cell')
+                avg = all_last_20.mean(dim='trial').squeeze()
                 if 'all_last_20pct' not in evolution_data:
                     evolution_data['all_last_20pct'] = {}
-                evolution_data['all_last_20pct'][mouse_id] = avg
+                evolution_data['all_last_20pct'][cell_key] = avg
 
             # Hits and misses from same chronological positions
             hit_indices_all = np.where(lick_flags == 1)[0]
@@ -352,24 +370,24 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
 
             if len(hits_in_first_20) > 0:
                 hits = whisker_trials.isel(trial=hits_in_first_20)
-                avg = hits.mean(dim='trial').mean(dim='cell')
+                avg = hits.mean(dim='trial').squeeze()
                 if 'hits_first_20pct' not in evolution_data:
                     evolution_data['hits_first_20pct'] = {}
-                evolution_data['hits_first_20pct'][mouse_id] = avg
+                evolution_data['hits_first_20pct'][cell_key] = avg
 
             if len(hits_in_middle) > 0:
                 hits = whisker_trials.isel(trial=hits_in_middle)
-                avg = hits.mean(dim='trial').mean(dim='cell')
+                avg = hits.mean(dim='trial').squeeze()
                 if 'hits_middle_60pct' not in evolution_data:
                     evolution_data['hits_middle_60pct'] = {}
-                evolution_data['hits_middle_60pct'][mouse_id] = avg
+                evolution_data['hits_middle_60pct'][cell_key] = avg
 
             if len(hits_in_last_20) > 0:
                 hits = whisker_trials.isel(trial=hits_in_last_20)
-                avg = hits.mean(dim='trial').mean(dim='cell')
+                avg = hits.mean(dim='trial').squeeze()
                 if 'hits_last_20pct' not in evolution_data:
                     evolution_data['hits_last_20pct'] = {}
-                evolution_data['hits_last_20pct'][mouse_id] = avg
+                evolution_data['hits_last_20pct'][cell_key] = avg
 
             # Misses
             misses_in_first_20 = miss_indices_all[miss_indices_all < first_20_idx]
@@ -378,24 +396,24 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
 
             if len(misses_in_first_20) > 0:
                 misses = whisker_trials.isel(trial=misses_in_first_20)
-                avg = misses.mean(dim='trial').mean(dim='cell')
+                avg = misses.mean(dim='trial').squeeze()
                 if 'misses_first_20pct' not in evolution_data:
                     evolution_data['misses_first_20pct'] = {}
-                evolution_data['misses_first_20pct'][mouse_id] = avg
+                evolution_data['misses_first_20pct'][cell_key] = avg
 
             if len(misses_in_middle) > 0:
                 misses = whisker_trials.isel(trial=misses_in_middle)
-                avg = misses.mean(dim='trial').mean(dim='cell')
+                avg = misses.mean(dim='trial').squeeze()
                 if 'misses_middle_60pct' not in evolution_data:
                     evolution_data['misses_middle_60pct'] = {}
-                evolution_data['misses_middle_60pct'][mouse_id] = avg
+                evolution_data['misses_middle_60pct'][cell_key] = avg
 
             if len(misses_in_last_20) > 0:
                 misses = whisker_trials.isel(trial=misses_in_last_20)
-                avg = misses.mean(dim='trial').mean(dim='cell')
+                avg = misses.mean(dim='trial').squeeze()
                 if 'misses_last_20pct' not in evolution_data:
                     evolution_data['misses_last_20pct'] = {}
-                evolution_data['misses_last_20pct'][mouse_id] = avg
+                evolution_data['misses_last_20pct'][cell_key] = avg
 
         except Exception as e:
             print(f"      Warning: Could not process whisker evolution: {e}")
@@ -406,17 +424,17 @@ def compute_population_whisker_evolution(mice_list, lmi_group, reward_group):
 
 
 # =============================================================================
-# FUNCTION: plot_population_psth_summary
+# FUNCTION: plot_cell_psth_summary
 # =============================================================================
 
-def plot_population_psth_summary(psth_data, reward_group, lmi_group):
+def plot_cell_psth_summary(psth_data, reward_group, lmi_group):
     """
-    Plot PSTH summary page for population (6 rows × 5 columns).
+    Plot PSTH summary page for cell-level data (6 rows × 5 columns).
 
     Parameters
     ----------
     psth_data : dict
-        {trial_type: {mouse_id: averaged_xarray}}
+        {trial_type: {cell_key: averaged_xarray}}
     reward_group : str
         'R+' or 'R-'
     lmi_group : str
@@ -434,8 +452,8 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
 
     # Calculate global y-limits
     all_values = []
-    for key, mouse_dict in psth_data.items():
-        for mouse_id, xarr in mouse_dict.items():
+    for key, cell_dict in psth_data.items():
+        for cell_key, xarr in cell_dict.items():
             all_values.extend(xarr.values.flatten() * 100)
 
     if len(all_values) > 0:
@@ -468,11 +486,11 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
         key = f'mapping_day{day}'
 
         if key in psth_data and psth_data[key]:
-            # Combine all mice
+            # Combine all cells
             dfs = []
-            for mouse_id, xarr in psth_data[key].items():
+            for cell_key, xarr in psth_data[key].items():
                 df = xarr.to_dataframe(name='activity').reset_index()
-                df['mouse_id'] = mouse_id
+                df['cell_key'] = cell_key
                 dfs.append(df)
             df_combined = pd.concat(dfs)
             df_combined['activity'] = df_combined['activity'] * 100
@@ -481,8 +499,8 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
                         ax=ax, color=mapping_color, linewidth=2.5, linestyle='-')
 
             ax.axvline(0, color=stim_palette[1], linestyle='-', linewidth=1.5)
-            n_mice = len(psth_data[key])
-            ax.set_title(f'Day {day}\n(n={n_mice} mice)', fontsize=9, fontweight='bold')
+            n_cells = len(psth_data[key])
+            ax.set_title(f'Day {day}\n(n={n_cells} cells)', fontsize=9, fontweight='bold')
             ax.set_ylabel('DF/F0 (%)', fontsize=10)
 
             if col_idx == 0:
@@ -513,11 +531,11 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
             key = f'{trial_key}_day{day}'
 
             if key in psth_data and psth_data[key]:
-                # Combine all mice
+                # Combine all cells
                 dfs = []
-                for mouse_id, xarr in psth_data[key].items():
+                for cell_key, xarr in psth_data[key].items():
                     df = xarr.to_dataframe(name='activity').reset_index()
-                    df['mouse_id'] = mouse_id
+                    df['cell_key'] = cell_key
                     dfs.append(df)
                 df_combined = pd.concat(dfs)
                 df_combined['activity'] = df_combined['activity'] * 100
@@ -526,8 +544,8 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
                             ax=ax, color=color, linewidth=2.5, linestyle=linestyle)
 
                 ax.axvline(0, color=t0_color, linestyle='-', linewidth=1.5)
-                n_mice = len(psth_data[key])
-                ax.set_title(f'Day {day}\n(n={n_mice} mice)', fontsize=9, fontweight='bold')
+                n_cells = len(psth_data[key])
+                ax.set_title(f'Day {day}\n(n={n_cells} cells)', fontsize=9, fontweight='bold')
                 ax.set_ylabel('DF/F0 (%)', fontsize=10)
 
                 if col_idx == 0:
@@ -557,7 +575,7 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
     else:
         title_color = reward_palette[1]
 
-    fig.suptitle(f'{reward_group} - {lmi_label} LMI Cells - Population PSTH Summary',
+    fig.suptitle(f'{reward_group} - {lmi_label} LMI Cells - Cell-Level PSTH Summary',
                 fontsize=16, fontweight='bold', color=title_color)
 
     sns.despine(fig=fig)
@@ -566,17 +584,17 @@ def plot_population_psth_summary(psth_data, reward_group, lmi_group):
 
 
 # =============================================================================
-# FUNCTION: plot_population_whisker_evolution
+# FUNCTION: plot_cell_whisker_evolution
 # =============================================================================
 
-def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
+def plot_cell_whisker_evolution(evolution_data, reward_group, lmi_group):
     """
-    Plot whisker evolution page for population (4 rows × 3 columns).
+    Plot whisker evolution page for cell-level data (4 rows × 3 columns).
 
     Parameters
     ----------
     evolution_data : dict
-        {data_key: {mouse_id: averaged_xarray}}
+        {data_key: {cell_key: averaged_xarray}}
     reward_group : str
         'R+' or 'R-'
     lmi_group : str
@@ -594,8 +612,8 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
 
     # Calculate global y-limits
     all_values = []
-    for key, mouse_dict in evolution_data.items():
-        for mouse_id, xarr in mouse_dict.items():
+    for key, cell_dict in evolution_data.items():
+        for cell_key, xarr in cell_dict.items():
             all_values.extend(xarr.values.flatten() * 100)
 
     if len(all_values) > 0:
@@ -629,20 +647,20 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
     ax = axes[0, 0]
     if 'misses_before_first_hit' in evolution_data and evolution_data['misses_before_first_hit']:
         dfs = []
-        for mouse_id, xarr in evolution_data['misses_before_first_hit'].items():
+        for cell_key, xarr in evolution_data['misses_before_first_hit'].items():
             df = xarr.to_dataframe(name='activity').reset_index()
-            df['mouse_id'] = mouse_id
+            df['cell_key'] = cell_key
             dfs.append(df)
         df_combined = pd.concat(dfs)
         df_combined['activity'] = df_combined['activity'] * 100
 
-        n_mice = len(evolution_data['misses_before_first_hit'])
+        n_cells = len(evolution_data['misses_before_first_hit'])
 
         sns.lineplot(data=df_combined, x='time', y='activity', errorbar='ci',
                     ax=ax, color=trial_color_miss, linewidth=2.5, linestyle='--')
 
         ax.axvline(0, color=stim_palette[1], linestyle='-', linewidth=1.5)
-        ax.set_title(f'Avg misses before 1st hit\n(n={n_mice} mice)', fontsize=10, fontweight='bold')
+        ax.set_title(f'Avg misses before 1st hit\n(n={n_cells} cells)', fontsize=10, fontweight='bold')
         ax.set_ylabel('DF/F0 (%)', fontsize=10)
     else:
         ax.text(0.5, 0.5, 'No misses\nbefore 1st hit', ha='center', va='center',
@@ -657,20 +675,20 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
     ax = axes[0, 1]
     if 'first_hit' in evolution_data and evolution_data['first_hit']:
         dfs = []
-        for mouse_id, xarr in evolution_data['first_hit'].items():
+        for cell_key, xarr in evolution_data['first_hit'].items():
             df = xarr.to_dataframe(name='activity').reset_index()
-            df['mouse_id'] = mouse_id
+            df['cell_key'] = cell_key
             dfs.append(df)
         df_combined = pd.concat(dfs)
         df_combined['activity'] = df_combined['activity'] * 100
 
-        n_mice = len(evolution_data['first_hit'])
+        n_cells = len(evolution_data['first_hit'])
 
         sns.lineplot(data=df_combined, x='time', y='activity', errorbar='ci',
                     ax=ax, color=trial_color_hit, linewidth=2.5, linestyle='-')
 
         ax.axvline(0, color=stim_palette[1], linestyle='-', linewidth=1.5)
-        ax.set_title(f'First whisker hit\n(n={n_mice} mice)', fontsize=10, fontweight='bold')
+        ax.set_title(f'First whisker hit\n(n={n_cells} cells)', fontsize=10, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'No first hit', ha='center', va='center',
                transform=ax.transAxes, fontsize=9)
@@ -680,20 +698,20 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
     ax = axes[0, 2]
     if 'next_5_after_hit' in evolution_data and evolution_data['next_5_after_hit']:
         dfs = []
-        for mouse_id, xarr in evolution_data['next_5_after_hit'].items():
+        for cell_key, xarr in evolution_data['next_5_after_hit'].items():
             df = xarr.to_dataframe(name='activity').reset_index()
-            df['mouse_id'] = mouse_id
+            df['cell_key'] = cell_key
             dfs.append(df)
         df_combined = pd.concat(dfs)
         df_combined['activity'] = df_combined['activity'] * 100
 
-        n_mice = len(evolution_data['next_5_after_hit'])
+        n_cells = len(evolution_data['next_5_after_hit'])
 
         sns.lineplot(data=df_combined, x='time', y='activity', errorbar='ci',
                     ax=ax, color=trial_color_hit, linewidth=2.5, linestyle='-')
 
         ax.axvline(0, color=stim_palette[1], linestyle='-', linewidth=1.5)
-        ax.set_title(f'Avg next 5 trials\nafter 1st hit (n={n_mice} mice)', fontsize=10, fontweight='bold')
+        ax.set_title(f'Avg next 5 trials\nafter 1st hit (n={n_cells} cells)', fontsize=10, fontweight='bold')
     else:
         ax.text(0.5, 0.5, 'No trials\nafter 1st hit', ha='center', va='center',
                transform=ax.transAxes, fontsize=9)
@@ -734,21 +752,21 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
 
             if key in evolution_data and evolution_data[key]:
                 dfs = []
-                for mouse_id, xarr in evolution_data[key].items():
+                for cell_key, xarr in evolution_data[key].items():
                     df = xarr.to_dataframe(name='activity').reset_index()
-                    df['mouse_id'] = mouse_id
+                    df['cell_key'] = cell_key
                     dfs.append(df)
                 df_combined = pd.concat(dfs)
                 df_combined['activity'] = df_combined['activity'] * 100
 
-                n_mice = len(evolution_data[key])
+                n_cells = len(evolution_data[key])
 
                 # Plot PSTH with confidence interval
                 sns.lineplot(data=df_combined, x='time', y='activity', errorbar='ci',
                             ax=ax, color=color, linewidth=2.5, linestyle=linestyle)
 
                 ax.axvline(0, color=stim_palette[1], linestyle='-', linewidth=1.5)
-                ax.set_title(f'{pct_label}\n(n={n_mice} mice)', fontsize=9, fontweight='bold')
+                ax.set_title(f'{pct_label}\n(n={n_cells} cells)', fontsize=9, fontweight='bold')
 
                 if col_idx == 0:
                     ax.set_ylabel('DF/F0 (%)', fontsize=10)
@@ -786,7 +804,7 @@ def plot_population_whisker_evolution(evolution_data, reward_group, lmi_group):
 # =============================================================================
 
 print(f"\n{'='*70}")
-print(f"GENERATING LMI POPULATION ANALYSIS PDF")
+print(f"GENERATING LMI CELL-LEVEL ANALYSIS PDF")
 print(f"{'='*70}\n")
 
 pdf_path = os.path.join(OUTPUT_DIR, pdf_name)
@@ -799,29 +817,28 @@ with PdfPages(pdf_path) as pdf:
             print(f"Processing {reward_group} - {lmi_group} LMI cells")
             print(f"{'-'*70}")
 
-            # Filter mice for this reward group that have cells in this LMI group
-            mice_list = [
-                m for m in all_mice
-                if cell_organization[m]['reward_group'] == reward_group
-                and len(cell_organization[m][lmi_group]) > 0
+            # Get list of cells for this reward group and LMI group
+            cell_list = [
+                cell_key for cell_key, meta in cell_metadata.items()
+                if meta['reward_group'] == reward_group and meta['lmi_group'] == lmi_group
             ]
 
-            if not mice_list:
-                print(f"  No mice with {lmi_group} LMI cells in {reward_group} group, skipping...")
+            if not cell_list:
+                print(f"  No cells in {reward_group} {lmi_group} group, skipping...")
                 continue
 
-            print(f"  Mice included: {mice_list}")
+            print(f"  Cells included: {len(cell_list)}")
 
             # Compute and plot PSTH summary
-            psth_data = compute_population_psth_summary(mice_list, lmi_group, reward_group)
-            fig_psth = plot_population_psth_summary(psth_data, reward_group, lmi_group)
+            psth_data = compute_cell_psth_summary(cell_list, lmi_group, reward_group)
+            fig_psth = plot_cell_psth_summary(psth_data, reward_group, lmi_group)
             pdf.savefig(fig_psth, bbox_inches='tight')
             plt.close(fig_psth)
             print(f"  ✓ PSTH summary page added to PDF")
 
             # Compute and plot whisker evolution
-            evolution_data = compute_population_whisker_evolution(mice_list, lmi_group, reward_group)
-            fig_evolution = plot_population_whisker_evolution(evolution_data, reward_group, lmi_group)
+            evolution_data = compute_cell_whisker_evolution(cell_list, lmi_group, reward_group)
+            fig_evolution = plot_cell_whisker_evolution(evolution_data, reward_group, lmi_group)
             pdf.savefig(fig_evolution, bbox_inches='tight')
             plt.close(fig_evolution)
             print(f"  ✓ Whisker evolution page added to PDF")
