@@ -32,13 +32,17 @@ def load_mouse_xarray(mouse_id, dir_path, file_name, substracted=True):
     #     array_path = local_path
     # # Load the xarray dataset.
     print(f'Loading {array_path}')
-    data = xr.open_dataarray(array_path)
-    
+    data = xr.open_dataarray(array_path, lock=False)
+
     # Deal with a few artefact cells.
     if mouse_id == 'AR176':
         data = data.sel(cell=~data['roi'].isin([46, 85, 105]))
     if mouse_id == 'AR180':
         data = data.sel(cell=data['roi'] != 79)
+
+    # Load into memory and close file immediately to prevent file handle accumulation
+    data = data.load()
+    data.close()
 
     return data
 

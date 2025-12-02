@@ -13,7 +13,6 @@ sns.set_theme(
         'pdf.fonttype': 42,
         'ps.fonttype': 42,
         'svg.fonttype': 'none',
-        
         'axes.linewidth': 0.8,
         'xtick.major.width': 0.8,
         'ytick.major.width': 0.8,
@@ -47,8 +46,8 @@ s2_m1_palette = sns.color_palette(['#ca59afff', '#0100fdff'])
 # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
 stim_palette = sns.color_palette(['#0100fdff', '#FF9600', '#010101ff'])
 behavior_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#980099ff', '#009600ff', '#807f7fff', '#010101ff'])
-trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])
-trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])
+trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
+trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
 
 # Mice groups.
 mice_groups = {

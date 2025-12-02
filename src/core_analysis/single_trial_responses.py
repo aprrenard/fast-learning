@@ -23,7 +23,7 @@ from src.utils.utils_behavior import *
 # ===========================================================
 
 # Parameters
-n_cells_per_group = 20  # Number of top positive/negative cells per reward group
+n_cells_per_group = 30  # Number of top positive/negative cells per reward group
 trials_per_row = 10  # Number of trials per row in grid
 max_rows_per_page = 10  # Maximum number of rows per page before creating a new page
 sampling_rate = 30
@@ -127,15 +127,17 @@ def compute_cell_psths(mouse_id, roi, folder):
         if len(cell_idx) > 0:
             xarr_learning_cell = xarr_learning.isel(cell=cell_idx[0])
 
-            # Whisker hits
+            # Whisker hits (exclude pre-learning days -2, -1 as these are mistaken trials)
             xarr_w_hit = xarr_learning_cell.sel(trial=(xarr_learning_cell['whisker_stim'] == 1) &
-                                                       (xarr_learning_cell['lick_flag'] == 1))
+                                                       (xarr_learning_cell['lick_flag'] == 1) &
+                                                       (~xarr_learning_cell['day'].isin([-2, -1])))
             if len(xarr_w_hit.trial) > 0:
                 psth_data['whisker_hit'] = xarr_w_hit
 
-            # Whisker misses
+            # Whisker misses (exclude pre-learning days -2, -1 as these are mistaken trials)
             xarr_w_miss = xarr_learning_cell.sel(trial=(xarr_learning_cell['whisker_stim'] == 1) &
-                                                        (xarr_learning_cell['lick_flag'] == 0))
+                                                        (xarr_learning_cell['lick_flag'] == 0) &
+                                                        (~xarr_learning_cell['day'].isin([-2, -1])))
             if len(xarr_w_miss.trial) > 0:
                 psth_data['whisker_miss'] = xarr_w_miss
 
@@ -682,6 +684,7 @@ with PdfPages(output_pdf) as pdf:
             print(f"  Cell ROI {roi} not found in data, skipping")
             continue
         xarr_cell = xarr_stim.isel(cell=cell_idx[0])
+        xarr_cell.load()  # Load into memory and close file handle
 
         # Load lick-aligned data for false alarms
         file_name_lick = 'lick_aligned_xarray.nc'
@@ -694,6 +697,7 @@ with PdfPages(output_pdf) as pdf:
             xarr_cell_lick = None
         else:
             xarr_cell_lick = xarr_lick.isel(cell=cell_idx_lick[0])
+            xarr_cell_lick.load()  # Load into memory and close file handle
 
         # ===== Generate PSTH summary page =====
         print(f"  Generating PSTH summary page...")

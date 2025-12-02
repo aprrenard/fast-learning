@@ -85,32 +85,24 @@ lmi_df['significant_pos_lmi'] = lmi_df['lmi_p'] >= 0.975
 lmi_df['significant_neg_lmi'] = lmi_df['lmi_p'] <= 0.025
 
 # Top percentiles for positive and negative LMI separately (calculated across ALL cells)
+# Simplified to only keep top 20%
 pos_lmi = lmi_df[lmi_df['lmi'] > 0]['lmi']
 neg_lmi = lmi_df[lmi_df['lmi'] < 0]['lmi']
 
-lmi_df['top_5pct_pos_lmi'] = False
-lmi_df['top_10pct_pos_lmi'] = False
 lmi_df['top_20pct_pos_lmi'] = False
-lmi_df['top_5pct_neg_lmi'] = False
-lmi_df['top_10pct_neg_lmi'] = False
 lmi_df['top_20pct_neg_lmi'] = False
 
 if len(pos_lmi) > 0:
-    lmi_df.loc[lmi_df['lmi'] > 0, 'top_5pct_pos_lmi'] = lmi_df.loc[lmi_df['lmi'] > 0, 'lmi'] >= np.percentile(pos_lmi, 95)
-    lmi_df.loc[lmi_df['lmi'] > 0, 'top_10pct_pos_lmi'] = lmi_df.loc[lmi_df['lmi'] > 0, 'lmi'] >= np.percentile(pos_lmi, 90)
     lmi_df.loc[lmi_df['lmi'] > 0, 'top_20pct_pos_lmi'] = lmi_df.loc[lmi_df['lmi'] > 0, 'lmi'] >= np.percentile(pos_lmi, 80)
 
 if len(neg_lmi) > 0:
-    lmi_df.loc[lmi_df['lmi'] < 0, 'top_5pct_neg_lmi'] = lmi_df.loc[lmi_df['lmi'] < 0, 'lmi'] <= np.percentile(neg_lmi, 5)
-    lmi_df.loc[lmi_df['lmi'] < 0, 'top_10pct_neg_lmi'] = lmi_df.loc[lmi_df['lmi'] < 0, 'lmi'] <= np.percentile(neg_lmi, 10)
     lmi_df.loc[lmi_df['lmi'] < 0, 'top_20pct_neg_lmi'] = lmi_df.loc[lmi_df['lmi'] < 0, 'lmi'] <= np.percentile(neg_lmi, 20)
 
 # Compute within-type proportions (only for wS2 and wM1)
 # This answers: "Of all wS2 cells, what % are in top X%?"
 lmi_criteria = [
     'significant_pos_lmi', 'significant_neg_lmi',
-    'top_5pct_pos_lmi', 'top_10pct_pos_lmi', 'top_20pct_pos_lmi',
-    'top_5pct_neg_lmi', 'top_10pct_neg_lmi', 'top_20pct_neg_lmi'
+    'top_20pct_pos_lmi', 'top_20pct_neg_lmi'
 ]
 lmi_proportions = []
 
@@ -212,37 +204,25 @@ print(f"Cell types (all): {weights_df['cell_type_group'].value_counts().to_dict(
 
 # Define weight criteria ON ALL CELLS (including non-projectors)
 # This is important for composition analysis: "Of top X% of ALL cells, what % are projectors?"
+# Simplified to only keep top 20%
 pos_weights = weights_df[weights_df['classifier_weight'] > 0]['classifier_weight']
 neg_weights = weights_df[weights_df['classifier_weight'] < 0]['classifier_weight']
 
-weights_df['top_5pct_pos_weight'] = False
-weights_df['top_10pct_pos_weight'] = False
 weights_df['top_20pct_pos_weight'] = False
-weights_df['top_5pct_neg_weight'] = False
-weights_df['top_10pct_neg_weight'] = False
 weights_df['top_20pct_neg_weight'] = False
 
 if len(pos_weights) > 0:
-    weights_df.loc[weights_df['classifier_weight'] > 0, 'top_5pct_pos_weight'] = \
-        weights_df.loc[weights_df['classifier_weight'] > 0, 'classifier_weight'] >= np.percentile(pos_weights, 95)
-    weights_df.loc[weights_df['classifier_weight'] > 0, 'top_10pct_pos_weight'] = \
-        weights_df.loc[weights_df['classifier_weight'] > 0, 'classifier_weight'] >= np.percentile(pos_weights, 90)
     weights_df.loc[weights_df['classifier_weight'] > 0, 'top_20pct_pos_weight'] = \
         weights_df.loc[weights_df['classifier_weight'] > 0, 'classifier_weight'] >= np.percentile(pos_weights, 80)
 
 if len(neg_weights) > 0:
-    weights_df.loc[weights_df['classifier_weight'] < 0, 'top_5pct_neg_weight'] = \
-        weights_df.loc[weights_df['classifier_weight'] < 0, 'classifier_weight'] <= np.percentile(neg_weights, 5)
-    weights_df.loc[weights_df['classifier_weight'] < 0, 'top_10pct_neg_weight'] = \
-        weights_df.loc[weights_df['classifier_weight'] < 0, 'classifier_weight'] <= np.percentile(neg_weights, 10)
     weights_df.loc[weights_df['classifier_weight'] < 0, 'top_20pct_neg_weight'] = \
         weights_df.loc[weights_df['classifier_weight'] < 0, 'classifier_weight'] <= np.percentile(neg_weights, 20)
 
 # Compute within-type proportions (only for wS2 and wM1)
 # This answers: "Of all wS2 cells, what % are in top X% weights?"
 weight_criteria = [
-    'top_5pct_pos_weight', 'top_10pct_pos_weight', 'top_20pct_pos_weight',
-    'top_5pct_neg_weight', 'top_10pct_neg_weight', 'top_20pct_neg_weight'
+    'top_20pct_pos_weight', 'top_20pct_neg_weight'
 ]
 weight_proportions = []
 
@@ -297,150 +277,14 @@ print("Saved: weight_proportions_composition.csv")
 
 
 # =============================================================================
-# PART 3: ACROSS-MICE ANALYSIS
+# PART 3: STATISTICAL TESTING (POOLED DATA)
 # =============================================================================
 
-print("\nPART 3: ACROSS-MICE ANALYSIS")
+print("\nPART 3: STATISTICAL TESTING (POOLED DATA)")
 print("-" * 80)
 
-# Parameter: minimum number of cells per cell type per mouse
+# Parameter: minimum number of cells per cell type per mouse (for average values analysis)
 MIN_CELLS_THRESHOLD = 5
-
-def compute_per_mouse_proportions(df, criteria, cell_types_to_analyze, min_cells=5):
-    """
-    Compute proportions per mouse, excluding mice with < min_cells of a given type.
-
-    Parameters:
-    -----------
-    df : DataFrame with columns: mouse_id, reward_group, cell_type_group, and boolean criterion columns
-    criteria : list of criterion column names (e.g., ['significant_pos_lmi', ...])
-    cell_types_to_analyze : list of cell types to analyze
-    min_cells : minimum number of cells required per cell type per mouse
-
-    Returns:
-    --------
-    DataFrame with columns: mouse_id, reward_group, cell_type, criterion, proportion
-    """
-    proportions_per_mouse = []
-
-    for mouse_id in df['mouse_id'].unique():
-        mouse_data = df[df['mouse_id'] == mouse_id]
-        reward_group = mouse_data['reward_group'].iloc[0]
-
-        for cell_type in cell_types_to_analyze:
-            # Get cells of this type for this mouse
-            type_data = mouse_data[mouse_data['cell_type_group'] == cell_type]
-            n_total = len(type_data)
-
-            # Skip if below threshold
-            if n_total < min_cells:
-                continue
-
-            for criterion in criteria:
-                n_met = type_data[criterion].sum()
-                proportion = n_met / n_total if n_total > 0 else 0
-
-                proportions_per_mouse.append({
-                    'mouse_id': mouse_id,
-                    'reward_group': reward_group,
-                    'cell_type': cell_type,
-                    'criterion': criterion,
-                    'n_total': n_total,
-                    'n_met': n_met,
-                    'proportion': proportion
-                })
-
-    return pd.DataFrame(proportions_per_mouse)
-
-def compute_per_mouse_composition(df, criteria, cell_types_to_include, min_cells=5):
-    """
-    Compute composition per mouse: of top X% cells, what % are each cell type?
-    Excludes mice with < min_cells in top X% for a given criterion.
-
-    Parameters:
-    -----------
-    df : DataFrame with columns: mouse_id, reward_group, cell_type_group, and boolean criterion columns
-    criteria : list of criterion column names
-    cell_types_to_include : list of cell types to include in composition
-    min_cells : minimum number of cells in top X% required to include mouse
-
-    Returns:
-    --------
-    DataFrame with columns: mouse_id, reward_group, cell_type, criterion, proportion
-    """
-    composition_per_mouse = []
-
-    for mouse_id in df['mouse_id'].unique():
-        mouse_data = df[df['mouse_id'] == mouse_id]
-        reward_group = mouse_data['reward_group'].iloc[0]
-
-        for criterion in criteria:
-            # Get cells meeting this criterion
-            top_cells = mouse_data[mouse_data[criterion] == True]
-            n_top_total = len(top_cells)
-
-            # Skip if too few cells in top X%
-            if n_top_total < min_cells:
-                continue
-
-            for cell_type in cell_types_to_include:
-                n_this_type = len(top_cells[top_cells['cell_type_group'] == cell_type])
-                proportion = n_this_type / n_top_total if n_top_total > 0 else 0
-
-                composition_per_mouse.append({
-                    'mouse_id': mouse_id,
-                    'reward_group': reward_group,
-                    'cell_type': cell_type,
-                    'criterion': criterion,
-                    'n_top_total': n_top_total,
-                    'n_this_type': n_this_type,
-                    'proportion': proportion
-                })
-
-    return pd.DataFrame(composition_per_mouse)
-
-# LMI: Per-mouse within-type proportions
-print(f"Computing LMI per-mouse proportions (min {MIN_CELLS_THRESHOLD} cells)...")
-df_lmi_props_mice = compute_per_mouse_proportions(
-    lmi_df, lmi_criteria, cell_types, min_cells=MIN_CELLS_THRESHOLD
-)
-df_lmi_props_mice.to_csv(os.path.join(output_dir, 'lmi_proportions_within_per_mouse.csv'), index=False)
-print(f"  Saved: lmi_proportions_within_per_mouse.csv")
-print(f"  Included {df_lmi_props_mice['mouse_id'].nunique()} mice (after threshold filter)")
-
-# LMI: Per-mouse composition (only wS2 and wM1, not non-projectors)
-print(f"Computing LMI per-mouse composition (min {MIN_CELLS_THRESHOLD} cells in top X%)...")
-df_lmi_comp_mice = compute_per_mouse_composition(
-    lmi_df, lmi_criteria, cell_types, min_cells=MIN_CELLS_THRESHOLD  # Only wS2 and wM1
-)
-df_lmi_comp_mice.to_csv(os.path.join(output_dir, 'lmi_proportions_composition_per_mouse.csv'), index=False)
-print(f"  Saved: lmi_proportions_composition_per_mouse.csv")
-print(f"  Included {df_lmi_comp_mice['mouse_id'].nunique()} mice (after threshold filter)")
-
-# Weights: Per-mouse within-type proportions
-print(f"Computing weight per-mouse proportions (min {MIN_CELLS_THRESHOLD} cells)...")
-df_weight_props_mice = compute_per_mouse_proportions(
-    weights_df, weight_criteria, cell_types, min_cells=MIN_CELLS_THRESHOLD
-)
-df_weight_props_mice.to_csv(os.path.join(output_dir, 'weight_proportions_within_per_mouse.csv'), index=False)
-print(f"  Saved: weight_proportions_within_per_mouse.csv")
-print(f"  Included {df_weight_props_mice['mouse_id'].nunique()} mice (after threshold filter)")
-
-# Weights: Per-mouse composition (only wS2 and wM1, not non-projectors)
-print(f"Computing weight per-mouse composition (min {MIN_CELLS_THRESHOLD} cells in top X%)...")
-df_weight_comp_mice = compute_per_mouse_composition(
-    weights_df, weight_criteria, cell_types, min_cells=MIN_CELLS_THRESHOLD  # Only wS2 and wM1
-)
-df_weight_comp_mice.to_csv(os.path.join(output_dir, 'weight_proportions_composition_per_mouse.csv'), index=False)
-print(f"  Saved: weight_proportions_composition_per_mouse.csv")
-print(f"  Included {df_weight_comp_mice['mouse_id'].nunique()} mice (after threshold filter)")
-
-# =============================================================================
-# PART 3b: STATISTICAL TESTING
-# =============================================================================
-
-print("\nPART 3b: STATISTICAL TESTING")
-print("-" * 80)
 
 def pvalue_to_stars(p):
     """Convert p-value to significance notation."""
@@ -492,44 +336,7 @@ def compute_fisher_exact_pvalue(raw_df, reward_group, criterion, cell_type_col='
         'stars': pvalue_to_stars(pvalue)
     }
 
-def compute_mannwhitney_pvalue(df_props_mice, reward_group, criterion):
-    """
-    Compute Mann-Whitney U test for across-mice data comparing wS2 vs wM1.
-
-    Parameters:
-    -----------
-    df_props_mice : DataFrame with per-mouse proportions
-    reward_group : 'R+' or 'R-'
-    criterion : criterion column name
-
-    Returns:
-    --------
-    dict with statistic, pvalue, stars
-    """
-    # Filter data
-    data_rg = df_props_mice[df_props_mice['reward_group'] == reward_group]
-    data_criterion = data_rg[data_rg['criterion'] == criterion]
-
-    # Extract proportions for wS2 and wM1
-    wS2_props = data_criterion[data_criterion['cell_type'] == 'wS2']['proportion'].values
-    wM1_props = data_criterion[data_criterion['cell_type'] == 'wM1']['proportion'].values
-
-    # Mann-Whitney U test
-    if len(wS2_props) > 0 and len(wM1_props) > 0:
-        statistic, pvalue = mannwhitneyu(wS2_props, wM1_props, alternative='two-sided')
-        return {
-            'statistic': statistic,
-            'pvalue': pvalue,
-            'stars': pvalue_to_stars(pvalue)
-        }
-    else:
-        return {
-            'statistic': np.nan,
-            'pvalue': np.nan,
-            'stars': 'NA'
-        }
-
-# Compute statistics for LMI (pooled)
+# Compute statistics for LMI (pooled - Fisher's exact test)
 print("Computing LMI statistics (pooled - Fisher's exact test)...")
 lmi_stats_pooled = []
 for reward_group in ['R+', 'R-']:
@@ -548,26 +355,7 @@ df_lmi_stats_pooled = pd.DataFrame(lmi_stats_pooled)
 df_lmi_stats_pooled.to_csv(os.path.join(output_dir, 'lmi_statistics_pooled.csv'), index=False)
 print(f"  Saved: lmi_statistics_pooled.csv")
 
-# Compute statistics for LMI (across-mice)
-print("Computing LMI statistics (across-mice - Mann-Whitney U test)...")
-lmi_stats_mice = []
-for reward_group in ['R+', 'R-']:
-    for criterion in lmi_criteria:
-        result = compute_mannwhitney_pvalue(df_lmi_props_mice, reward_group, criterion)
-        lmi_stats_mice.append({
-            'reward_group': reward_group,
-            'criterion': criterion,
-            'test_type': 'mann_whitney',
-            'statistic': result['statistic'],
-            'pvalue': result['pvalue'],
-            'stars': result['stars']
-        })
-
-df_lmi_stats_mice = pd.DataFrame(lmi_stats_mice)
-df_lmi_stats_mice.to_csv(os.path.join(output_dir, 'lmi_statistics_across_mice.csv'), index=False)
-print(f"  Saved: lmi_statistics_across_mice.csv")
-
-# Compute statistics for Weights (pooled)
+# Compute statistics for Weights (pooled - Fisher's exact test)
 print("Computing weight statistics (pooled - Fisher's exact test)...")
 weight_stats_pooled = []
 for reward_group in ['R+', 'R-']:
@@ -586,31 +374,12 @@ df_weight_stats_pooled = pd.DataFrame(weight_stats_pooled)
 df_weight_stats_pooled.to_csv(os.path.join(output_dir, 'weight_statistics_pooled.csv'), index=False)
 print(f"  Saved: weight_statistics_pooled.csv")
 
-# Compute statistics for Weights (across-mice)
-print("Computing weight statistics (across-mice - Mann-Whitney U test)...")
-weight_stats_mice = []
-for reward_group in ['R+', 'R-']:
-    for criterion in weight_criteria:
-        result = compute_mannwhitney_pvalue(df_weight_props_mice, reward_group, criterion)
-        weight_stats_mice.append({
-            'reward_group': reward_group,
-            'criterion': criterion,
-            'test_type': 'mann_whitney',
-            'statistic': result['statistic'],
-            'pvalue': result['pvalue'],
-            'stars': result['stars']
-        })
-
-df_weight_stats_mice = pd.DataFrame(weight_stats_mice)
-df_weight_stats_mice.to_csv(os.path.join(output_dir, 'weight_statistics_across_mice.csv'), index=False)
-print(f"  Saved: weight_statistics_across_mice.csv")
-
 # =============================================================================
-# PART 3c: AVERAGE VALUES ANALYSIS (LMI and Weights)
+# PART 4: AVERAGE VALUES ANALYSIS (LMI and Weights) ACROSS MICE
 # =============================================================================
 # IMPORTANT: To properly analyze positive vs negative LMI/weights, we compute
 # per-mouse averages SEPARATELY for positive and negative cells.
-# 
+#
 # Previous approach (INCORRECT):
 #   1. Compute per-mouse mean across ALL cells (mixing positive and negative)
 #   2. Filter mice where mean > 0 or mean < 0
@@ -624,7 +393,7 @@ print(f"  Saved: weight_statistics_across_mice.csv")
 #      not an average that mixes both polarities
 # =============================================================================
 
-print("\nPART 3c: AVERAGE VALUES ANALYSIS")
+print("\nPART 4: AVERAGE VALUES ANALYSIS")
 print("-" * 80)
 
 # Compute per-mouse mean LMI for wS2 and wM1
@@ -960,24 +729,164 @@ df_weight_mean_stats_neg.to_csv(os.path.join(output_dir, 'weight_mean_values_sta
 print(f"  Saved: weight_mean_values_statistics_negative.csv")
 
 # =============================================================================
-# PART 4: VISUALIZATIONS
+# PART 5: CUMULATIVE DISTRIBUTION ANALYSIS (KS TEST)
+# =============================================================================
+# This analysis compares the full distributions of LMI/weights between wS2 and wM1
+# without arbitrary thresholding. The Kolmogorov-Smirnov test quantifies whether
+# wS2 cells tend to have systematically higher values than wM1 cells.
 # =============================================================================
 
-print("\nPART 4: VISUALIZATIONS")
+print("\nPART 5: CUMULATIVE DISTRIBUTION ANALYSIS")
+print("-" * 80)
+
+# Function to compute KS test and save results
+def compute_ks_test_for_distributions(df, value_column, reward_groups, cell_types_to_compare,
+                                     positive_only=False, negative_only=False):
+    """
+    Compute Kolmogorov-Smirnov test comparing distributions between cell types.
+
+    Parameters:
+    -----------
+    df : DataFrame with cell-level data
+    value_column : column name containing values to compare (e.g., 'lmi', 'classifier_weight')
+    reward_groups : list of reward groups to analyze
+    cell_types_to_compare : list of cell types to compare (e.g., ['wS2', 'wM1'])
+    positive_only : if True, only consider positive values
+    negative_only : if True, only consider negative values
+
+    Returns:
+    --------
+    DataFrame with KS test results
+    """
+    results = []
+
+    for reward_group in reward_groups:
+        data_rg = df[df['reward_group'] == reward_group]
+
+        # Apply filters for positive/negative
+        if positive_only:
+            data_rg = data_rg[data_rg[value_column] > 0]
+        elif negative_only:
+            data_rg = data_rg[data_rg[value_column] < 0]
+
+        # Get distributions for each cell type
+        wS2_values = data_rg[data_rg['cell_type_group'] == 'wS2'][value_column].values
+        wM1_values = data_rg[data_rg['cell_type_group'] == 'wM1'][value_column].values
+
+        if len(wS2_values) > 0 and len(wM1_values) > 0:
+            # Two-sided KS test: tests if distributions are different
+            statistic_2sided, pvalue_2sided = ks_2samp(wS2_values, wM1_values, alternative='two-sided')
+
+            # One-sided KS test: tests if wS2 distribution is shifted toward higher values
+            statistic_greater, pvalue_greater = ks_2samp(wS2_values, wM1_values, alternative='greater')
+
+            # One-sided KS test: tests if wS2 distribution is shifted toward lower values
+            statistic_less, pvalue_less = ks_2samp(wS2_values, wM1_values, alternative='less')
+
+            results.append({
+                'reward_group': reward_group,
+                'value_type': 'positive' if positive_only else ('negative' if negative_only else 'all'),
+                'n_wS2': len(wS2_values),
+                'n_wM1': len(wM1_values),
+                'mean_wS2': np.mean(wS2_values),
+                'mean_wM1': np.mean(wM1_values),
+                'median_wS2': np.median(wS2_values),
+                'median_wM1': np.median(wM1_values),
+                'ks_statistic_2sided': statistic_2sided,
+                'ks_pvalue_2sided': pvalue_2sided,
+                'ks_stars_2sided': pvalue_to_stars(pvalue_2sided),
+                'ks_statistic_greater': statistic_greater,
+                'ks_pvalue_greater': pvalue_greater,
+                'ks_stars_greater': pvalue_to_stars(pvalue_greater),
+                'ks_statistic_less': statistic_less,
+                'ks_pvalue_less': pvalue_less,
+                'ks_stars_less': pvalue_to_stars(pvalue_less)
+            })
+        else:
+            results.append({
+                'reward_group': reward_group,
+                'value_type': 'positive' if positive_only else ('negative' if negative_only else 'all'),
+                'n_wS2': len(wS2_values),
+                'n_wM1': len(wM1_values),
+                'mean_wS2': np.nan,
+                'mean_wM1': np.nan,
+                'median_wS2': np.nan,
+                'median_wM1': np.nan,
+                'ks_statistic_2sided': np.nan,
+                'ks_pvalue_2sided': np.nan,
+                'ks_stars_2sided': 'NA',
+                'ks_statistic_greater': np.nan,
+                'ks_pvalue_greater': np.nan,
+                'ks_stars_greater': 'NA',
+                'ks_statistic_less': np.nan,
+                'ks_pvalue_less': np.nan,
+                'ks_stars_less': 'NA'
+            })
+
+    return pd.DataFrame(results)
+
+# LMI: KS test for all values
+print("Computing KS test for LMI distributions...")
+df_lmi_ks_all = compute_ks_test_for_distributions(
+    lmi_df, 'lmi', ['R+', 'R-'], ['wS2', 'wM1']
+)
+df_lmi_ks_all.to_csv(os.path.join(output_dir, 'lmi_ks_test_all.csv'), index=False)
+print(f"  Saved: lmi_ks_test_all.csv")
+
+# LMI: KS test for positive values only
+df_lmi_ks_pos = compute_ks_test_for_distributions(
+    lmi_df, 'lmi', ['R+', 'R-'], ['wS2', 'wM1'], positive_only=True
+)
+df_lmi_ks_pos.to_csv(os.path.join(output_dir, 'lmi_ks_test_positive.csv'), index=False)
+print(f"  Saved: lmi_ks_test_positive.csv")
+
+# LMI: KS test for negative values only
+df_lmi_ks_neg = compute_ks_test_for_distributions(
+    lmi_df, 'lmi', ['R+', 'R-'], ['wS2', 'wM1'], negative_only=True
+)
+df_lmi_ks_neg.to_csv(os.path.join(output_dir, 'lmi_ks_test_negative.csv'), index=False)
+print(f"  Saved: lmi_ks_test_negative.csv")
+
+# Weights: KS test for all values
+print("Computing KS test for weight distributions...")
+df_weight_ks_all = compute_ks_test_for_distributions(
+    weights_df, 'classifier_weight', ['R+', 'R-'], ['wS2', 'wM1']
+)
+df_weight_ks_all.to_csv(os.path.join(output_dir, 'weight_ks_test_all.csv'), index=False)
+print(f"  Saved: weight_ks_test_all.csv")
+
+# Weights: KS test for positive values only
+df_weight_ks_pos = compute_ks_test_for_distributions(
+    weights_df, 'classifier_weight', ['R+', 'R-'], ['wS2', 'wM1'], positive_only=True
+)
+df_weight_ks_pos.to_csv(os.path.join(output_dir, 'weight_ks_test_positive.csv'), index=False)
+print(f"  Saved: weight_ks_test_positive.csv")
+
+# Weights: KS test for negative values only
+df_weight_ks_neg = compute_ks_test_for_distributions(
+    weights_df, 'classifier_weight', ['R+', 'R-'], ['wS2', 'wM1'], negative_only=True
+)
+df_weight_ks_neg.to_csv(os.path.join(output_dir, 'weight_ks_test_negative.csv'), index=False)
+print(f"  Saved: weight_ks_test_negative.csv")
+
+# =============================================================================
+# PART 6: VISUALIZATIONS (POOLED DATA ONLY)
+# =============================================================================
+
+print("\nPART 6: VISUALIZATIONS (POOLED DATA ONLY)")
 
 # ====================================================================================
-# Figure 1: LMI Significant - POOLED + ACROSS MICE
+# Figure 1: LMI Significant - POOLED ONLY
 # ====================================================================================
-print("Creating Figure 1: LMI Significant (Pooled + Across Mice)...")
+print("Creating Figure 1: LMI Significant (Pooled)...")
 
 sig_data_pooled = df_lmi_props[df_lmi_props['criterion'].isin(['significant_pos_lmi', 'significant_neg_lmi'])]
-sig_data_mice = df_lmi_props_mice[df_lmi_props_mice['criterion'].isin(['significant_pos_lmi', 'significant_neg_lmi'])]
 
-# Create figure with 2 columns (pooled vs across-mice)
-fig = plt.figure(figsize=(16, 6))
-gs = fig.add_gridspec(2, 4, hspace=0.3, wspace=0.3)
+# Create figure with 2 columns
+fig = plt.figure(figsize=(10, 6))
+gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
 
-# Left 2 columns: Pooled data
+# Pooled data
 for row_idx, reward_group in enumerate(['R+', 'R-']):
     for col_idx, criterion in enumerate(['significant_pos_lmi', 'significant_neg_lmi']):
         ax = fig.add_subplot(gs[row_idx, col_idx])
@@ -1004,59 +913,25 @@ for row_idx, reward_group in enumerate(['R+', 'R-']):
             ax.text(0.5, 0.47, stars, ha='center', va='center', fontsize=12, fontweight='bold',
                    transform=ax.transData)
 
-# Right 2 columns: Across-mice data with CI
-for row_idx, reward_group in enumerate(['R+', 'R-']):
-    for col_idx, criterion in enumerate(['significant_pos_lmi', 'significant_neg_lmi']):
-        ax = fig.add_subplot(gs[row_idx, col_idx + 2])
-        plot_data = sig_data_mice[
-            (sig_data_mice['reward_group'] == reward_group) &
-            (sig_data_mice['criterion'] == criterion)
-        ]
-        sns.barplot(data=plot_data, x='cell_type', y='proportion',
-                   palette=cell_type_colors, order=cell_types,
-                   ax=ax, alpha=0.7, edgecolor='black', linewidth=1.5,
-                   errorbar='ci', err_kws={'linewidth': 2}, hue='cell_type',)
-        ax.set_xlabel('')
-        ax.set_ylabel('')
-        ax.set_ylim(0, 0.5)
-        if row_idx == 0:
-            ax.set_title(f"{'Positive' if 'pos' in criterion else 'Negative'} LMI (Across Mice)",
-                        fontsize=11, fontweight='bold')
-
-        # Add significance stars
-        stat_result = df_lmi_stats_mice[
-            (df_lmi_stats_mice['reward_group'] == reward_group) &
-            (df_lmi_stats_mice['criterion'] == criterion)
-        ]
-        if len(stat_result) > 0:
-            stars = stat_result.iloc[0]['stars']
-            ax.text(0.5, 0.47, stars, ha='center', va='center', fontsize=12, fontweight='bold',
-                   transform=ax.transData)
-
-fig.suptitle('Proportion of wS2 and wM1 Neurons with Significant LMI: Pooled vs Across Mice',
+fig.suptitle('Proportion of wS2 and wM1 Neurons with Significant LMI (Pooled)',
              fontsize=14, fontweight='bold', y=0.98)
 sns.despine()
-plt.savefig(os.path.join(output_dir, 'figure_lmi_significant_dual.svg'), format='svg', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(output_dir, 'figure_lmi_significant_pooled.svg'), format='svg', dpi=300, bbox_inches='tight')
 # plt.close()
-print("  Saved: figure_lmi_significant_dual.svg")
+print("  Saved: figure_lmi_significant_pooled.svg")
 
 # ====================================================================================
-# Figure 2: LMI Percentiles - Within Cell Type (POOLED - original)
+# Figure 2: LMI Percentiles - Within Cell Type (POOLED, Top 20% Only)
 # ====================================================================================
-print("Creating Figure 2: LMI Percentiles Within (Pooled)...")
+print("Creating Figure 2: LMI Percentiles Within (Pooled, Top 20% Only)...")
 
-# Define correct order for percentile criteria
-lmi_pct_criteria = [
-    'top_5pct_pos_lmi', 'top_10pct_pos_lmi', 'top_20pct_pos_lmi',
-    'top_5pct_neg_lmi', 'top_10pct_neg_lmi', 'top_20pct_neg_lmi'
-]
+# Define criteria - only top 20%
+lmi_pct_criteria = ['top_20pct_pos_lmi', 'top_20pct_neg_lmi']
 
 # Create simple title mapping
 lmi_pct_titles = {
-    'top_5pct_pos_lmi': 'Top 5% Pos',
-    'top_10pct_pos_lmi': 'Top 10% Pos', 'top_20pct_pos_lmi': 'Top 20% Pos',
-    'top_5pct_neg_lmi': 'Top 5% Neg',
-    'top_10pct_neg_lmi': 'Top 10% Neg', 'top_20pct_neg_lmi': 'Top 20% Neg'
+    'top_20pct_pos_lmi': 'Top 20% Positive LMI',
+    'top_20pct_neg_lmi': 'Top 20% Negative LMI'
 }
 
 pct_data = df_lmi_props[~df_lmi_props['criterion'].isin(['significant_pos_lmi', 'significant_neg_lmi'])]
@@ -1064,14 +939,14 @@ g = sns.catplot(
     data=pct_data, x='cell_type', y='proportion',
     col='criterion', row='reward_group', col_order=lmi_pct_criteria,
     kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
+    height=3, aspect=1.0, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
 )
 g.set_titles("")  # Remove default titles
 g.set_axis_labels("", "Proportion")
 g.set(ylim=(0, 0.3))
 # Set custom titles only for top row
 for col_idx, criterion in enumerate(lmi_pct_criteria):
-    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=10, fontweight='bold')
+    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=11, fontweight='bold')
 
 # Add significance stars
 for row_idx, reward_group in enumerate(['R+', 'R-']):
@@ -1085,7 +960,7 @@ for row_idx, reward_group in enumerate(['R+', 'R-']):
             g.axes[row_idx, col_idx].text(0.5, 0.28, stars, ha='center', va='center',
                                           fontsize=10, fontweight='bold')
 
-g.figure.suptitle('Proportion of Each Projection Neuron Type in Top LMI Percentiles\n(Within Cell Type - Pooled)',
+g.figure.suptitle('Proportion of Each Projection Neuron Type in Top 20% LMI\n(Within Cell Type - Pooled)',
                fontsize=14, fontweight='bold', y=1.01)
 plt.tight_layout()
 g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_within_pooled.svg'), format='svg', dpi=300, bbox_inches='tight')
@@ -1093,47 +968,9 @@ g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_within_pooled.svg'), f
 print("  Saved: figure_lmi_percentile_within_pooled.svg")
 
 # ====================================================================================
-# Figure 2b: LMI Percentiles - Within Cell Type (ACROSS MICE)
+# Figure 3: LMI Percentiles - Composition (POOLED, Top 20% Only)
 # ====================================================================================
-print("Creating Figure 2b: LMI Percentiles Within (Across Mice)...")
-
-pct_data_mice = df_lmi_props_mice[~df_lmi_props_mice['criterion'].isin(['significant_pos_lmi', 'significant_neg_lmi'])]
-g = sns.catplot(
-    data=pct_data_mice, x='cell_type', y='proportion',
-    col='criterion', row='reward_group', col_order=lmi_pct_criteria,
-    kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7,
-    errorbar='ci', err_kws={'linewidth': 2}, hue='cell_type',
-)
-g.set_titles("")
-g.set_axis_labels("", "Proportion")
-g.set(ylim=(0, 0.3))
-for col_idx, criterion in enumerate(lmi_pct_criteria):
-    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=10, fontweight='bold')
-
-# Add significance stars
-for row_idx, reward_group in enumerate(['R+', 'R-']):
-    for col_idx, criterion in enumerate(lmi_pct_criteria):
-        stat_result = df_lmi_stats_mice[
-            (df_lmi_stats_mice['reward_group'] == reward_group) &
-            (df_lmi_stats_mice['criterion'] == criterion)
-        ]
-        if len(stat_result) > 0:
-            stars = stat_result.iloc[0]['stars']
-            g.axes[row_idx, col_idx].text(0.5, 0.28, stars, ha='center', va='center',
-                                          fontsize=10, fontweight='bold')
-
-g.figure.suptitle('Proportion of Each Projection Neuron Type in Top LMI Percentiles\n(Within Cell Type - Across Mice with CI)',
-               fontsize=14, fontweight='bold', y=1.01)
-plt.tight_layout()
-g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_within_mice.svg'), format='svg', dpi=300, bbox_inches='tight')
-# plt.close()
-print("  Saved: figure_lmi_percentile_within_mice.svg")
-
-# ====================================================================================
-# Figure 3: LMI Percentiles - Composition (POOLED - only wS2 and wM1)
-# ====================================================================================
-print("Creating Figure 3: LMI Percentiles Composition (Pooled)...")
+print("Creating Figure 3: LMI Percentiles Composition (Pooled, Top 20% Only)...")
 
 # Filter to only wS2 and wM1 for composition plots
 pct_comp_data = df_lmi_comp[
@@ -1144,13 +981,13 @@ g = sns.catplot(
     data=pct_comp_data, x='cell_type', y='proportion',
     col='criterion', row='reward_group', col_order=lmi_pct_criteria,
     kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
+    height=3, aspect=1.0, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
 )
 g.set_titles("")
 g.set_axis_labels("", "Proportion")
 g.set(ylim=(0, 1.0))
 for col_idx, criterion in enumerate(lmi_pct_criteria):
-    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=10, fontweight='bold')
+    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=11, fontweight='bold')
 
 # Add significance stars
 for row_idx, reward_group in enumerate(['R+', 'R-']):
@@ -1164,7 +1001,7 @@ for row_idx, reward_group in enumerate(['R+', 'R-']):
             g.axes[row_idx, col_idx].text(0.5, 0.95, stars, ha='center', va='center',
                                           fontsize=10, fontweight='bold')
 
-g.figure.suptitle('Cell Type Composition of Top LMI Percentiles\n(Of Top X% Cells, what % are wS2 vs wM1 - Pooled)',
+g.figure.suptitle('Cell Type Composition of Top 20% LMI\n(Of Top 20% Cells, what % are wS2 vs wM1 - Pooled)',
                fontsize=14, fontweight='bold', y=1.01)
 plt.tight_layout()
 g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_composition_pooled.svg'), format='svg', dpi=300, bbox_inches='tight')
@@ -1172,67 +1009,27 @@ g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_composition_pooled.svg
 print("  Saved: figure_lmi_percentile_composition_pooled.svg")
 
 # ====================================================================================
-# Figure 3b: LMI Percentiles - Composition (ACROSS MICE - only wS2 and wM1)
+# Figure 4: Weight Percentiles - Within Cell Type (POOLED, Top 20% Only)
 # ====================================================================================
-print("Creating Figure 3b: LMI Percentiles Composition (Across Mice)...")
+print("Creating Figure 4: Weight Percentiles Within (Pooled, Top 20% Only)...")
 
-pct_comp_data_mice = df_lmi_comp_mice[~df_lmi_comp_mice['criterion'].isin(['significant_pos_lmi', 'significant_neg_lmi'])]
-g = sns.catplot(
-    data=pct_comp_data_mice, x='cell_type', y='proportion',
-    col='criterion', row='reward_group', col_order=lmi_pct_criteria,
-    kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7,
-    errorbar='ci', err_kws={'linewidth': 2}, hue='cell_type',
-)
-g.set_titles("")
-g.set_axis_labels("", "Proportion")
-g.set(ylim=(0, 1.0))
-for col_idx, criterion in enumerate(lmi_pct_criteria):
-    g.axes[0, col_idx].set_title(lmi_pct_titles[criterion], fontsize=10, fontweight='bold')
-
-# Add significance stars
-for row_idx, reward_group in enumerate(['R+', 'R-']):
-    for col_idx, criterion in enumerate(lmi_pct_criteria):
-        stat_result = df_lmi_stats_mice[
-            (df_lmi_stats_mice['reward_group'] == reward_group) &
-            (df_lmi_stats_mice['criterion'] == criterion)
-        ]
-        if len(stat_result) > 0:
-            stars = stat_result.iloc[0]['stars']
-            g.axes[row_idx, col_idx].text(0.5, 0.95, stars, ha='center', va='center',
-                                          fontsize=10, fontweight='bold')
-
-g.figure.suptitle('Cell Type Composition of Top LMI Percentiles\n(Of Top X% Cells, what % are wS2 vs wM1 - Across Mice with CI)',
-               fontsize=14, fontweight='bold', y=1.01)
-plt.tight_layout()
-g.savefig(os.path.join(output_dir, 'figure_lmi_percentile_composition_mice.svg'), format='svg', dpi=300, bbox_inches='tight')
-# plt.close()
-print("  Saved: figure_lmi_percentile_composition_mice.svg")
-
-# ====================================================================================
-# Figure 4: Weight Percentiles - Within Cell Type (POOLED)
-# ====================================================================================
-print("Creating Figure 4: Weight Percentiles Within (Pooled)...")
-
-# Create simple title mapping for weight criteria
+# Create simple title mapping for weight criteria - only top 20%
 weight_pct_titles = {
-    'top_5pct_pos_weight': 'Top 5% Pos',
-    'top_10pct_pos_weight': 'Top 10% Pos', 'top_20pct_pos_weight': 'Top 20% Pos',
-    'top_5pct_neg_weight': 'Top 5% Neg',
-    'top_10pct_neg_weight': 'Top 10% Neg', 'top_20pct_neg_weight': 'Top 20% Neg'
+    'top_20pct_pos_weight': 'Top 20% Positive Weight',
+    'top_20pct_neg_weight': 'Top 20% Negative Weight'
 }
 
 g = sns.catplot(
     data=df_weight_props, x='cell_type', y='proportion',
     col='criterion', row='reward_group', col_order=weight_criteria,
     kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
+    height=3, aspect=1.0, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
 )
 g.set_titles("")
 g.set_axis_labels("", "Proportion")
 g.set(ylim=(0, 0.3))
 for col_idx, criterion in enumerate(weight_criteria):
-    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=10, fontweight='bold')
+    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=11, fontweight='bold')
 
 # Add significance stars
 for row_idx, reward_group in enumerate(['R+', 'R-']):
@@ -1246,7 +1043,7 @@ for row_idx, reward_group in enumerate(['R+', 'R-']):
             g.axes[row_idx, col_idx].text(0.5, 0.28, stars, ha='center', va='center',
                                           fontsize=10, fontweight='bold')
 
-g.figure.suptitle('Proportion of Each Projection Neuron Type in Top Decoder Weight Percentiles\n(Within Cell Type - Pooled)',
+g.figure.suptitle('Proportion of Each Projection Neuron Type in Top 20% Decoder Weights\n(Within Cell Type - Pooled)',
                fontsize=14, fontweight='bold', y=1.01)
 plt.tight_layout()
 g.savefig(os.path.join(output_dir, 'figure_weight_percentile_within_pooled.svg'), format='svg', dpi=300, bbox_inches='tight')
@@ -1254,46 +1051,9 @@ g.savefig(os.path.join(output_dir, 'figure_weight_percentile_within_pooled.svg')
 print("  Saved: figure_weight_percentile_within_pooled.svg")
 
 # ====================================================================================
-# Figure 4b: Weight Percentiles - Within Cell Type (ACROSS MICE)
+# Figure 5: Weight Percentiles - Composition (POOLED, Top 20% Only)
 # ====================================================================================
-print("Creating Figure 4b: Weight Percentiles Within (Across Mice)...")
-
-g = sns.catplot(
-    data=df_weight_props_mice, x='cell_type', y='proportion',
-    col='criterion', row='reward_group', col_order=weight_criteria,
-    kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7,
-    errorbar='ci', err_kws={'linewidth': 2}, hue='cell_type',
-)
-g.set_titles("")
-g.set_axis_labels("", "Proportion")
-g.set(ylim=(0, 0.3))
-for col_idx, criterion in enumerate(weight_criteria):
-    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=10, fontweight='bold')
-
-# Add significance stars
-for row_idx, reward_group in enumerate(['R+', 'R-']):
-    for col_idx, criterion in enumerate(weight_criteria):
-        stat_result = df_weight_stats_mice[
-            (df_weight_stats_mice['reward_group'] == reward_group) &
-            (df_weight_stats_mice['criterion'] == criterion)
-        ]
-        if len(stat_result) > 0:
-            stars = stat_result.iloc[0]['stars']
-            g.axes[row_idx, col_idx].text(0.5, 0.28, stars, ha='center', va='center',
-                                          fontsize=10, fontweight='bold')
-
-g.figure.suptitle('Proportion of Each Projection Neuron Type in Top Decoder Weight Percentiles\n(Within Cell Type - Across Mice with CI)',
-               fontsize=14, fontweight='bold', y=1.01)
-plt.tight_layout()
-g.savefig(os.path.join(output_dir, 'figure_weight_percentile_within_mice.svg'), format='svg', dpi=300, bbox_inches='tight')
-# plt.close()
-print("  Saved: figure_weight_percentile_within_mice.svg")
-
-# ====================================================================================
-# Figure 5: Weight Percentiles - Composition (POOLED - only wS2 and wM1)
-# ====================================================================================
-print("Creating Figure 5: Weight Percentiles Composition (Pooled)...")
+print("Creating Figure 5: Weight Percentiles Composition (Pooled, Top 20% Only)...")
 
 # Filter to only wS2 and wM1 for composition plots
 weight_comp_data = df_weight_comp[df_weight_comp['cell_type'].isin(cell_types)]
@@ -1301,13 +1061,13 @@ g = sns.catplot(
     data=weight_comp_data, x='cell_type', y='proportion',
     col='criterion', row='reward_group', col_order=weight_criteria,
     kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
+    height=3, aspect=1.0, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7, hue='cell_type',
 )
 g.set_titles("")
 g.set_axis_labels("", "Proportion")
 g.set(ylim=(0, 0.5))
 for col_idx, criterion in enumerate(weight_criteria):
-    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=10, fontweight='bold')
+    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=11, fontweight='bold')
 
 # Add significance stars
 for row_idx, reward_group in enumerate(['R+', 'R-']):
@@ -1321,49 +1081,12 @@ for row_idx, reward_group in enumerate(['R+', 'R-']):
             g.axes[row_idx, col_idx].text(0.5, 0.47, stars, ha='center', va='center',
                                           fontsize=10, fontweight='bold')
 
-g.figure.suptitle('Cell Type Composition of Top Decoder Weight Percentiles\n(Of Top X% Cells, what % are wS2 vs wM1 - Pooled)',
+g.figure.suptitle('Cell Type Composition of Top 20% Decoder Weights\n(Of Top 20% Cells, what % are wS2 vs wM1 - Pooled)',
                fontsize=14, fontweight='bold', y=1.01)
 plt.tight_layout()
 g.savefig(os.path.join(output_dir, 'figure_weight_percentile_composition_pooled.svg'), format='svg', dpi=300, bbox_inches='tight')
 # plt.close()
 print("  Saved: figure_weight_percentile_composition_pooled.svg")
-
-# ====================================================================================
-# Figure 5b: Weight Percentiles - Composition (ACROSS MICE - only wS2 and wM1)
-# ====================================================================================
-print("Creating Figure 5b: Weight Percentiles Composition (Across Mice)...")
-
-g = sns.catplot(
-    data=df_weight_comp_mice, x='cell_type', y='proportion',
-    col='criterion', row='reward_group', col_order=weight_criteria,
-    kind='bar', palette=cell_type_colors, order=cell_types,
-    height=2.5, aspect=0.8, legend=False, edgecolor='black', linewidth=1.5, alpha=0.7,
-    errorbar='ci', err_kws={'linewidth': 2}, hue='cell_type',
-)
-g.set_titles("")
-g.set_axis_labels("", "Proportion")
-g.set(ylim=(0, 0.5))
-for col_idx, criterion in enumerate(weight_criteria):
-    g.axes[0, col_idx].set_title(weight_pct_titles[criterion], fontsize=10, fontweight='bold')
-
-# Add significance stars
-for row_idx, reward_group in enumerate(['R+', 'R-']):
-    for col_idx, criterion in enumerate(weight_criteria):
-        stat_result = df_weight_stats_mice[
-            (df_weight_stats_mice['reward_group'] == reward_group) &
-            (df_weight_stats_mice['criterion'] == criterion)
-        ]
-        if len(stat_result) > 0:
-            stars = stat_result.iloc[0]['stars']
-            g.axes[row_idx, col_idx].text(0.5, 0.47, stars, ha='center', va='center',
-                                          fontsize=10, fontweight='bold')
-
-g.figure.suptitle('Cell Type Composition of Top Decoder Weight Percentiles\n(Of Top X% Cells, what % are wS2 vs wM1 - Across Mice with CI)',
-               fontsize=14, fontweight='bold', y=1.01)
-plt.tight_layout()
-g.savefig(os.path.join(output_dir, 'figure_weight_percentile_composition_mice.svg'), format='svg', dpi=300, bbox_inches='tight')
-# plt.close()
-print("  Saved: figure_weight_percentile_composition_mice.svg")
 
 # ====================================================================================
 # Figure 6: Cell Counts Summary
@@ -1547,3 +1270,163 @@ fig.suptitle('Average Negative LMI and Classifier Weight Values (Absolute): wS2 
 sns.despine()
 plt.savefig(os.path.join(output_dir, 'figure_average_negative_values.svg'), format='svg', dpi=300, bbox_inches='tight')
 print("  Saved: figure_average_negative_values.svg")
+
+# ====================================================================================
+# Figure 8: Cumulative Distribution Functions - LMI (Positive and Negative)
+# ====================================================================================
+print("Creating Figure 8: Cumulative Distribution Functions - LMI...")
+
+fig = plt.figure(figsize=(14, 10))
+gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+# LMI: Positive values only
+for row_idx, reward_group in enumerate(['R+', 'R-']):
+    ax = fig.add_subplot(gs[row_idx, 0])
+
+    data_rg = lmi_df[lmi_df['reward_group'] == reward_group]
+    data_pos = data_rg[data_rg['lmi'] > 0]
+
+    for cell_type in cell_types:
+        values = data_pos[data_pos['cell_type_group'] == cell_type]['lmi'].values
+        if len(values) > 0:
+            sorted_values = np.sort(values)
+            cumulative = np.arange(1, len(sorted_values) + 1) / len(sorted_values)
+            ax.plot(sorted_values, cumulative, label=cell_type,
+                   color=cell_type_colors[cell_type], linewidth=2, alpha=0.8)
+
+    ax.set_xlabel('LMI Value' if row_idx == 1 else '', fontsize=11)
+    ax.set_ylabel('Cumulative Probability', fontsize=11)
+    ax.set_title(f'{reward_group} - Positive LMI' if row_idx == 0 else f'{reward_group}',
+                fontsize=11, fontweight='bold')
+    ax.legend(frameon=False)
+    ax.grid(alpha=0.3)
+
+    # Add KS test result
+    ks_result = df_lmi_ks_pos[df_lmi_ks_pos['reward_group'] == reward_group]
+    if len(ks_result) > 0:
+        stars_2sided = ks_result.iloc[0]['ks_stars_2sided']
+        stars_greater = ks_result.iloc[0]['ks_stars_greater']
+        pval_greater = ks_result.iloc[0]['ks_pvalue_greater']
+        ax.text(0.98, 0.02, f'KS test (2-sided): {stars_2sided}\nKS test (wS2>wM1): {stars_greater} (p={pval_greater:.4f})',
+               ha='right', va='bottom', fontsize=9, transform=ax.transAxes,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+# LMI: Negative values only (plot absolute values)
+for row_idx, reward_group in enumerate(['R+', 'R-']):
+    ax = fig.add_subplot(gs[row_idx, 1])
+
+    data_rg = lmi_df[lmi_df['reward_group'] == reward_group]
+    data_neg = data_rg[data_rg['lmi'] < 0]
+
+    for cell_type in cell_types:
+        values = np.abs(data_neg[data_neg['cell_type_group'] == cell_type]['lmi'].values)
+        if len(values) > 0:
+            sorted_values = np.sort(values)
+            cumulative = np.arange(1, len(sorted_values) + 1) / len(sorted_values)
+            ax.plot(sorted_values, cumulative, label=cell_type,
+                   color=cell_type_colors[cell_type], linewidth=2, alpha=0.8)
+
+    ax.set_xlabel('|LMI| Value' if row_idx == 1 else '', fontsize=11)
+    ax.set_ylabel('Cumulative Probability', fontsize=11)
+    ax.set_title(f'{reward_group} - Negative LMI (abs)' if row_idx == 0 else f'{reward_group}',
+                fontsize=11, fontweight='bold')
+    ax.legend(frameon=False)
+    ax.grid(alpha=0.3)
+
+    # Add KS test result
+    ks_result = df_lmi_ks_neg[df_lmi_ks_neg['reward_group'] == reward_group]
+    if len(ks_result) > 0:
+        stars_2sided = ks_result.iloc[0]['ks_stars_2sided']
+        stars_greater = ks_result.iloc[0]['ks_stars_greater']
+        pval_greater = ks_result.iloc[0]['ks_pvalue_greater']
+        ax.text(0.98, 0.02, f'KS test (2-sided): {stars_2sided}\nKS test (wS2>wM1): {stars_greater} (p={pval_greater:.4f})',
+               ha='right', va='bottom', fontsize=9, transform=ax.transAxes,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+fig.suptitle('Cumulative Distribution Functions: LMI (wS2 vs wM1)',
+             fontsize=14, fontweight='bold', y=0.98)
+sns.despine()
+plt.savefig(os.path.join(output_dir, 'figure_cdf_lmi.svg'), format='svg', dpi=300, bbox_inches='tight')
+print("  Saved: figure_cdf_lmi.svg")
+
+# ====================================================================================
+# Figure 9: Cumulative Distribution Functions - Classifier Weights (Positive and Negative)
+# ====================================================================================
+print("Creating Figure 9: Cumulative Distribution Functions - Classifier Weights...")
+
+fig = plt.figure(figsize=(14, 10))
+gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+# Weights: Positive values only
+for row_idx, reward_group in enumerate(['R+', 'R-']):
+    ax = fig.add_subplot(gs[row_idx, 0])
+
+    data_rg = weights_df[weights_df['reward_group'] == reward_group]
+    data_pos = data_rg[data_rg['classifier_weight'] > 0]
+
+    for cell_type in cell_types:
+        values = data_pos[data_pos['cell_type_group'] == cell_type]['classifier_weight'].values
+        if len(values) > 0:
+            sorted_values = np.sort(values)
+            cumulative = np.arange(1, len(sorted_values) + 1) / len(sorted_values)
+            ax.plot(sorted_values, cumulative, label=cell_type,
+                   color=cell_type_colors[cell_type], linewidth=2, alpha=0.8)
+
+    ax.set_xlabel('Classifier Weight' if row_idx == 1 else '', fontsize=11)
+    ax.set_ylabel('Cumulative Probability', fontsize=11)
+    ax.set_title(f'{reward_group} - Positive Weights' if row_idx == 0 else f'{reward_group}',
+                fontsize=11, fontweight='bold')
+    ax.legend(frameon=False)
+    ax.grid(alpha=0.3)
+
+    # Add KS test result
+    ks_result = df_weight_ks_pos[df_weight_ks_pos['reward_group'] == reward_group]
+    if len(ks_result) > 0:
+        stars_2sided = ks_result.iloc[0]['ks_stars_2sided']
+        stars_greater = ks_result.iloc[0]['ks_stars_greater']
+        pval_greater = ks_result.iloc[0]['ks_pvalue_greater']
+        ax.text(0.98, 0.02, f'KS test (2-sided): {stars_2sided}\nKS test (wS2>wM1): {stars_greater} (p={pval_greater:.4f})',
+               ha='right', va='bottom', fontsize=9, transform=ax.transAxes,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+# Weights: Negative values only (plot absolute values)
+for row_idx, reward_group in enumerate(['R+', 'R-']):
+    ax = fig.add_subplot(gs[row_idx, 1])
+
+    data_rg = weights_df[weights_df['reward_group'] == reward_group]
+    data_neg = data_rg[data_rg['classifier_weight'] < 0]
+
+    for cell_type in cell_types:
+        values = np.abs(data_neg[data_neg['cell_type_group'] == cell_type]['classifier_weight'].values)
+        if len(values) > 0:
+            sorted_values = np.sort(values)
+            cumulative = np.arange(1, len(sorted_values) + 1) / len(sorted_values)
+            ax.plot(sorted_values, cumulative, label=cell_type,
+                   color=cell_type_colors[cell_type], linewidth=2, alpha=0.8)
+
+    ax.set_xlabel('|Classifier Weight|' if row_idx == 1 else '', fontsize=11)
+    ax.set_ylabel('Cumulative Probability', fontsize=11)
+    ax.set_title(f'{reward_group} - Negative Weights (abs)' if row_idx == 0 else f'{reward_group}',
+                fontsize=11, fontweight='bold')
+    ax.legend(frameon=False)
+    ax.grid(alpha=0.3)
+
+    # Add KS test result
+    ks_result = df_weight_ks_neg[df_weight_ks_neg['reward_group'] == reward_group]
+    if len(ks_result) > 0:
+        stars_2sided = ks_result.iloc[0]['ks_stars_2sided']
+        stars_greater = ks_result.iloc[0]['ks_stars_greater']
+        pval_greater = ks_result.iloc[0]['ks_pvalue_greater']
+        ax.text(0.98, 0.02, f'KS test (2-sided): {stars_2sided}\nKS test (wS2>wM1): {stars_greater} (p={pval_greater:.4f})',
+               ha='right', va='bottom', fontsize=9, transform=ax.transAxes,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+fig.suptitle('Cumulative Distribution Functions: Classifier Weights (wS2 vs wM1)',
+             fontsize=14, fontweight='bold', y=0.98)
+sns.despine()
+plt.savefig(os.path.join(output_dir, 'figure_cdf_weights.svg'), format='svg', dpi=300, bbox_inches='tight')
+print("  Saved: figure_cdf_weights.svg")
+
+print("\n" + "="*80)
+print("ANALYSIS COMPLETE!")
+print("="*80)

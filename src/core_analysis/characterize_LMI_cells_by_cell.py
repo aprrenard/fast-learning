@@ -31,7 +31,7 @@ from src.utils.utils_behavior import *
 
 # Cell selection parameters
 USE_TOP_N = True  # If True, use top N cells; if False, use all cells meeting threshold
-TOP_N = 20  # Number of top cells to use per reward group (if USE_TOP_N=True)
+TOP_N = 100  # Number of top cells to use per reward group (if USE_TOP_N=True)
 
 # Data parameters
 DAYS_LEARNING = [-2, -1, 0, 1, 2]
@@ -184,6 +184,7 @@ def compute_cell_psth_summary(cell_list, lmi_group, reward_group):
             trial_filters = {
                 'whisker_hit': (xarr_learning['whisker_stim'] == 1) & (xarr_learning['lick_flag'] == 1),
                 'whisker_miss': (xarr_learning['whisker_stim'] == 1) & (xarr_learning['lick_flag'] == 0),
+                'false_alarm': (xarr_learning['no_stim'] == 1) & (xarr_learning['lick_flag'] == 1),
                 'correct_rejection': (xarr_learning['no_stim'] == 1) & (xarr_learning['lick_flag'] == 0),
                 'auditory_hit': (xarr_learning['auditory_stim'] == 1) & (xarr_learning['lick_flag'] == 1)
             }
@@ -193,6 +194,10 @@ def compute_cell_psth_summary(cell_list, lmi_group, reward_group):
 
                 # Average trials per day
                 for day in DAYS_LEARNING:
+                    # Skip whisker trials for pre-learning days (mistaken trials)
+                    if trial_key in ['whisker_hit', 'whisker_miss'] and day in [-2, -1]:
+                        continue
+
                     day_data = xarr_trial_type.sel(trial=xarr_trial_type['day'] == day)
                     if len(day_data.trial) > 0:
                         day_avg = day_data.mean(dim='trial').squeeze()
@@ -205,25 +210,76 @@ def compute_cell_psth_summary(cell_list, lmi_group, reward_group):
         except Exception as e:
             print(f"      Warning: Could not load learning data: {e}")
 
-        # Load lick-aligned data for false alarms
+    return psth_data
+
+
+# =============================================================================
+# FUNCTION: compute_cell_lick_aligned_psth
+# =============================================================================
+
+def compute_cell_lick_aligned_psth(cell_list, lmi_group, reward_group):
+    """
+    Compute lick-aligned PSTH data at the cell level.
+    Only includes trial types with licks: whisker_hit, false_alarm, auditory_hit.
+
+    Parameters
+    ----------
+    cell_list : list
+        List of (mouse_id, roi) tuples
+    lmi_group : str
+        'positive' or 'negative'
+    reward_group : str
+        'R+' or 'R-'
+
+    Returns
+    -------
+    dict
+        {trial_type: {cell_key: averaged_xarray}}
+    """
+    print(f"\n  Computing lick-aligned PSTH for {reward_group} {lmi_group} cells...")
+
+    psth_data = {}
+    folder = os.path.join(io.processed_dir, 'mice')
+
+    for cell_key in cell_list:
+        meta = cell_metadata[cell_key]
+        mouse_id = meta['mouse_id']
+        roi = meta['roi']
+
+        print(f"    Processing {cell_key}...")
+
+        # Load lick-aligned data for trial types with licks
         try:
             file_name_lick = 'lick_aligned_xarray.nc'
             xarr_lick = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name_lick, substracted=False)
             xarr_lick = xarr_lick.sel(cell=xarr_lick['roi'] == roi)
-            xarr_lick = xarr_lick.sel(trial=(xarr_lick['no_stim'] == 1) & (xarr_lick['lick_flag'] == 1))
             xarr_lick = xarr_lick.sel(trial=xarr_lick['day'].isin(DAYS_LEARNING))
             xarr_lick.load()  # Load into memory and close file handle
 
-            # Average trials per day
-            for day in DAYS_LEARNING:
-                day_data = xarr_lick.sel(trial=xarr_lick['day'] == day)
-                if len(day_data.trial) > 0:
-                    day_avg = day_data.mean(dim='trial').squeeze()
+            # Define trial types with licks only
+            trial_filters = {
+                'whisker_hit': (xarr_lick['whisker_stim'] == 1) & (xarr_lick['lick_flag'] == 1),
+                'false_alarm': (xarr_lick['no_stim'] == 1) & (xarr_lick['lick_flag'] == 1),
+                'auditory_hit': (xarr_lick['auditory_stim'] == 1) & (xarr_lick['lick_flag'] == 1)
+            }
 
-                    key = f'false_alarm_day{day}'
-                    if key not in psth_data:
-                        psth_data[key] = {}
-                    psth_data[key][cell_key] = day_avg
+            for trial_key, trial_filter in trial_filters.items():
+                xarr_trial_type = xarr_lick.sel(trial=trial_filter)
+
+                # Average trials per day
+                for day in DAYS_LEARNING:
+                    # Skip whisker trials for pre-learning days (mistaken trials)
+                    if trial_key == 'whisker_hit' and day in [-2, -1]:
+                        continue
+
+                    day_data = xarr_trial_type.sel(trial=xarr_trial_type['day'] == day)
+                    if len(day_data.trial) > 0:
+                        day_avg = day_data.mean(dim='trial').squeeze()
+
+                        key = f'{trial_key}_day{day}'
+                        if key not in psth_data:
+                            psth_data[key] = {}
+                        psth_data[key][cell_key] = day_avg
 
         except Exception as e:
             print(f"      Warning: Could not load lick-aligned data: {e}")
@@ -458,10 +514,10 @@ def plot_cell_psth_summary(psth_data, reward_group, lmi_group):
 
     if len(all_values) > 0:
         global_ymin = np.nanpercentile(all_values, 1)
-        global_ymax = np.nanpercentile(all_values, 99.9)
+        global_ymax = np.nanpercentile(all_values, 99)
         y_range = global_ymax - global_ymin
         global_ymin -= y_range * 0.1
-        global_ymax += y_range * 0.2
+        global_ymax += y_range * 0.1
     else:
         global_ymin, global_ymax = -5, 20
 
@@ -518,7 +574,7 @@ def plot_cell_psth_summary(psth_data, reward_group, lmi_group):
     trial_types = [
         ('whisker_hit', 'Whisker Hit', whisker_hit_color, '-', stim_palette[1], 1),
         ('whisker_miss', 'Whisker Miss', whisker_miss_color, '--', stim_palette[1], 2),
-        ('false_alarm', 'False Alarm\n(lick-aligned)', behavior_palette[5], '-', stim_palette[2], 3),
+        ('false_alarm', 'False Alarm', behavior_palette[5], '-', stim_palette[2], 3),
         ('correct_rejection', 'Correct Rejection', behavior_palette[4], '--', stim_palette[2], 4),
         ('auditory_hit', 'Auditory Hit', behavior_palette[1], '-', stim_palette[0], 5)
     ]
@@ -584,6 +640,157 @@ def plot_cell_psth_summary(psth_data, reward_group, lmi_group):
 
 
 # =============================================================================
+# FUNCTION: plot_cell_lick_aligned_psth
+# =============================================================================
+
+def plot_cell_lick_aligned_psth(psth_data, reward_group, lmi_group):
+    """
+    Plot lick-aligned PSTH summary page at cell level (6 rows × 5 columns).
+    Only plots trial types with licks: whisker_hit (row 1), false_alarm (row 3), auditory_hit (row 5).
+    Rows 0, 2, 4 are left empty (mapping, whisker_miss, correct_rejection have no licks).
+
+    Parameters
+    ----------
+    psth_data : dict
+        {trial_type: {cell_key: averaged_xarray}}
+    reward_group : str
+        'R+' or 'R-'
+    lmi_group : str
+        'positive' or 'negative'
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    print(f"\n  Plotting lick-aligned PSTH for {reward_group} {lmi_group} cells...")
+
+    # Create figure
+    fig = plt.figure(figsize=(25, 18))
+    gs = fig.add_gridspec(6, 5, hspace=0.4, wspace=0.3)
+
+    # Calculate global y-limits
+    all_values = []
+    for key, cell_dict in psth_data.items():
+        for cell_key, xarr in cell_dict.items():
+            all_values.extend(xarr.values.flatten() * 100)
+
+    if len(all_values) > 0:
+        global_ymin = np.nanpercentile(all_values, 1)
+        global_ymax = np.nanpercentile(all_values, 99)
+        y_range = global_ymax - global_ymin
+        global_ymin -= y_range * 0.1
+        global_ymax += y_range * 0.1
+    else:
+        global_ymin, global_ymax = -5, 20
+
+    # Collect all axes
+    all_axes = []
+
+    # Set reward-group-specific colors
+    if reward_group == 'R+':
+        whisker_hit_color = trial_type_rew_palette[3]
+    else:  # R-
+        whisker_hit_color = trial_type_nonrew_palette[3]
+
+    # Define trial types with licks only (rows 1, 3, 5)
+    # Leave rows 0, 2, 4 empty (mapping, whisker_miss, correct_rejection)
+    trial_types = [
+        ('whisker_hit', 'Whisker Hit\n(lick-aligned)', whisker_hit_color, '-', 'black', 1),
+        ('false_alarm', 'False Alarm\n(lick-aligned)', behavior_palette[5], '-', 'black', 3),
+        ('auditory_hit', 'Auditory Hit\n(lick-aligned)', behavior_palette[1], '-', 'black', 5)
+    ]
+
+    # Row 0: Empty (mapping trials - no licks)
+    for col_idx, day in enumerate(DAYS_LEARNING):
+        ax = fig.add_subplot(gs[0, col_idx])
+        all_axes.append(ax)
+        ax.axis('off')
+        if col_idx == 0:
+            ax.text(-0.3, 0.5, 'Passive Whisker\nTrials\n(no licks)', transform=ax.transAxes,
+                   rotation=90, va='center', ha='center', fontsize=10, fontweight='bold', color='gray')
+
+    # Row 2: Empty (whisker miss - no licks)
+    for col_idx, day in enumerate(DAYS_LEARNING):
+        ax = fig.add_subplot(gs[2, col_idx])
+        all_axes.append(ax)
+        ax.axis('off')
+        if col_idx == 0:
+            ax.text(-0.3, 0.5, 'Whisker Miss\n(no licks)', transform=ax.transAxes,
+                   rotation=90, va='center', ha='center', fontsize=10, fontweight='bold', color='gray')
+
+    # Row 4: Empty (correct rejection - no licks)
+    for col_idx, day in enumerate(DAYS_LEARNING):
+        ax = fig.add_subplot(gs[4, col_idx])
+        all_axes.append(ax)
+        ax.axis('off')
+        if col_idx == 0:
+            ax.text(-0.3, 0.5, 'Correct Rejection\n(no licks)', transform=ax.transAxes,
+                   rotation=90, va='center', ha='center', fontsize=10, fontweight='bold', color='gray')
+
+    # Rows 1, 3, 5: Trial types with licks
+    for trial_key, trial_label, color, linestyle, t0_color, row_idx in trial_types:
+        for col_idx, day in enumerate(DAYS_LEARNING):
+            ax = fig.add_subplot(gs[row_idx, col_idx])
+            all_axes.append(ax)
+
+            key = f'{trial_key}_day{day}'
+
+            if key in psth_data and psth_data[key]:
+                # Combine all cells
+                dfs = []
+                for cell_key, xarr in psth_data[key].items():
+                    df = xarr.to_dataframe(name='activity').reset_index()
+                    df['cell_id'] = cell_key
+                    dfs.append(df)
+                df_combined = pd.concat(dfs)
+                df_combined['activity'] = df_combined['activity'] * 100
+
+                sns.lineplot(data=df_combined, x='time', y='activity', errorbar='ci',
+                            ax=ax, color=color, linewidth=2.5, linestyle=linestyle)
+
+                # t=0 is lick time (black vertical line)
+                ax.axvline(0, color=t0_color, linestyle='-', linewidth=1.5)
+                n_cells = len(psth_data[key])
+                ax.set_title(f'Day {day}\n(n={n_cells} cells)', fontsize=9, fontweight='bold')
+                ax.set_ylabel('DF/F0 (%)', fontsize=10)
+
+                if col_idx == 0:
+                    # Add trial type label
+                    ax.text(-0.3, 0.5, trial_label, transform=ax.transAxes,
+                           rotation=90, va='center', ha='center', fontsize=10, fontweight='bold')
+
+                if row_idx == 5:
+                    ax.set_xlabel('Time from lick (s)', fontsize=10)
+                    if col_idx == 0:
+                        ax.set_xticks([-1, 0, 1, 2, 3, 4, 5])
+            else:
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+                ax.set_ylabel('DF/F0 (%)', fontsize=10)
+                if col_idx == 0:
+                    ax.text(-0.3, 0.5, trial_label, transform=ax.transAxes,
+                           rotation=90, va='center', ha='center', fontsize=10, fontweight='bold')
+
+    # Set shared y-limits (only for non-empty axes)
+    for ax in all_axes:
+        if ax.get_visible() and not ax.axison == False:
+            ax.set_ylim(global_ymin, global_ymax)
+
+    # Overall title
+    lmi_label = 'Positive' if lmi_group == 'positive' else 'Negative'
+    if reward_group == 'R-':
+        title_color = reward_palette[0]
+    else:
+        title_color = reward_palette[1]
+
+    fig.suptitle(f'{reward_group} - {lmi_label} LMI Cells - Lick-Aligned PSTH Summary (Cell-Level Variance)',
+                fontsize=16, fontweight='bold', color=title_color)
+
+    sns.despine(fig=fig)
+
+    return fig
+
+
+# =============================================================================
 # FUNCTION: plot_cell_whisker_evolution
 # =============================================================================
 
@@ -618,7 +825,7 @@ def plot_cell_whisker_evolution(evolution_data, reward_group, lmi_group):
 
     if len(all_values) > 0:
         global_ymin = np.nanpercentile(all_values, 1)
-        global_ymax = np.nanpercentile(all_values, 99.9)
+        global_ymax = np.nanpercentile(all_values, 99)
         y_range = global_ymax - global_ymin
         global_ymin -= y_range * 0.1
         global_ymax += y_range * 0.2
@@ -835,6 +1042,13 @@ with PdfPages(pdf_path) as pdf:
             pdf.savefig(fig_psth, bbox_inches='tight')
             plt.close(fig_psth)
             print(f"  ✓ PSTH summary page added to PDF")
+
+            # Compute and plot lick-aligned PSTH
+            lick_psth_data = compute_cell_lick_aligned_psth(cell_list, lmi_group, reward_group)
+            fig_lick_psth = plot_cell_lick_aligned_psth(lick_psth_data, reward_group, lmi_group)
+            pdf.savefig(fig_lick_psth, bbox_inches='tight')
+            plt.close(fig_lick_psth)
+            print(f"  ✓ Lick-aligned PSTH page added to PDF")
 
             # Compute and plot whisker evolution
             evolution_data = compute_cell_whisker_evolution(cell_list, lmi_group, reward_group)
