@@ -1,6 +1,7 @@
 """
 Reactivation Surrogate Analysis for Data-Driven Threshold Determination
 
+
 This script computes statistically principled correlation thresholds for reactivation
 event detection via circular time-shift surrogate analysis. It generates per-mouse
 thresholds based on baseline days (-2 and -1), ensuring consistent event detection

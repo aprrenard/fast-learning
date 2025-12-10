@@ -55,20 +55,26 @@ n_map_trials = 40  # Number of mapping trials for template
 
 # Event detection parameters (must match reactivation.py)
 threshold_type = 'percentile'  # Options: 'percentile' or 'max' (FWER)
-threshold_dff = 0.05  # 5% dff threshold for template cells
+threshold_mode = 'day'  # Options: 'mouse' (baseline-derived, same for all days) or 'day' (per-day thresholds)
+threshold_dff = None  # 5% dff threshold for template cells (use None for all cells)
 threshold_corr = 0.45  # Default correlation threshold for event detection (if no surrogate thresholds available)
 min_event_distance_ms = 500
 min_event_distance_frames = int(min_event_distance_ms / 1000 * sampling_rate)
 prominence = 0.15  # Minimum prominence of peaks for event detection (vertical distance to contour line)
 
 # NOTE: Surrogate-based thresholds
-# If reactivation_surrogates.py has been run and surrogate_thresholds.csv exists,
-# the script will automatically load and use per-mouse, per-day thresholds instead
-# of the fixed threshold_corr value above. You can choose between:
-#   - 'percentile': Uses the percentile specified in reactivation_surrogates.py (default: 95th)
+# If reactivation_surrogates.py or reactivation_surrogates_per_day.py has been run,
+# the script will automatically load and use thresholds instead of the fixed threshold_corr value.
+#
+# threshold_type options:
+#   - 'percentile': Uses the percentile specified in surrogate scripts (default: 99.9th)
 #   - 'max' (FWER/maximum): More conservative, controls family-wise error rate
-# The percentile value can be changed in reactivation_surrogates.py (e.g., 90, 95, 99).
-# Change threshold_type in the main execution block to switch between them.
+#
+# threshold_mode options:
+#   - 'mouse': One threshold per mouse (from baseline days -2 and -1), applied to all days
+#              Loads from: reactivation_surrogates/surrogate_thresholds.csv
+#   - 'day': Separate threshold per mouse-day combination, computed from each day's data
+#            Loads from: reactivation_surrogates_per_day/surrogate_thresholds_per_day.csv
 
 # Participation parameters
 event_window_ms = 150  # ±150ms around event (total 300ms)
@@ -176,9 +182,9 @@ def extract_event_responses(mouse, day, verbose=True, threshold_dict=None):
         correlations = compute_template_correlation(data, template)
 
         # Step 4: Detect events - use per-mouse, per-day threshold if available
-        current_threshold = get_threshold_for_mouse_day(threshold_dict, mouse, day, threshold_corr)
+        current_threshold = get_threshold_for_mouse_day(threshold_dict, mouse, day, threshold_corr, threshold_mode)
         if verbose and threshold_dict is not None:
-            print(f"    Using threshold: {current_threshold:.4f} (surrogate-based)")
+            print(f"    Using threshold: {current_threshold:.4f} (surrogate-based, {threshold_mode} mode)")
         events = detect_reactivation_events(correlations, current_threshold, min_event_distance_frames)
 
         if verbose:
@@ -915,16 +921,29 @@ if __name__ == "__main__":
     print(f"\nResults will be saved to: {output_dir}")
 
     # Load surrogate thresholds if available
-    surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+    # Choose file based on threshold_mode
+    if threshold_mode == 'mouse':
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+    elif threshold_mode == 'day':
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates_per_day', 'surrogate_thresholds_per_day.csv')
+    else:
+        raise ValueError(f"Invalid threshold_mode '{threshold_mode}'. Must be 'mouse' or 'day'.")
+
     threshold_dict = None
     if os.path.exists(surrogate_csv_path):
         print(f"\n{'='*60}")
         print("LOADING SURROGATE-BASED THRESHOLDS")
         print(f"{'='*60}")
-        threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type=threshold_type)
+        threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type=threshold_type, threshold_mode=threshold_mode)
         print(f"Loaded thresholds from: {surrogate_csv_path}")
         print(f"Threshold type: {threshold_type} ({'percentile-based' if threshold_type in ['percentile', '95'] else 'FWER/maximum'})")
-        print(f"Loaded thresholds for {len(threshold_dict)} mice")
+        print(f"Threshold mode: {threshold_mode} ({'one per mouse' if threshold_mode == 'mouse' else 'per mouse-day'})")
+        if threshold_mode == 'mouse':
+            print(f"Loaded thresholds for {len(threshold_dict)} mice")
+        else:
+            n_mice = len(threshold_dict)
+            n_mouse_days = sum(len(days_dict) for days_dict in threshold_dict.values())
+            print(f"Loaded thresholds for {n_mice} mice, {n_mouse_days} mouse-day combinations")
     else:
         print(f"\nSurrogate threshold file not found: {surrogate_csv_path}")
         print(f"Using default threshold: {threshold_corr}")

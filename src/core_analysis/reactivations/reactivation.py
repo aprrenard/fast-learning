@@ -37,29 +37,35 @@ n_map_trials = 40  # Number of mapping trials to use
 
 # Template and event detection parameters
 threshold_type = 'percentile'  # Options: 'percentile' or 'max' (FWER)
-threshold_dff = 0.05  # 5% dff threshold for including cells in template
+threshold_mode = 'day'  # Options: 'mouse' (baseline-derived, same for all days) or 'day' (per-day thresholds)
+threshold_dff = None  # 5% dff threshold for including cells in template (use None for all cells)
 threshold_corr = 0.45  # Default correlation threshold for event detection (if no surrogate thresholds available)
 min_event_distance_ms = 500  # Minimum distance between events (ms)
 min_event_distance_frames = int(min_event_distance_ms / 1000 * sampling_rate)
 prominence = 0.15  # Minimum prominence of peaks for event detection (vertical distance to contour line)
 
 # NOTE: Surrogate-based thresholds
-# If reactivation_surrogates.py has been run and surrogate_thresholds.csv exists,
-# the script will automatically load and use per-mouse, per-day thresholds instead
-# of the fixed threshold_corr value above. You can choose between:
-#   - 'percentile': Uses the percentile specified in reactivation_surrogates.py (default: 95th)
+# If reactivation_surrogates.py or reactivation_surrogates_per_day.py has been run,
+# the script will automatically load and use thresholds instead of the fixed threshold_corr value.
+#
+# threshold_type options:
+#   - 'percentile': Uses the percentile specified in surrogate scripts (default: 99.9th)
 #   - 'max' (FWER/maximum): More conservative, controls family-wise error rate
-# The percentile value can be changed in reactivation_surrogates.py (e.g., 90, 95, 99).
-# Change threshold_type in the main execution block to switch between them.
+#
+# threshold_mode options:
+#   - 'mouse': One threshold per mouse (from baseline days -2 and -1), applied to all days
+#              Loads from: reactivation_surrogatesd/surrogate_thresholds.csv
+#   - 'day': Separate threshold per mouse-day combination, computed from each day's data
+#            Loads from: reactivation_surrogates_per_day/surrogate_thresholds_per_day.csv
 
 # Visualization parameters
 time_per_row = 200  # seconds per row in correlation trace plots (rows calculated dynamically)
 
 # Trial type selection (used in 'analyze' mode to specify which results to load and plot)
-trial_type = 'whisker_hit'  # Options: 'no_stim', 'whisker_hit', 'whisker_miss', 'auditory_hit'
+trial_type = 'no_stim'  # Options: 'no_stim', 'whisker'
 
 # Analysis mode
-mode = 'analyze'  # Options: 'compute' (run analysis and save results) or 'analyze' (load results and generate plots)
+mode = 'compute'  # Options: 'compute' (run analysis and save results) or 'analyze' (load results and generate plots)
 
 # Parallel processing parameters
 n_jobs = 35  # Number of parallel jobs for processing mice (set to -1 to use all available cores)
@@ -92,24 +98,25 @@ print(f"Found {len(r_minus_mice)} R- mice: {r_minus_mice}")
 # THRESHOLD LOADING FUNCTIONS
 # ============================================================================
 
-def load_surrogate_thresholds(surrogate_csv_path, threshold_type='max'):
+def load_surrogate_thresholds(surrogate_csv_path, threshold_type='max', threshold_mode='day'):
     """
-    Load per-mouse Day 0 thresholds from surrogate analysis.
-
-    These thresholds are applied to all days for consistent event detection.
+    Load thresholds from surrogate analysis.
 
     Parameters
     ----------
     surrogate_csv_path : str
-        Path to surrogate_thresholds.csv file
+        Path to surrogate threshold CSV file
     threshold_type : str
-        Type of threshold to use: 'percentile' (or '95' for compatibility) for percentile-based, 'max' for FWER/maximum
+        Type of threshold to use: 'percentile' for percentile-based, 'max' for FWER/maximum
+    threshold_mode : str
+        'mouse': One threshold per mouse (from baseline days), applied to all days
+        'day': Separate threshold per mouse-day combination
 
     Returns
     -------
     threshold_dict : dict
-        Dictionary: {mouse_id: threshold_value}
-        Note: Single threshold per mouse (from Day 0), applied to all days
+        If threshold_mode='mouse': {mouse_id: threshold_value}
+        If threshold_mode='day': {mouse_id: {day: threshold_value}}
     """
     if not os.path.exists(surrogate_csv_path):
         raise FileNotFoundError(f"Surrogate threshold file not found: {surrogate_csv_path}")
@@ -124,22 +131,36 @@ def load_surrogate_thresholds(surrogate_csv_path, threshold_type='max'):
     else:
         raise ValueError(f"Invalid threshold_type '{threshold_type}'. Must be 'percentile' or 'max'.")
 
-    # Build simple dictionary (no day nesting - one threshold per mouse)
+    # Build dictionary based on mode
     threshold_dict = {}
-    for _, row in df.iterrows():
-        mouse = row['mouse_id']
-        threshold = row[threshold_col]
-        threshold_dict[mouse] = threshold
+
+    if threshold_mode == 'mouse':
+        # One threshold per mouse (original behavior)
+        for _, row in df.iterrows():
+            mouse = row['mouse_id']
+            threshold = row[threshold_col]
+            threshold_dict[mouse] = threshold
+
+    elif threshold_mode == 'day':
+        # Separate threshold per mouse-day combination
+        for _, row in df.iterrows():
+            mouse = row['mouse_id']
+            day = int(row['day'])
+            threshold = row[threshold_col]
+
+            if mouse not in threshold_dict:
+                threshold_dict[mouse] = {}
+            threshold_dict[mouse][day] = threshold
+
+    else:
+        raise ValueError(f"Invalid threshold_mode '{threshold_mode}'. Must be 'mouse' or 'day'.")
 
     return threshold_dict
 
 
-def get_threshold_for_mouse_day(threshold_dict, mouse, day, default_threshold=0.45):
+def get_threshold_for_mouse_day(threshold_dict, mouse, day, default_threshold=0.45, threshold_mode='day'):
     """
-    Get threshold for a specific mouse, with fallback to default.
-
-    Note: The 'day' parameter is kept for backwards compatibility but is ignored.
-    All days use the same Day 0-derived threshold for consistent event detection.
+    Get threshold for a specific mouse and day, with fallback to default.
 
     Parameters
     ----------
@@ -148,22 +169,38 @@ def get_threshold_for_mouse_day(threshold_dict, mouse, day, default_threshold=0.
     mouse : str
         Mouse ID
     day : int
-        Day number (ignored - kept for compatibility)
+        Day number
     default_threshold : float
-        Default threshold if mouse not found
+        Default threshold if mouse/day not found
+    threshold_mode : str
+        'mouse': Use same threshold for all days (threshold_dict[mouse])
+        'day': Use day-specific threshold (threshold_dict[mouse][day])
 
     Returns
     -------
     threshold : float
-        Threshold value to use (same for all days)
+        Threshold value to use
     """
     if threshold_dict is None:
         return default_threshold
 
-    if mouse in threshold_dict:
-        return threshold_dict[mouse]
+    if threshold_mode == 'mouse':
+        # Mouse-wise threshold (same for all days)
+        if mouse in threshold_dict:
+            return threshold_dict[mouse]
+        else:
+            return default_threshold
+
+    elif threshold_mode == 'day':
+        # Day-specific threshold
+        if mouse in threshold_dict and day in threshold_dict[mouse]:
+            return threshold_dict[mouse][day]
+        else:
+            return default_threshold
+
     else:
-        return default_threshold
+        raise ValueError(f"Invalid threshold_mode '{threshold_mode}'. Must be 'mouse' or 'day'.")
+
 
 
 def select_trials_by_type(xarray_day, trial_type):
@@ -188,15 +225,20 @@ def select_trials_by_type(xarray_day, trial_type):
         # All no-stim trials (current behavior)
         selected = xarray_day.sel(trial=xarray_day['no_stim'] == 1)
 
-    elif trial_type == 'whisker_hit':
-        # Whisker stimulus + lick
-        mask = (xarray_day['whisker_stim'] == 1) & (xarray_day['lick_flag'] == 1)
+    elif trial_type == 'whisker':
+        # Whisker stimulus
+        mask = (xarray_day['whisker_stim'] == 1)
         selected = xarray_day.sel(trial=mask)
 
-    elif trial_type == 'whisker_miss':
-        # Whisker stimulus + no lick
-        mask = (xarray_day['whisker_stim'] == 1) & (xarray_day['lick_flag'] == 0)
-        selected = xarray_day.sel(trial=mask)
+    # elif trial_type == 'whisker_hit':
+    #     # Whisker stimulus + lick
+    #     mask = (xarray_day['whisker_stim'] == 1) & (xarray_day['lick_flag'] == 1)
+    #     selected = xarray_day.sel(trial=mask)
+
+    # elif trial_type == 'whisker_miss':
+    #     # Whisker stimulus + no lick
+    #     mask = (xarray_day['whisker_stim'] == 1) & (xarray_day['lick_flag'] == 0)
+    #     selected = xarray_day.sel(trial=mask)
 
     elif trial_type == 'auditory_hit':
         # Auditory stimulus + lick
@@ -290,8 +332,9 @@ def create_whisker_template(mouse, day, threshold_dff=0.05, verbose=True):
         Mouse ID
     day : int
         Day number (-2, -1, 0, 1, 2)
-    threshold_dff : float
-        Minimum absolute dff response for including cells (default: 0.05 = 5%)
+    threshold_dff : float or None
+        Minimum absolute dff response for including cells (default: 0.05 = 5%).
+        If None, all cells are included without filtering.
     verbose : bool
         Print information about template creation
 
@@ -300,7 +343,7 @@ def create_whisker_template(mouse, day, threshold_dff=0.05, verbose=True):
     template : np.ndarray
         Template vector (n_cells,)
     cells_mask : np.ndarray
-        Boolean mask indicating which cells pass threshold
+        Boolean mask indicating which cells pass threshold (all True if threshold_dff is None)
     """
     if verbose:
         print(f"\n  Creating template for {mouse}, Day {day}")
@@ -326,16 +369,24 @@ def create_whisker_template(mouse, day, threshold_dff=0.05, verbose=True):
     template = d.mean(dim='trial').values
 
     # Filter cells by threshold
-    cells_mask = template >= threshold_dff
-
-    # Create filtered template (set non-responsive cells to 0)
-    template_filtered = template.copy()
-    template_filtered[~cells_mask] = 0
+    if threshold_dff is None:
+        # Use all cells, no filtering
+        cells_mask = np.ones(len(template), dtype=bool)
+        template_filtered = template.copy()
+    else:
+        # Filter cells by threshold
+        cells_mask = template >= threshold_dff
+        template_filtered = template.copy()
+        template_filtered[~cells_mask] = 0
 
     if verbose:
         print(f"    Total cells: {len(template)}")
-        print(f"    Cells above {threshold_dff*100}% threshold: {cells_mask.sum()} ({cells_mask.sum()/len(template)*100:.1f}%)")
-        print(f"    Template mean: {np.mean(template_filtered[cells_mask]):.4f}")
+        if threshold_dff is None:
+            print(f"    Using ALL cells (no threshold applied)")
+            print(f"    Template mean: {np.mean(template_filtered):.4f}")
+        else:
+            print(f"    Cells above {threshold_dff*100}% threshold: {cells_mask.sum()} ({cells_mask.sum()/len(template)*100:.1f}%)")
+            print(f"    Template mean: {np.mean(template_filtered[cells_mask]):.4f}")
 
     return template_filtered, cells_mask
 
@@ -401,6 +452,41 @@ def detect_reactivation_events(correlations, threshold=0.45, min_distance=15, pr
     return peaks
 
 
+def compute_time_above_threshold(correlations, threshold):
+    """
+    Compute percentage of time spent above correlation threshold.
+
+    This treats reactivation as a continuous state rather than discrete events,
+    quantifying how much time the neural population spends in a "reactivated" state.
+
+    Parameters
+    ----------
+    correlations : np.ndarray
+        Correlation timeseries (n_timepoints,)
+    threshold : float
+        Correlation threshold
+
+    Returns
+    -------
+    percent_time_above : float
+        Percentage of time spent above threshold (0-100%)
+    n_frames_above : int
+        Number of frames above threshold
+    total_frames : int
+        Total number of frames
+    """
+    above_threshold = correlations > threshold
+    n_frames_above = np.sum(above_threshold)
+    total_frames = len(correlations)
+
+    if total_frames > 0:
+        percent_time_above = (n_frames_above / total_frames) * 100
+    else:
+        percent_time_above = 0.0
+
+    return percent_time_above, n_frames_above, total_frames
+
+
 def map_events_to_blocks(event_indices, nostim_trials, n_timepoints_per_trial, sampling_rate=30):
     """
     Map event indices to block IDs and count events per block.
@@ -461,6 +547,54 @@ def map_events_to_blocks(event_indices, nostim_trials, n_timepoints_per_trial, s
         event_frequency_per_block[block_int] = events_per_block[block_int] / block_duration_min
 
     return events_per_block, event_frequency_per_block, event_blocks
+
+
+def compute_time_above_per_block(correlations, threshold, trial_block_ids, n_timepoints_per_trial):
+    """
+    Compute percentage of time above threshold per block.
+
+    Parameters
+    ----------
+    correlations : np.ndarray
+        Full correlation timeseries (n_trials * n_timepoints,)
+    threshold : float
+        Correlation threshold
+    trial_block_ids : np.ndarray
+        Block ID for each trial (n_trials,)
+    n_timepoints_per_trial : int
+        Number of timepoints per trial
+
+    Returns
+    -------
+    percent_time_per_block : dict
+        {block_id: percent_time_above}
+    """
+    n_trials = len(trial_block_ids)
+    unique_blocks = np.unique(trial_block_ids)
+    percent_time_per_block = {}
+
+    for block in unique_blocks:
+        block_int = int(block)
+        # Get trials in this block
+        trials_in_block = np.where(trial_block_ids == block)[0]
+
+        # Get correlation frames for these trials
+        block_correlations = []
+        for trial_idx in trials_in_block:
+            start_idx = trial_idx * n_timepoints_per_trial
+            end_idx = start_idx + n_timepoints_per_trial
+            block_correlations.extend(correlations[start_idx:end_idx])
+
+        block_correlations = np.array(block_correlations)
+
+        # Compute percentage
+        above_threshold = block_correlations > threshold
+        if len(block_correlations) > 0:
+            percent_time_per_block[block_int] = (np.sum(above_threshold) / len(block_correlations)) * 100
+        else:
+            percent_time_per_block[block_int] = 0.0
+
+    return percent_time_per_block
 
 
 def get_block_boundaries(nostim_trials, n_timepoints_per_trial):
@@ -820,6 +954,67 @@ def plot_events_per_day(frequency_by_day, mouse, save_path=None):
     return fig
 
 
+def plot_percent_time_above_per_day(results_dict, reward_group, save_path):
+    """
+    Plot percentage of time above threshold per day (bar chart).
+
+    Similar to plot_events_per_day() but shows % time instead of events/min.
+
+    Parameters
+    ----------
+    results_dict : dict
+        {mouse_id: results} from analyze_mouse_reactivation()
+    reward_group : str
+        'R+' or 'R-'
+    save_path : str
+        Path to save SVG file
+    """
+    # Extract data
+    all_data = []
+    for mouse, results in results_dict.items():
+        for day in days:
+            if day in results['days']:
+                day_data = results['days'][day]
+                all_data.append({
+                    'mouse': mouse,
+                    'day': day,
+                    'percent_time_above': day_data.get('percent_time_above', 0)
+                })
+
+    df = pd.DataFrame(all_data)
+
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Compute mean and SEM per day
+    day_means = df.groupby('day')['percent_time_above'].mean()
+    day_sems = df.groupby('day')['percent_time_above'].sem()
+
+    # Bar plot
+    colors = [reward_palette[1]] * len(days) if reward_group == 'R+' else [reward_palette[0]] * len(days)
+    ax.bar(days_str, day_means.values, yerr=day_sems.values,
+           color=colors, alpha=0.7, capsize=5, edgecolor='black', linewidth=1.5)
+
+    # Formatting
+    ax.set_xlabel('Day', fontsize=12, fontweight='bold')
+    ax.set_ylabel('% Time Above Threshold', fontsize=12, fontweight='bold')
+    ax.set_title(f'{reward_group} Mice: Percentage of Time Above Threshold Per Day',
+                 fontsize=14, fontweight='bold')
+    ax.grid(axis='y', alpha=0.3)
+
+    # Add n mice annotation
+    n_mice = df['mouse'].nunique()
+    ax.text(0.02, 0.98, f'n = {n_mice} mice',
+            transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    plt.savefig(save_path, format='svg', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"  Saved: {save_path}")
+
+
 def compute_reactivation_frequency_per_trial(selected_trials, template, threshold,
                                               time_bin_ms=500, sampling_rate=30,
                                               min_distance=15, prominence=0.1):
@@ -989,17 +1184,31 @@ def analyze_mouse_reactivation(mouse, days=[-2, -1, 0, 1, 2], verbose=True, thre
                 print(f"  Correlation: mean={np.mean(correlations):.3f}, max={np.max(correlations):.3f}")
 
             # Step 4: Detect events - use per-mouse, per-day threshold if available
-            current_threshold = get_threshold_for_mouse_day(threshold_dict, mouse, day, threshold_corr)
+            current_threshold = get_threshold_for_mouse_day(threshold_dict, mouse, day, threshold_corr, threshold_mode)
             if verbose and threshold_dict is not None:
-                print(f"  Using threshold: {current_threshold:.4f} (surrogate-based)")
+                print(f"  Using threshold: {current_threshold:.4f} (surrogate-based, {threshold_mode} mode)")
             events = detect_reactivation_events(correlations, current_threshold, min_event_distance_frames, prominence)
 
             if verbose:
                 print(f"  Events detected: {len(events)}")
 
+            # Compute time above threshold metric
+            percent_time_above, n_frames_above, total_frames = compute_time_above_threshold(
+                correlations, current_threshold
+            )
+
+            if verbose:
+                print(f"  Time above threshold: {percent_time_above:.2f}% ({n_frames_above}/{total_frames} frames)")
+
             # Step 5: Map events to blocks
             events_per_block, event_frequency_per_block, event_blocks = map_events_to_blocks(
                 events, selected_trials, n_timepoints, sampling_rate
+            )
+
+            # Compute per-block time above threshold
+            trial_block_ids = selected_trials['block_id'].values
+            percent_time_per_block = compute_time_above_per_block(
+                correlations, current_threshold, trial_block_ids, n_timepoints
             )
 
             # Step 6: Get block boundaries
@@ -1042,6 +1251,10 @@ def analyze_mouse_reactivation(mouse, days=[-2, -1, 0, 1, 2], verbose=True, thre
                 'events': events,
                 'events_per_block': events_per_block,
                 'event_frequency_per_block': event_frequency_per_block,
+                'percent_time_above': percent_time_above,  # NEW: % time above threshold
+                'n_frames_above': n_frames_above,  # NEW: frames above threshold
+                'total_frames': total_frames,  # NEW: total frames
+                'percent_time_per_block': percent_time_per_block,  # NEW: % time per block
                 'hr_per_block': hr_per_block,
                 'block_boundaries': block_boundaries,
                 'n_trials': n_selected_trials,
@@ -1252,6 +1465,89 @@ def plot_session_level_across_mice(r_plus_results, r_minus_results, save_path):
         plt.close()
 
     return fig
+
+
+def plot_percent_time_above_vs_performance(r_plus_results, r_minus_results, save_path):
+    """
+    Scatter plot: Day 0 percentage time above threshold vs hit rate across mice.
+
+    Similar to plot_session_level_across_mice() but shows % time instead of events/min.
+
+    Parameters
+    ----------
+    r_plus_results : dict
+        {mouse_id: results} for R+ mice
+    r_minus_results : dict
+        {mouse_id: results} for R- mice
+    save_path : str
+        Path to save SVG file
+    """
+    # Extract Day 0 data
+    data_list = []
+
+    for reward_group, results_dict in [('R+', r_plus_results), ('R-', r_minus_results)]:
+        for mouse, results in results_dict.items():
+            if 0 in results['days']:
+                day0_data = results['days'][0]
+                data_list.append({
+                    'mouse': mouse,
+                    'reward_group': reward_group,
+                    'percent_time_above': day0_data.get('percent_time_above', 0),
+                    'hit_rate': day0_data.get('session_hr_mean', np.nan)
+                })
+
+    df = pd.DataFrame(data_list)
+    df = df.dropna(subset=['hit_rate', 'percent_time_above'])
+
+    if len(df) == 0:
+        print(f"  Warning: No valid data for time-above vs performance plot")
+        return
+
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Plot each reward group
+    for reward_group in ['R+', 'R-']:
+        group_df = df[df['reward_group'] == reward_group]
+
+        if len(group_df) > 0:
+            ax.scatter(group_df['percent_time_above'], group_df['hit_rate'],
+                      color=reward_palette[1 if reward_group == 'R+' else 0], s=100, alpha=0.7,
+                      edgecolor='black', linewidth=1.5,
+                      label=f'{reward_group} (n={len(group_df)})')
+
+            # Linear regression
+            if len(group_df) >= 3:
+                x = group_df['percent_time_above'].values
+                y = group_df['hit_rate'].values
+
+                slope, intercept, r_value, p_value, std_err = linregress(x, y)
+
+                # Plot regression line
+                x_line = np.array([x.min(), x.max()])
+                y_line = slope * x_line + intercept
+                ax.plot(x_line, y_line, color=reward_palette[1 if reward_group == 'R+' else 0],
+                       linestyle='--', linewidth=2, alpha=0.8)
+
+                # Add stats text
+                stats_text = f'{reward_group}: r={r_value:.3f}, p={p_value:.3f}'
+                ax.text(0.02, 0.98 - (0.05 * ['R+', 'R-'].index(reward_group)),
+                       stats_text, transform=ax.transAxes, fontsize=10,
+                       color=reward_palette[1 if reward_group == 'R+' else 0], fontweight='bold')
+
+    # Formatting
+    ax.set_xlabel('% Time Above Threshold (Day 0)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Hit Rate (Day 0)', fontsize=12, fontweight='bold')
+    ax.set_title('Day 0: Percentage Time Above Threshold vs Performance',
+                 fontsize=14, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=10)
+    ax.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, format='svg', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"  Saved: {save_path}")
 
 
 def plot_block_level_across_mice(r_plus_results, r_minus_results, save_path):
@@ -2059,20 +2355,20 @@ def analyze_reactivation_around_first_hit(mouse, verbose=False):
         return None
 
     # Load surrogate thresholds if available
-    surrogate_csv_path = os.path.join(
-        io.solve_common_paths('results'),
-        'reactivations',
-        'surrogate_thresholds.csv'
-    )
+    # Choose file based on threshold_mode
+    if threshold_mode == 'mouse':
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+    else:  # threshold_mode == 'day'
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates_per_day', 'surrogate_thresholds_per_day.csv')
 
+    threshold_dict = None
     if os.path.exists(surrogate_csv_path):
         try:
-            surrogate_thresholds = load_surrogate_thresholds(surrogate_csv_path, threshold_type='percentile')
-            threshold = surrogate_thresholds.get((mouse, 0), threshold_corr)
+            threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type='percentile', threshold_mode=threshold_mode)
         except:
-            threshold = threshold_corr
-    else:
-        threshold = threshold_corr
+            pass
+
+    threshold = get_threshold_for_mouse_day(threshold_dict, mouse, 0, threshold_corr, threshold_mode)
 
     # Get trial groups
     # Before: all miss trials before first hit
@@ -2187,15 +2483,20 @@ def analyze_reactivation_trial_by_trial(mouse, n_trials_after_hit=60):
         return None
 
     # Load threshold
-    surrogate_csv_path = os.path.join(io.solve_common_paths('results'), 'reactivations', 'surrogate_thresholds.csv')
+    # Choose file based on threshold_mode
+    if threshold_mode == 'mouse':
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+    else:  # threshold_mode == 'day'
+        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates_per_day', 'surrogate_thresholds_per_day.csv')
+
+    threshold_dict = None
     if os.path.exists(surrogate_csv_path):
         try:
-            surrogate_thresholds = load_surrogate_thresholds(surrogate_csv_path, threshold_type='percentile')
-            threshold = surrogate_thresholds.get((mouse, 0), threshold_corr)
+            threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type='percentile', threshold_mode=threshold_mode)
         except:
-            threshold = threshold_corr
-    else:
-        threshold = threshold_corr
+            pass
+
+    threshold = get_threshold_for_mouse_day(threshold_dict, mouse, 0, threshold_corr, threshold_mode)
 
     # Calculate per-trial frequencies
     frequencies = calculate_per_trial_reactivation_frequency(
@@ -2604,20 +2905,16 @@ def plot_trial_type_comparison_day0(save_dir):
         Directory where trial type result files are stored and where figure will be saved
     """
     # Define trial types and their labels
-    trial_types = ['no_stim', 'whisker_hit', 'whisker_miss', 'auditory_hit']
-    trial_labels = ['No Stim', 'Whisker Hit', 'Whisker Miss', 'Auditory Hit']
-
-    # Define color palettes
-    trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])
-    trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])
+    # trial_types = ['no_stim', 'whisker_hit', 'whisker_miss', 'auditory_hit']
+    # trial_labels = ['No Stim', 'Whisker Hit', 'Whisker Miss', 'Auditory Hit']
+    trial_types = ['no_stim', 'whisker']
+    trial_labels = ['No Stim', 'Whisker']
 
     # Map trial types to color indices
     # Palette order: auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
     color_map = {
         'no_stim': 4,        # Use correct rejection color (grey)
-        'whisker_hit': 3,    # Whisker hits
-        'whisker_miss': 2,   # Whisker misses
-        'auditory_hit': 1    # Auditory hits
+        'whisker': 3    # Whisker
     }
 
     print("\n" + "="*60)
@@ -2815,7 +3112,7 @@ if __name__ == "__main__":
     print(f"  Correlation threshold: {threshold_corr} (default)")
     print(f"  Min event distance: {min_event_distance_ms}ms ({min_event_distance_frames} frames)")
     print(f"  Prominence: {prominence}")
-    print(f"  DFF threshold: {threshold_dff*100}%")
+    print(f"  DFF threshold: {threshold_dff*100 if threshold_dff is not None else 'None'}%")
     print(f"  Days: {days}")
     print(f"  Parallel jobs: {n_jobs}")
     print(f"\nMice groups:")
@@ -2837,20 +3134,34 @@ if __name__ == "__main__":
         print("="*60)
 
         # Define all trial types to analyze
-        all_trial_types = ['no_stim', 'whisker_hit', 'whisker_miss', 'auditory_hit']
+        # all_trial_types = ['no_stim', 'whisker_hit', 'whisker_miss', 'auditory_hit']
+        all_trial_types = ['no_stim', 'whisker']
         print(f"\nTrial types to process: {all_trial_types}")
 
         # Load surrogate thresholds if available (shared across all trial types)
-        surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+        # Choose file based on threshold_mode
+        if threshold_mode == 'mouse':
+            surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates', 'surrogate_thresholds.csv')
+        elif threshold_mode == 'day':
+            surrogate_csv_path = os.path.join(io.results_dir, 'reactivation_surrogates_per_day', 'surrogate_thresholds_per_day.csv')
+        else:
+            raise ValueError(f"Invalid threshold_mode '{threshold_mode}'. Must be 'mouse' or 'day'.")
+
         threshold_dict = None
         if os.path.exists(surrogate_csv_path):
             print(f"\n{'='*60}")
             print("LOADING SURROGATE-BASED THRESHOLDS")
             print(f"{'='*60}")
-            threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type=threshold_type)
+            threshold_dict = load_surrogate_thresholds(surrogate_csv_path, threshold_type=threshold_type, threshold_mode=threshold_mode)
             print(f"Loaded thresholds from: {surrogate_csv_path}")
             print(f"Threshold type: {threshold_type} ({'percentile-based' if threshold_type in ['percentile', '95'] else 'FWER/maximum'})")
-            print(f"Loaded thresholds for {len(threshold_dict)} mice")
+            print(f"Threshold mode: {threshold_mode} ({'one per mouse' if threshold_mode == 'mouse' else 'per mouse-day'})")
+            if threshold_mode == 'mouse':
+                print(f"Loaded thresholds for {len(threshold_dict)} mice")
+            else:
+                n_mice = len(threshold_dict)
+                n_mouse_days = sum(len(days_dict) for days_dict in threshold_dict.values())
+                print(f"Loaded thresholds for {n_mice} mice, {n_mouse_days} mouse-day combinations")
         else:
             print(f"\nSurrogate threshold file not found: {surrogate_csv_path}")
             print(f"Using default threshold: {threshold_corr}")
@@ -2862,9 +3173,9 @@ if __name__ == "__main__":
             print("="*80)
             
             # Stimulus blanking parameters (for whisker/auditory trials to avoid stimulus bias)
-            if current_trial_type in ['whisker_hit', 'whisker_miss', 'auditory_hit']:
+            if current_trial_type in ['no_stim']:
                 blank_stimulus = True  # Whether to blank the stimulus period
-                blank_window = (0, 1)  # Time window around stimulus to blank (seconds)
+                blank_window = (0, 1.5)  # Time window around stimulus to blank (seconds)
             else:
                 blank_stimulus = False
                 blank_window = (0, 0)  # No blanking
@@ -2972,6 +3283,28 @@ if __name__ == "__main__":
 
     # Figure 7: Trial type comparison for day 0 (requires all trial types to be computed)
     plot_trial_type_comparison_day0(save_dir)
+
+    # Generate time-above-threshold plots (SVG)
+    print("\n" + "="*60)
+    print("GENERATING TIME-ABOVE-THRESHOLD VISUALIZATIONS")
+    print("="*60)
+
+    # Plot 1: Percent time above per day (separate for R+ and R-)
+    for reward_group, results_dict in [('R+', r_plus_results), ('R-', r_minus_results)]:
+        if len(results_dict) > 0:
+            svg_path = os.path.join(save_dir,
+                                    f'{reward_group}_percent_time_above_per_day_{trial_type}.svg')
+            print(f"\nGenerating {reward_group} time-above per day plot...")
+            plot_percent_time_above_per_day(results_dict, reward_group, svg_path)
+
+    # Plot 2: Percent time above vs performance (combined R+ and R-)
+    if len(r_plus_results) > 0 or len(r_minus_results) > 0:
+        svg_path = os.path.join(save_dir,
+                                f'percent_time_above_vs_performance_{trial_type}.svg')
+        print(f"\nGenerating time-above vs performance plot...")
+        plot_percent_time_above_vs_performance(r_plus_results, r_minus_results, svg_path)
+
+    print(f"\nTime-above-threshold plots saved to: {save_dir}")
 
     # # Figure 8 & 9: Within-day-0 performance improvement vs reactivation frequency
     # # These analyses require loading results from specific trial types

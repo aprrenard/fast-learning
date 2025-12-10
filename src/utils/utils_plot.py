@@ -28,29 +28,31 @@ sns.set_theme(
     }
 )
 
-# # Color palettes.
-# reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
-# reward_palette_r = sns.color_palette([ '#1b9e77', '#c959affe'])
-# cell_types_palette = sns.color_palette(['#a3a3a3', '#1f77b4', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
-# # s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
-# s2_m1_palette = sns.color_palette(['steelblue', 'salmon'])
-# # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
-# stim_palette = sns.color_palette(['#1f77b4', '#FF9600', '#333333'])
-# behavior_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#c959affe', '#1b9e77', '#cccccc', '#333333'])
-
 # Color palettes.
-reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
-reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])
-cell_types_palette = sns.color_palette(['#807f7fff', '#ca59afff', '#0100fdff'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
-s2_m1_palette = sns.color_palette(['#ca59afff', '#0100fdff'])
+reward_palette = sns.color_palette(['#c959affe', '#1b9e77'])
+reward_palette_r = sns.color_palette([ '#1b9e77', '#c959affe'])
+cell_types_palette = sns.color_palette(['#a3a3a3', '#1f77b4', '#ff7f0e'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
+# s2_m1_palette = sns.color_palette(['#6D9BC3', '#E67A59'])
+s2_m1_palette = sns.color_palette(['steelblue','salmon'])
 # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
-stim_palette = sns.color_palette(['#0100fdff', '#FF9600', '#010101ff'])
-behavior_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#980099ff', '#009600ff', '#807f7fff', '#010101ff'])
-trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
-trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
+stim_palette = sns.color_palette(['#1f77b4', '#FF9600', '#333333'])
+behavior_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#c959affe', '#1b9e77', '#cccccc', '#333333'])
+trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#90ee90', '#1b9e77', '#cccccc', '#333333'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
+trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#dda0dd', '#c959affe', '#cccccc', '#333333'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
+
+# # Color palettes.
+# reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
+# reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])
+# cell_types_palette = sns.color_palette(['#807f7fff', '#ca59afff', '#0100fdff'])  # Grey for all cells, Blue for S2 projection, Orange for M1 projection
+# s2_m1_palette = sns.color_palette(['#ca59afff', '#0100fdff'])
+# # s2_m1_palette = sns.color_palette(['#cc5500','#4682b4',]) 
+# stim_palette = sns.color_palette(['#0100fdff', '#FF9600', '#010101ff'])
+# behavior_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#980099ff', '#009600ff', '#807f7fff', '#010101ff'])
+# trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#66c266', '#009600ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
+# trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#0100fdff', '#e699e6ff', '#980099ff', '#807f7fff', '#010101ff'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
 
 # Mice groups.
-mice_groups = {
+mice_groups = { 
     'gradual_day0': ['GF278', 'GF301', 'GF305', 'GF306', 'GF313', 'GF317', 'GF318', 'GF323', 'GF328', ],
     'step_day0': ['GF339', 'AR176', ],
     'psth_mapping_increase': ['GF305', 'GF306', 'GF308', 'GF313', 'GF318', 'GF323', 'GF334',],
