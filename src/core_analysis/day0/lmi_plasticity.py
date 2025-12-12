@@ -16,7 +16,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import chi2, mannwhitneyu
+from scipy.stats import chi2, mannwhitneyu, kruskal
 from scipy.optimize import curve_fit
 from scipy.special import expit
 from joblib import Parallel, delayed
@@ -41,6 +41,7 @@ AMPLITUDE_TYPE = 'absolute'  # 'absolute' or 'relative' - how to compute amplitu
 MIN_TRIALS = 20  # Minimum whisker trials required for fitting
 ALPHA = 0.05  # Significance threshold
 N_CORES = 35  # Number of cores for parallel processing (one per mouse)
+DAYS_LEARNING = [-2, -1, 0, 1, 2]  # Days for mapping PSTH visualization
 
 # LMI thresholds for cell selection
 LMI_POSITIVE_THRESHOLD = 0.975  # Top 2.5% LMI cells
@@ -123,9 +124,9 @@ def sigmoid_4pl(x, baseline, max_val, inflection, slope_param):
     x : array-like
         Independent variable (trial numbers)
     baseline : float
-        Bottom asymptote (minimum response)
+        Lower asymptote (response level at early trials, x → -∞)
     max_val : float
-        Top asymptote (maximum response)
+        Upper asymptote (response level at late trials, x → +∞)
     inflection : float
         Inflection point (trial number where change is steepest)
     slope_param : float
@@ -208,12 +209,15 @@ def fit_sigmoid_model(x, y):
         trial_range = np.linspace(x_clean[0], x_clean[-1], 100)
         predictions_range = sigmoid_4pl(trial_range, *popt)
 
-        # Absolute amplitude: max - min of fitted curve
-        amplitude_absolute = predictions_range.max() - predictions_range.min()
+        # Signed amplitude: max_val - baseline (can be positive or negative)
+        # Positive: cell increases response during learning
+        # Negative: cell decreases response during learning
+        baseline_val = popt[0]
+        max_val = popt[1]
+        amplitude_absolute = max_val - baseline_val
 
         # Relative amplitude: normalized by baseline (avoid division by zero)
-        baseline_val = popt[0]
-        if abs(baseline_val) > 1e-10:  # Avoid division by very small values
+        if abs(baseline_val) > .1:  # Avoid division by very small values
             amplitude_relative = amplitude_absolute / abs(baseline_val)
         else:
             amplitude_relative = amplitude_absolute  # Fallback to absolute if baseline ~0
@@ -485,7 +489,8 @@ def process_mouse(mouse_id, response_type='mean', response_win=(0, 0.300),
 
 def plot_distributions(results_df, output_dir):
     """
-    Plot distributions of key plasticity metrics.
+    Plot distributions of key plasticity metrics by reward group.
+    Uses ALL cells (no significance filtering).
 
     Parameters
     ----------
@@ -496,85 +501,54 @@ def plot_distributions(results_df, output_dir):
     """
     sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1.5)
 
-    # Overall distributions
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10), dpi=150)
+    # Convert amplitude to percentage and clip to ±200% ΔF/F
+    results_df = results_df.copy()
+    results_df['amplitude_pct'] = results_df['amplitude'].clip(lower=-2, upper=2) * 100
 
-    # 1. Amplitude distribution
-    ax = axes[0, 0]
-    sns.histplot(data=results_df, x='amplitude', bins=50, ax=ax, color='darkgreen')
-    ax.set_xlabel('Amplitude (Range of Fitted Curve)')
-    ax.set_ylabel('Count')
-    ax.set_title('Distribution of Response Amplitude')
-    ax.axvline(results_df['amplitude'].median(), color='red', linestyle='--', label='Median')
-    ax.legend()
+    # Compute shared x-axis ranges for inflection plots
+    inflection_min = results_df['inflection'].min()
+    inflection_max = results_df['inflection'].max()
+    inflection_range = (inflection_min - 5, inflection_max + 5)
 
-    # 2. Pseudo-R²
-
-    ax = axes[0, 1]
-    sns.histplot(data=results_df, x='pseudo_r2', bins=50, ax=ax, color='steelblue')
-    ax.set_xlabel('Pseudo-R²')
-    ax.set_ylabel('Count')
-    ax.set_title('Distribution of Pseudo-R² (Sigmoid Fit)')
-    ax.axvline(results_df['pseudo_r2'].median(), color='red', linestyle='--', label='Median')
-    ax.legend()
-
-    # 3. Inflection points
-    ax = axes[1, 0]
-    sns.histplot(data=results_df, x='inflection', bins=30, ax=ax, color='darkorange')
-    ax.set_xlabel('Inflection Point (trial number)')
-    ax.set_ylabel('Count')
-    ax.set_title(f'Inflection Points (n={len(results_df)})')
-
-    # 4. Proportion significant by reward group
-    ax = axes[1, 1]
-    sig_props = []
-    for group in ['R+', 'R-']:
-        df_g = results_df[results_df['reward_group'] == group]
-        prop_sig = (df_g['p_value'] < ALPHA).sum() / len(df_g) if len(df_g) > 0 else 0
-        sig_props.append({'reward_group': group, 'proportion': prop_sig})
-    sig_props_df = pd.DataFrame(sig_props)
-    sns.barplot(data=sig_props_df, x='reward_group', y='proportion',
-                order=['R+', 'R-'], palette=reward_palette[::-1], ax=ax)
-    ax.set_ylabel('Proportion Significant')
-    ax.set_xlabel('Reward Group')
-    ax.set_title('Significant Plasticity (p < 0.05)')
-    ax.set_ylim(0, 1)
-    for i, row in sig_props_df.iterrows():
-        ax.text(i, row['proportion'] + 0.02, f'{row["proportion"]:.2f}', ha='center')
-
-    plt.tight_layout()
-    sns.despine()
-    plt.savefig(os.path.join(output_dir, 'distributions_all.svg'), format='svg', dpi=150)
-    plt.close()
+    # Compute shared x-axis range for inflection_relative plots (all cells with learning trial)
+    df_with_learning = results_df.dropna(subset=['learning_trial'])
+    if len(df_with_learning) > 0:
+        inflection_rel_min = df_with_learning['inflection_relative'].min()
+        inflection_rel_max = df_with_learning['inflection_relative'].max()
+        inflection_rel_range = (inflection_rel_min - 5, inflection_rel_max + 5)
+    else:
+        inflection_rel_range = (-50, 50)  # Default range if no data
 
     # Distributions by reward group
     fig, axes = plt.subplots(2, 3, figsize=(18, 10), dpi=150)
 
     for idx, group in enumerate(['R+', 'R-']):
         df_group = results_df[results_df['reward_group'] == group]
-        df_group_sig = df_group[df_group['p_value'] < ALPHA]
         color = reward_palette[1] if group == 'R+' else reward_palette[0]
 
-        # Amplitude distribution
+        # Amplitude distribution - proportions with -200 to +200% range
         ax = axes[idx, 0]
-        sns.histplot(data=df_group, x='amplitude', bins=30, ax=ax, color=color)
-        ax.set_xlabel('Amplitude (Range of Fitted Curve)')
-        ax.set_ylabel('Count')
+        sns.histplot(data=df_group, x='amplitude_pct', ax=ax, color=color,
+                     binwidth=10, binrange=(-200, 200), stat='proportion')
+        ax.set_xlabel('Amplitude (% ΔF/F)')
+        ax.set_ylabel('Proportion')
         ax.set_title(f'{group}: Amplitude (n={len(df_group)})')
+        ax.set_xlim([-200, 200])
 
-        # Inflection points
+        # Inflection points - shared x-axis
         ax = axes[idx, 1]
         sns.histplot(data=df_group, x='inflection', bins=30, ax=ax, color=color)
         ax.set_xlabel('Inflection Point (trial number)')
         ax.set_ylabel('Count')
         ax.set_title(f'{group}: Inflection Points (n={len(df_group)})')
+        ax.set_xlim(inflection_range)
 
-        # Inflection relative to learning trial (significant cells only)
+        # Inflection relative to learning trial - ALL cells with learning data, no KDE
         ax = axes[idx, 2]
-        df_group_sig_with_learning = df_group_sig.dropna(subset=['learning_trial'])
-        if len(df_group_sig_with_learning) > 0:
+        df_group_with_learning = df_group.dropna(subset=['learning_trial'])
+        if len(df_group_with_learning) > 0:
             sns.histplot(
-                data=df_group_sig_with_learning, x='inflection_relative', kde=True,
+                data=df_group_with_learning, x='inflection_relative',
                 color=color, ax=ax, bins=20
             )
             ax.axvline(0, color='black', linestyle='--', linewidth=1.5,
@@ -582,7 +556,8 @@ def plot_distributions(results_df, output_dir):
             ax.legend(frameon=False)
         ax.set_xlabel('Cellular inflection - Learning trial (trials)')
         ax.set_ylabel('Count')
-        ax.set_title(f'{group}: Inflection Timing (n={len(df_group_sig_with_learning)})')
+        ax.set_title(f'{group}: Inflection Timing (n={len(df_group_with_learning)})')
+        ax.set_xlim(inflection_rel_range)
 
     plt.tight_layout()
     sns.despine()
@@ -594,70 +569,69 @@ def plot_distributions(results_df, output_dir):
 
 def plot_amplitude_distributions_by_lmi(results_df, output_dir, alpha=0.05):
     """
-    Plot amplitude distributions by reward group for LMI+ and LMI- cells.
+    Plot amplitude distributions by reward group for LMI+, Non-sig, and LMI- cells.
 
-    Creates 2-panel figure with overlaid histograms:
+    Creates 3-panel figure with overlaid histograms:
     - Left panel: LMI positive cells (R+ vs R-)
+    - Middle panel: Non-significant LMI cells (R+ vs R-)
     - Right panel: LMI negative cells (R+ vs R-)
+
+    Uses ALL cells (no significance filtering).
 
     Parameters
     ----------
     results_df : pd.DataFrame
-        Results dataframe with all cells (must have 'lmi_sign' column)
+        Results dataframe with all cells (must have 'lmi_p' column)
     output_dir : str
         Output directory for saving figure
     alpha : float
-        Significance threshold for filtering cells (default: 0.05)
+        Not used (kept for backward compatibility)
     """
     sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1.5)
 
-    # Filter for significant cells only
-    sig_cells = results_df[results_df['p_value'] < alpha].copy()
+    # Use ALL cells (no p_value filtering)
+    all_cells = results_df.copy()
 
-    # Determine global bin edges across all data for consistency
-    all_amplitudes = sig_cells['amplitude'].values
-    bin_edges = np.histogram_bin_edges(all_amplitudes, bins=20)
+    # Convert amplitude to percentage (x100) and cap at ±150% ΔF/F (±1.5 in original units)
+    all_cells['amplitude_pct'] = all_cells['amplitude'].clip(lower=-1.5, upper=1.5) * 100
 
-    # Create figure with 2 subplots
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), dpi=150)
+    # Assign LMI categories based on lmi_p percentile
+    def assign_lmi_category(lmi_p):
+        if lmi_p >= LMI_POSITIVE_THRESHOLD:
+            return 'LMI+'
+        elif lmi_p <= LMI_NEGATIVE_THRESHOLD:
+            return 'LMI-'
+        else:
+            return 'Non-sig'
 
-    # Panel 1: LMI Positive cells
-    lmi_pos = sig_cells[sig_cells['lmi_sign'] == 'Positive']
-    lmi_pos_rplus = lmi_pos[lmi_pos['reward_group'] == 'R+']
-    lmi_pos_rminus = lmi_pos[lmi_pos['reward_group'] == 'R-']
+    all_cells['lmi_category'] = all_cells['lmi_p'].apply(assign_lmi_category)
 
-    ax = axes[0]
-    # Histogram for R- with KDE
-    sns.histplot(data=lmi_pos_rminus, x='amplitude', ax=ax, color=reward_palette[0],
-                 alpha=0.4, label=f'R- (n={len(lmi_pos_rminus)})', stat='density',
-                 bins=bin_edges, kde=True, line_kws={'linewidth': 2})
-    # Overlaid histogram for R+ with KDE
-    sns.histplot(data=lmi_pos_rplus, x='amplitude', ax=ax, color=reward_palette[1],
-                 alpha=0.4, label=f'R+ (n={len(lmi_pos_rplus)})', stat='density',
-                 bins=bin_edges, kde=True, line_kws={'linewidth': 2})
-    ax.set_xlabel('Amplitude (Relative to Baseline)')
-    ax.set_ylabel('Density')
-    ax.set_title(f'LMI+ Cells (n={len(lmi_pos)})')
-    ax.legend(frameon=False)
+    # Create figure with 3 subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), dpi=150)
 
-    # Panel 2: LMI Negative cells
-    lmi_neg = sig_cells[sig_cells['lmi_sign'] == 'Negative']
-    lmi_neg_rplus = lmi_neg[lmi_neg['reward_group'] == 'R+']
-    lmi_neg_rminus = lmi_neg[lmi_neg['reward_group'] == 'R-']
+    # Panel order: LMI+, Non-sig, LMI-
+    categories = ['LMI+', 'Non-sig', 'LMI-']
+    titles = ['LMI+ Cells', 'Non-sig Cells', 'LMI- Cells']
 
-    ax = axes[1]
-    # Histogram for R- with KDE
-    sns.histplot(data=lmi_neg_rminus, x='amplitude', ax=ax, color=reward_palette[0],
-                 alpha=0.4, label=f'R- (n={len(lmi_neg_rminus)})', stat='density',
-                 bins=bin_edges, kde=True, line_kws={'linewidth': 2})
-    # Overlaid histogram for R+ with KDE
-    sns.histplot(data=lmi_neg_rplus, x='amplitude', ax=ax, color=reward_palette[1],
-                 alpha=0.4, label=f'R+ (n={len(lmi_neg_rplus)})', stat='density',
-                 bins=bin_edges, kde=True, line_kws={'linewidth': 2})
-    ax.set_xlabel('Amplitude (Relative to Baseline)')
-    ax.set_ylabel('Density')
-    ax.set_title(f'LMI- Cells (n={len(lmi_neg)})')
-    ax.legend(frameon=False)
+    for idx, (category, title) in enumerate(zip(categories, titles)):
+        lmi_cells = all_cells[all_cells['lmi_category'] == category]
+        lmi_rplus = lmi_cells[lmi_cells['reward_group'] == 'R+']
+        lmi_rminus = lmi_cells[lmi_cells['reward_group'] == 'R-']
+
+        ax = axes[idx]
+        # Histogram for R- with KDE
+        sns.histplot(data=lmi_rminus, x='amplitude_pct', ax=ax, color=reward_palette[0],
+                     alpha=0.4, label=f'R- (n={len(lmi_rminus)})', stat='density',
+                     binwidth=10, binrange=(-150, 150), kde=True, line_kws={'linewidth': 2})
+        # Overlaid histogram for R+ with KDE
+        sns.histplot(data=lmi_rplus, x='amplitude_pct', ax=ax, color=reward_palette[1],
+                     alpha=0.4, label=f'R+ (n={len(lmi_rplus)})', stat='density',
+                     binwidth=10, binrange=(-150, 150), kde=True, line_kws={'linewidth': 2})
+        ax.set_xlabel('Amplitude (%ΔF/F)', fontsize=12)
+        ax.set_ylabel('Density', fontsize=12)
+        ax.set_xlim([-150, 150])
+        ax.set_title(f'{title} (n={len(lmi_cells)})')
+        ax.legend(frameon=False)
 
     plt.tight_layout()
     sns.despine()
@@ -665,6 +639,228 @@ def plot_amplitude_distributions_by_lmi(results_df, output_dir, alpha=0.05):
     plt.close()
 
     print("  ✓ Amplitude distribution plots saved")
+
+
+def plot_lmi_groups_amplitude_barplot(results_df, output_dir):
+    """
+    Create bar plot comparing amplitude across LMI groups for R+ and R- mice.
+
+    Two panels (R+ and R-), each with three bars showing average amplitude for:
+    - LMI positive cells (lmi_p >= 0.975)
+    - Non-significant cells (0.025 < lmi_p < 0.975)
+    - LMI negative cells (lmi_p <= 0.025)
+
+    Averages are computed per mouse first, then aggregated across mice.
+    Includes statistical testing and significance markers.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Results dataframe with all cells
+    output_dir : str
+        Output directory for saving figure
+    """
+    print("\n  Computing LMI group amplitude comparison...")
+
+    # Define LMI categories
+    def assign_lmi_category(lmi_p):
+        if lmi_p >= LMI_POSITIVE_THRESHOLD:
+            return 'LMI+'
+        elif lmi_p <= LMI_NEGATIVE_THRESHOLD:
+            return 'LMI-'
+        else:
+            return 'Non-sig'
+
+    results_df = results_df.copy()
+    results_df['lmi_category'] = results_df['lmi_p'].apply(assign_lmi_category)
+
+    # Aggregate per mouse first
+    mouse_averages = results_df.groupby(['mouse_id', 'reward_group', 'lmi_category'])['amplitude'].mean().reset_index()
+    mouse_averages.columns = ['mouse_id', 'reward_group', 'lmi_category', 'mean_amplitude']
+
+    # Create figure
+    sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1.3)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6), dpi=150, sharey=True)
+
+    # Define colors for LMI categories
+    lmi_colors = {
+        'LMI+': '#d62728',      # Red
+        'Non-sig': '#7f7f7f',   # Gray
+        'LMI-': '#1f77b4'       # Blue
+    }
+
+    # Order of categories for plotting
+    category_order = ['LMI+', 'Non-sig', 'LMI-']
+
+    # Plot for each reward group
+    for idx, reward_group in enumerate(['R+', 'R-']):
+        ax = axes[idx]
+
+        # Filter data for this reward group
+        data = mouse_averages[mouse_averages['reward_group'] == reward_group]
+
+        # Ensure all categories are present
+        data = data[data['lmi_category'].isin(category_order)]
+
+        # Create bar plot with seaborn
+        sns.barplot(data=data, x='lmi_category', y='mean_amplitude',
+                   order=category_order, palette=lmi_colors,
+                   errorbar='ci', ax=ax, alpha=0.7, edgecolor='black', linewidth=1.5)
+
+        # Add individual mouse points
+        sns.stripplot(data=data, x='lmi_category', y='mean_amplitude',
+                     order=category_order, color='black', size=4, alpha=0.4, ax=ax)
+
+        # Statistical testing
+        # Prepare data for each category
+        lmi_pos_data = data[data['lmi_category'] == 'LMI+']['mean_amplitude'].values
+        non_sig_data = data[data['lmi_category'] == 'Non-sig']['mean_amplitude'].values
+        lmi_neg_data = data[data['lmi_category'] == 'LMI-']['mean_amplitude'].values
+
+        # Kruskal-Wallis test (overall)
+        if len(lmi_pos_data) > 0 and len(non_sig_data) > 0 and len(lmi_neg_data) > 0:
+            h_stat, p_kruskal = kruskal(lmi_pos_data, non_sig_data, lmi_neg_data)
+
+            # Post-hoc pairwise Mann-Whitney U tests
+            comparisons = [
+                ('LMI+', 'Non-sig', lmi_pos_data, non_sig_data, 0, 1),
+                ('LMI+', 'LMI-', lmi_pos_data, lmi_neg_data, 0, 2),
+                ('Non-sig', 'LMI-', non_sig_data, lmi_neg_data, 1, 2)
+            ]
+
+            # Bonferroni correction
+            alpha_corrected = 0.05 / len(comparisons)
+
+            y_max = data['mean_amplitude'].max()
+            y_range = data['mean_amplitude'].max() - data['mean_amplitude'].min()
+
+            for comp_idx, (cat1, cat2, data1, data2, x1, x2) in enumerate(comparisons):
+                if len(data1) > 0 and len(data2) > 0:
+                    stat, p_val = mannwhitneyu(data1, data2, alternative='two-sided')
+
+                    # Determine significance stars
+                    if p_val < alpha_corrected:
+                        if p_val < 0.001:
+                            stars = '***'
+                        elif p_val < 0.01:
+                            stars = '**'
+                        else:
+                            stars = '*'
+
+                        # Draw significance bracket
+                        y = y_max + y_range * (0.05 + 0.08 * comp_idx)
+                        ax.plot([x1, x1, x2, x2], [y, y + y_range*0.02, y + y_range*0.02, y],
+                               'k-', linewidth=1.5)
+                        ax.text((x1 + x2) / 2, y + y_range*0.025, stars,
+                               ha='center', va='bottom', fontsize=14, fontweight='bold')
+
+        # Styling
+        ax.set_xlabel('LMI Category', fontsize=12)
+        ax.set_ylabel('Amplitude (ΔF/F)', fontsize=12)
+        ax.set_title(f'{reward_group} Mice', fontsize=14, fontweight='bold')
+
+        # Add sample sizes
+        for cat_idx, cat in enumerate(category_order):
+            n = len(data[data['lmi_category'] == cat])
+            n_mice = data[data['lmi_category'] == cat]['mouse_id'].nunique()
+            ax.text(cat_idx, -0.02, f'n={n}\n({n_mice} mice)',
+                   ha='center', va='top', fontsize=9, transform=ax.get_xaxis_transform())
+
+    plt.tight_layout()
+    sns.despine()
+
+    # Save figure
+    save_path = os.path.join(output_dir, 'lmi_groups_amplitude_comparison.svg')
+    plt.savefig(save_path, format='svg', dpi=150, bbox_inches='tight')
+    plt.close()
+
+    print(f"  ✓ LMI groups amplitude comparison saved to: {save_path}")
+
+
+def plot_lmi_groups_amplitude_histograms(results_df, output_dir):
+    """
+    Create histogram plots showing amplitude distributions for LMI groups.
+
+    Two panels (R+ and R-), each with three overlaid histograms showing
+    amplitude distributions for LMI+, Non-sig, and LMI- cells.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Results dataframe with all cells
+    output_dir : str
+        Output directory for saving figure
+    """
+    print("\n  Computing LMI groups amplitude histograms...")
+
+    # Define LMI categories
+    def assign_lmi_category(lmi_p):
+        if lmi_p >= LMI_POSITIVE_THRESHOLD:
+            return 'LMI+'
+        elif lmi_p <= LMI_NEGATIVE_THRESHOLD:
+            return 'LMI-'
+        else:
+            return 'Non-sig'
+
+    results_df = results_df.copy()
+    results_df['lmi_category'] = results_df['lmi_p'].apply(assign_lmi_category)
+
+    # Convert amplitude to percentage (x100) and cap at ±150% ΔF/F (±1.5 in original units)
+    results_df['amplitude_pct'] = results_df['amplitude'].clip(lower=-1.5, upper=1.5) * 100
+
+    # Create figure
+    sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serf', font_scale=1.3)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6), dpi=150, sharey=True)
+
+    # Define colors for LMI categories (matching bar plot)
+    lmi_colors = {
+        'LMI+': '#d62728',      # Red
+        'Non-sig': '#7f7f7f',   # Gray
+        'LMI-': '#1f77b4'       # Blue
+    }
+
+    # Order of categories for plotting
+    category_order = ['LMI+', 'Non-sig', 'LMI-']
+
+    # Plot for each reward group
+    for idx, reward_group in enumerate(['R+', 'R-']):
+        ax = axes[idx]
+
+        # Filter data for this reward group
+        data = results_df[results_df['reward_group'] == reward_group]
+
+        # Plot each LMI category as overlaid histogram
+        for category in category_order:
+            cat_data = data[data['lmi_category'] == category]
+
+            if len(cat_data) > 0:
+                sns.histplot(
+                    data=cat_data, x='amplitude_pct', ax=ax,
+                    binwidth=10, binrange=(-150, 150),
+                    color=lmi_colors[category],
+                    alpha=0.4,
+                    label=f'{category} (n={len(cat_data)})',
+                    stat='density',
+                    kde=True,
+                    line_kws={'linewidth': 2}
+                )
+
+        # Styling
+        ax.set_xlabel('Amplitude (%ΔF/F)', fontsize=12)
+        ax.set_ylabel('Density', fontsize=12)
+        ax.set_xlim([-150, 150])
+        ax.set_title(f'{reward_group} Mice', fontsize=14, fontweight='bold')
+        ax.legend(loc='best', frameon=False, fontsize=10)
+
+    plt.tight_layout()
+    sns.despine()
+
+    # Save figure
+    save_path = os.path.join(output_dir, 'lmi_groups_amplitude_histograms.svg')
+    plt.savefig(save_path, format='svg', dpi=150, bbox_inches='tight')
+    plt.close()
+
+    print(f"  ✓ LMI groups amplitude histograms saved to: {save_path}")
 
 
 def plot_cell_psth_split_by_inflection(ax, mouse_id, roi, inflection_trial, reward_group='R+'):
@@ -688,8 +884,7 @@ def plot_cell_psth_split_by_inflection(ax, mouse_id, roi, inflection_trial, rewa
     # Load xarray data (baseline-subtracted)¨
     folder = os.path.join(io.processed_dir, 'mice')
     xarr = utils_imaging.load_mouse_xarray(
-        mouse_id, folder, 'tensor_xarray_learning_data.nc', substracted=False
-    )
+        mouse_id, folder, 'tensor_xarray_learning_data.nc', substracted=True)
 
     # Filter for this cell
     xarr_cell = xarr.sel(cell=xarr['roi'] == roi)
@@ -742,6 +937,115 @@ def plot_cell_psth_split_by_inflection(ax, mouse_id, roi, inflection_trial, rewa
     sns.despine(ax=ax)
 
 
+def plot_behavior_learning_curves(ax, mouse_id, behavior_table, reward_group):
+    """
+    Plot behavioral learning curves for a specific mouse.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to plot on
+    mouse_id : str
+        Mouse identifier
+    behavior_table : pd.DataFrame
+        Behavior table with learning curves
+    reward_group : str
+        Reward group ('R+' or 'R-')
+    """
+    # Filter for this mouse, day 0, whisker trials
+    mouse_data = behavior_table[
+        (behavior_table['mouse_id'] == mouse_id) &
+        (behavior_table['day'] == 0) &
+        (behavior_table['whisker_stim'] == 1)
+    ].reset_index(drop=True)
+
+    if len(mouse_data) == 0:
+        ax.text(0.5, 0.5, 'No behavior data', ha='center', va='center', transform=ax.transAxes)
+        ax.axis('off')
+        return
+
+    # Extract learning curves
+    trial_w = mouse_data['trial_w'].values
+    learning_curve_w = mouse_data['learning_curve_w'].values.astype(float)
+    learning_curve_w_ci_low = mouse_data['learning_curve_w_ci_low'].values.astype(float)
+    learning_curve_w_ci_high = mouse_data['learning_curve_w_ci_high'].values.astype(float)
+    learning_curve_chance = mouse_data['learning_curve_chance'].values.astype(float)
+
+    # Colors based on reward group
+    w_color = behavior_palette[3] if reward_group == 'R+' else behavior_palette[2]
+    ns_color = behavior_palette[5]
+
+    # Plot learning curves
+    ax.plot(trial_w, learning_curve_w, color=w_color, linewidth=2, label='Whisker')
+    ax.fill_between(trial_w, learning_curve_w_ci_low, learning_curve_w_ci_high,
+                     color=w_color, alpha=0.2)
+    ax.plot(trial_w, learning_curve_chance, color=ns_color, linewidth=2, label='No stim')
+
+    # Add learning trial vertical line
+    learning_trial = mouse_data['learning_trial'].values[0]
+    if not pd.isna(learning_trial):
+        ax.axvline(learning_trial, color='black', linestyle='-', linewidth=1.5, alpha=0.8)
+
+    # Styling
+    ax.set_ylim([0, 1])
+    ax.set_xlabel('Whisker Trial', fontsize=9)
+    ax.set_ylabel('Lick Probability', fontsize=9)
+    ax.set_title('Behavioral Learning Curve', fontsize=10)
+    ax.legend(loc='best', frameon=False, fontsize=8)
+    sns.despine(ax=ax)
+
+
+def plot_5day_mapping_psth(axes, mouse_id, roi):
+    """
+    Plot mapping trial PSTH across 5 days for a single cell.
+
+    Parameters
+    ----------
+    axes : list of matplotlib.axes.Axes
+        List of 5 axes (one per day)
+    mouse_id : str
+        Mouse identifier
+    roi : int
+        Cell ROI number
+    """
+    # Load mapping data
+    folder = os.path.join(io.processed_dir, 'mice')
+    file_name_mapping = 'tensor_xarray_mapping_data.nc'
+ 
+    xarr_mapping = utils_imaging.load_mouse_xarray(mouse_id, folder, file_name_mapping, substracted=True)
+    xarr_mapping = xarr_mapping.sel(cell=xarr_mapping['roi'] == roi)
+    xarr_mapping.load()
+
+    # Plot each day
+    for idx, day in enumerate(DAYS_LEARNING):
+        ax = axes[idx]
+
+        # Select day data
+        day_data = xarr_mapping.sel(trial=xarr_mapping['day'] == day)
+
+        if len(day_data.trial) > 0:
+            # Convert to DataFrame for seaborn
+            df = day_data.to_dataframe(name='activity').reset_index()
+            df['activity'] = df['activity'] * 100  # Convert to %
+
+            # Plot with CI
+            sns.lineplot(data=df, x='time', y='activity', errorbar='ci',
+                        ax=ax, color='darkorange', linewidth=1.5)
+
+            # Styling
+            ax.axvline(0, color='darkorange', linestyle='-', linewidth=1, alpha=0.5)
+            ax.set_title(f'Day {day}\n(n={len(day_data.trial)})', fontsize=9)
+            ax.set_ylabel('ΔF/F (%)', fontsize=8)
+            ax.set_xlabel('Time (s)', fontsize=8)
+            ax.tick_params(labelsize=7)
+        else:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(f'Day {day}', fontsize=9)
+
+        sns.despine(ax=ax)
+
+
+
 def create_cell_pdf_report(results_df, output_dir, pdf_name, n_cells=50):
     """
     Create PDF report with individual cell plots showing raw data and sigmoid fits.
@@ -757,11 +1061,18 @@ def create_cell_pdf_report(results_df, output_dir, pdf_name, n_cells=50):
     n_cells : int
         Number of top cells to include in report (default: 50)
     """
-    print(f"\n  Generating {pdf_name} for top {n_cells} cells (sorted by amplitude)...")
+    print(f"\n  Generating {pdf_name} for top {n_cells} cells (sorted by LMI)...")
 
-    # Filter for significant cells and sort by amplitude
+    # Filter for significant cells and sort by LMI value
     results_significant = results_df[results_df['p_value'] < ALPHA]
-    results_sorted = results_significant.sort_values('amplitude', ascending=False).head(n_cells)
+    results_sorted = results_significant.sort_values('lmi', ascending=False).head(n_cells)
+
+    # Load behavior table for learning curves
+    behavior_path = io.adjust_path_to_host(
+        r'/mnt/lsens-analysis/Anthony_Renard/data_processed/behavior/'
+        r'behavior_imagingmice_table_5days_cut_with_learning_curves.csv'
+    )
+    behavior_table = pd.read_csv(behavior_path)
 
     # Create PDF
     pdf_path = os.path.join(output_dir, pdf_name)
@@ -780,12 +1091,19 @@ def create_cell_pdf_report(results_df, output_dir, pdf_name, n_cells=50):
             y = responses[cell_idx, :]
             x = trial_indices
 
-            # Create figure
-            fig = plt.figure(figsize=(12, 8), dpi=150)
-            gs = fig.add_gridspec(2, 2, hspace=0.4, wspace=0.3)
+            # Create figure with expanded layout
+            fig = plt.figure(figsize=(16, 12), dpi=150)
+            gs = fig.add_gridspec(
+                4, 5,
+                hspace=0.45,
+                wspace=0.35,
+                height_ratios=[1, 0.8, 1, 0.9],
+                top=0.96,   # shift the grid up on the page
+                bottom=0.06
+            )
 
-            # Main plot: Raw data + fitted model
-            ax_main = fig.add_subplot(gs[0, :])
+            # Row 0: Sigmoid fit (full width)
+            ax_main = fig.add_subplot(gs[1, :])
 
             # Plot raw data
             color = reward_palette[1] if row['reward_group'] == 'R+' else reward_palette[0]
@@ -799,11 +1117,9 @@ def create_cell_pdf_report(results_df, output_dir, pdf_name, n_cells=50):
                 y_fit = sigmoid_fit['predictions']
                 ax_main.plot(x_fit, y_fit * 100, 'darkorange', linewidth=3, label='Sigmoid fit')
 
-            # Add vertical line for behavioral learning trial
-            if 'learning_trial' in row and not pd.isna(row['learning_trial']):
-                learning_trial = row['learning_trial']
-                ax_main.axvline(learning_trial, color='black', linestyle='-',
-                                linewidth=2, alpha=0.8, label='Behavioral learning trial')
+                inflexion = row['inflection']
+                ax_main.axvline(inflexion, color='darkorange', linestyle='-',
+                                linewidth=2, alpha=0.8, label='Inflexion point')
 
             ax_main.set_xlabel('Whisker Trial Number (trial_w)', fontsize=12)
             ax_main.set_ylabel('Response (ΔF/F0 %)', fontsize=12)
@@ -811,58 +1127,56 @@ def create_cell_pdf_report(results_df, output_dir, pdf_name, n_cells=50):
             ax_main.grid(True, alpha=0.3)
             sns.despine(ax=ax_main)
 
-            # Info panel
-            ax_info = fig.add_subplot(gs[1, 0])
+            # Row 1: Behavior learning curves (full width)
+            ax_behavior = fig.add_subplot(gs[0, :])
+            plot_behavior_learning_curves(ax_behavior, row['mouse_id'], behavior_table,
+                                         row['reward_group'])
+
+            # Row 2: Info panel (left) and Day 0 PSTH (right)
+            ax_info = fig.add_subplot(gs[2, 0:2])
             ax_info.axis('off')
 
             # Format learning trial info
             learning_trial_text = ""
             if 'learning_trial' in row and not pd.isna(row['learning_trial']):
                 learning_trial_text = f"""
-Behavioral Learning:
-─────────────────
+
 Learning trial: {row['learning_trial']:.0f}
 Inflection rel. to learning: {row['inflection_relative']:.1f} trials
 """
 
             info_text = f"""
-Cell Information:
-─────────────────
-Mouse ID: {row['mouse_id']}
-ROI: {row['roi']}
-Reward Group: {row['reward_group']}
-LMI: {row['lmi']:.3f}
-LMI p: {row['lmi_p']:.3f}
+LMI: {row['lmi']:.3f}, p: {row['lmi_p']:.3f}
 
-Plasticity Metrics:
-─────────────────
-Amplitude: {row['amplitude']:.2f}
 p-value: {row['p_value']:.4e}
 Pseudo-R²: {row['pseudo_r2']:.4f}
 Significant: {'YES' if row['p_value'] < ALPHA else 'NO'}
 
-Sigmoid Parameters:
-─────────────────
+Amplitude: {row['amplitude']*100:.2f}
 Inflection: {row['inflection']:.1f} trials
-Baseline: {row['baseline']:.2f}
-Max: {row['max_val']:.2f}
-Slope param: {row['slope_param']:.2f}
-{learning_trial_text}
+Baseline: {row['baseline']*100:.2f}
+Max: {row['max_val']*100:.2f}
             """
 
             ax_info.text(0.05, 0.95, info_text, transform=ax_info.transAxes,
-                        fontsize=10, verticalalignment='top', fontfamily='monospace')
+                    fontsize=10, verticalalignment='top', fontfamily='monospace')
 
-            # PSTH plot (whisker responses before/after inflection)
-            ax_psth = fig.add_subplot(gs[1, 1])
+            # Day 0 PSTH (before/after inflection)
+            ax_psth = fig.add_subplot(gs[2, 2:])
             inflection_trial = row['inflection']
             plot_cell_psth_split_by_inflection(ax_psth, row['mouse_id'], row['roi'],
                                                 inflection_trial,
                                                 reward_group=row['reward_group'])
 
+            # Row 3: 5-day mapping PSTH (one panel per day)
+            # Create 5 axes that share the same y-axis
+            ax0 = fig.add_subplot(gs[3, 0])
+            axes_5day = [ax0] + [fig.add_subplot(gs[3, i], sharey=ax0) for i in range(1, 5)]
+            plot_5day_mapping_psth(axes_5day, row['mouse_id'], row['roi'])
+
             # Overall title
             fig.suptitle(f'Cell Plasticity Report #{idx+1} - {row["mouse_id"]}_{row["roi"]} ({row["reward_group"]})',
-                        fontsize=14, fontweight='bold')
+                        fontsize=16, fontweight='bold', y=0.995)
 
             # Save to PDF
             pdf.savefig(fig, bbox_inches='tight')
@@ -940,7 +1254,11 @@ def main():
     learning_df = pd.read_csv(learning_path)
     learning_df = learning_df[['mouse_id', 'learning_trial']].dropna(subset=['learning_trial']).drop_duplicates()
 
-    # Merge learning_trial into results
+    # Merge learning_trial into ALL cells (for distribution plots)
+    results_df = results_df.merge(learning_df, on='mouse_id', how='left')
+    results_df['inflection_relative'] = results_df['inflection'] - results_df['learning_trial']
+
+    # Merge learning_trial into LMI-filtered results
     results_lmi = results_lmi.merge(learning_df, on='mouse_id', how='left')
 
     # Compute inflection relative to learning trial
@@ -1016,8 +1334,15 @@ def main():
     print("GENERATING VISUALIZATIONS")
     print("="*70)
 
-    plot_distributions(results_lmi, OUTPUT_DIR)
-    plot_amplitude_distributions_by_lmi(results_lmi, OUTPUT_DIR, alpha=ALPHA)
+    # Plot distributions using ALL cells
+    plot_distributions(results_df, OUTPUT_DIR)
+    plot_amplitude_distributions_by_lmi(results_df, OUTPUT_DIR, alpha=ALPHA)
+
+    # Plot LMI groups amplitude comparison (using ALL cells)
+    plot_lmi_groups_amplitude_barplot(results_df, OUTPUT_DIR)
+
+    # Plot LMI groups amplitude histograms (using ALL cells)
+    plot_lmi_groups_amplitude_histograms(results_df, OUTPUT_DIR)
 
     # Generate 4 separate PDF reports
     print("\n" + "="*70)
@@ -1030,7 +1355,7 @@ def main():
     if len(subset) > 0:
         create_cell_pdf_report(subset, OUTPUT_DIR,
                                'plasticity_R+_LMI_positive.pdf',
-                               n_cells=min(50, len(subset)))
+                               n_cells=min(100, len(subset)))
     else:
         print("  No R+ LMI+ cells found")
 

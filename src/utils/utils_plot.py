@@ -40,6 +40,16 @@ behavior_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#c959affe', '#1b9
 trial_type_rew_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#90ee90', '#1b9e77', '#cccccc', '#333333'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
 trial_type_nonrew_palette = sns.color_palette(['#06fcfeff', '#1f77b4', '#dda0dd', '#c959affe', '#cccccc', '#333333'])  # auditory misses, auditory hits, whisker misses, whisker hits, correct rejection, false alarm
 
+# Color palettes (muted, less pastel).
+reward_palette = sns.color_palette(['#a63e6a', '#13775f'])
+reward_palette_r = sns.color_palette(['#13775f', '#a63e6a'])
+cell_types_palette = sns.color_palette(['#8a8a8a', '#1f5f97', '#d2642a'])  # muted grey, deep blue, burnt orange
+s2_m1_palette = sns.color_palette(['#376fa3', '#c75d4b'])  # toned steel blue, warm muted red-orange
+stim_palette = sns.color_palette(['#2f6fa3', '#c96f1e', '#2b2b2b'])  # muted blue, warm orange, dark neutral
+behavior_palette = sns.color_palette(['#2aa2a2', '#2f6fa3', '#a63e6a', '#13775f', '#9e9e9e', '#2b2b2b'])
+trial_type_rew_palette = sns.color_palette(['#2aa2a2', '#2f6fa3', '#6da86d', '#13775f', '#9e9e9e', '#2b2b2b'])
+trial_type_nonrew_palette = sns.color_palette(['#2aa2a2', '#2f6fa3', '#a86a9a', '#a63e6a', '#9e9e9e', '#2b2b2b'])
+
 # # Color palettes.
 # reward_palette = sns.color_palette(['#980099ff', '#009600ff'])
 # reward_palette_r = sns.color_palette([ '#009600ff', '#980099ff'])

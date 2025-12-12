@@ -62,13 +62,13 @@ n_map_trials = 40  # Number of mapping trials for template
 threshold_dff = None  # 5% dF/F threshold for template cells (use None for all cells)
 
 # Surrogate parameters
-n_surrogates = 1000  # Number of surrogate iterations
-min_shift_frames = 30  # Minimum shift: 1 second at 30Hz
+n_surrogates = 100000  # Number of surrogate iterations
+min_shift_frames = 60  # Minimum shift: 1 second at 30Hz
 percentile_threshold = 99  # Percentile for pointwise threshold (e.g., 90, 95, 99)
 np.random.seed(42)  # For reproducibility
 
 # Parallel processing
-n_jobs = 35
+n_jobs = 1
 
 # Visualization
 sns.set_theme(context='paper', style='ticks', palette='deep', font='sans-serif', font_scale=1)
@@ -80,18 +80,22 @@ _, _, all_mice, db = io.select_sessions_from_db(
     two_p_imaging='yes'
 )
 
-# Separate mice by reward group
-r_plus_mice = []
+# # Separate mice by reward group
+# r_plus_mice = []
+# r_minus_mice = []
+# for mouse in all_mice:
+#     try:
+#         reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse, db=db)
+#         if reward_group == 'R+':
+#             r_plus_mice.append(mouse)
+#         elif reward_group == 'R-':
+#             r_minus_mice.append(mouse)
+#     except:
+#         continue
+
+# Testing
+r_plus_mice = ['AR127']
 r_minus_mice = []
-for mouse in all_mice:
-    try:
-        reward_group = io.get_mouse_reward_group_from_db(io.db_path, mouse, db=db)
-        if reward_group == 'R+':
-            r_plus_mice.append(mouse)
-        elif reward_group == 'R-':
-            r_minus_mice.append(mouse)
-    except:
-        continue
 
 print(f"Found {len(r_plus_mice)} R+ mice: {r_plus_mice}")
 print(f"Found {len(r_minus_mice)} R- mice: {r_minus_mice}")
